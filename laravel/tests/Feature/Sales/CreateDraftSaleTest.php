@@ -3,6 +3,7 @@
 use App\Actions\Sales\CreateDraftSale;
 use App\Actions\Sales\UpdateDraftSale;
 use App\Enums\SaleStatus;
+use App\Exceptions\SaleNotEditableException;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
@@ -101,5 +102,5 @@ test('non-draft sales cannot be updated', function () {
 
     expect(fn () => app(UpdateDraftSale::class)->execute($user, $sale, [
         'notes' => 'nope',
-    ]))->toThrow(\DomainException::class);
+    ]))->toThrow(SaleNotEditableException::class);
 });

@@ -2,6 +2,7 @@
 
 use App\Actions\Inventory\AdjustStock;
 use App\Enums\StockMovementType;
+use App\Exceptions\InsufficientStockException;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\StockMovement;
@@ -40,7 +41,7 @@ test('negative stock blocked when setting false', function () {
         StockMovementType::Damage,
         'Water damage',
     );
-})->throws(DomainException::class);
+})->throws(InsufficientStockException::class);
 
 test('negative stock allowed when allow_negative_stock true', function () {
     Setting::setValue('allow_negative_stock', true);
@@ -74,7 +75,10 @@ test('negative stock blocked via api when setting false', function () {
         'note' => 'Correction',
     ])
         ->assertUnprocessable()
-        ->assertJsonPath('code', 'insufficient_stock');
+        ->assertJsonPath('code', 'insufficient_stock')
+        ->assertJsonPath('details.items.0.product_id', $product->id)
+        ->assertJsonPath('details.items.0.requested', 5)
+        ->assertJsonPath('details.items.0.available', 2);
 
     expect($product->fresh()->stock_on_hand)->toBe(2);
 });

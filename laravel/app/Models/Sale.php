@@ -11,7 +11,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use LogicException;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
+/**
+ * amount_paid and balance_due are cached money fields: deliberately not fillable,
+ * set explicitly by actions only.
+ */
 #[Fillable([
     'invoice_no',
     'customer_id',
@@ -24,8 +31,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'discount_total',
     'tax_total',
     'total',
-    'amount_paid',
-    'balance_due',
     'delivered_at',
     'notes',
     'created_by',
@@ -38,7 +43,43 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Sale extends Model
 {
     /** @use HasFactory<SaleFactory> */
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    /**
+     * Financial records are never deleted (spec rule 5). Drafts are cancelled, confirmed sales voided.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function () {
+            throw new LogicException('Sales are financial records and cannot be deleted. Cancel or void instead.');
+        });
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly([
+                'invoice_no',
+                'customer_id',
+                'status',
+                'payment_status',
+                'sale_date',
+                'due_date',
+                'subtotal',
+                'discount_total',
+                'tax_total',
+                'total',
+                'amount_paid',
+                'balance_due',
+                'confirmed_by',
+                'confirmed_at',
+                'cancelled_at',
+                'cancel_reason',
+                'delivered_at',
+            ])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     protected function casts(): array
     {

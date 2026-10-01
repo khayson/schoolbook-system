@@ -274,6 +274,7 @@ Base: `/api/v1`. JSON only. Auth header: `Authorization: Bearer <token>`.
 - Money fields are integers in pesewas. Dates are ISO 8601.
 - Lists: `?page=`, `?per_page=`, `?search=`, `?sort=`, plus filters. Response: `{ data: [...], meta: { current_page, last_page, per_page, total }, links }`.
 - Errors: `{ "message": "...", "code": "validation_failed|insufficient_stock|price_changed|credit_limit_exceeded|not_found|forbidden|...", "errors": { "field": ["..."] } }` with correct HTTP status (401, 403, 404, 409, 422).
+  - Business-rule errors may add a `details` object (decision 2026-10-01, Phase 2A.1): `insufficient_stock` (422) → `details.items[]` of `{product_id, sku, title, requested, available}`; `price_changed` (409) → `details.priced_order`; `credit_limit_exceeded` (409) → `details.{credit_limit, outstanding, sale_total, projected_balance, override_flag}`; `sale_not_editable` (409) → `details.{sale_id, status}`. `errors` is always an object (`{}` when empty).
 - Mutating money endpoints (`/sales/{id}/confirm`, `/payments`) require `Idempotency-Key`.
 
 | Area | Endpoints |

@@ -54,3 +54,17 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 **Context:** Review of `EnsureIdempotency`: failed actions left `response_status=0` (permanent 409); non-2xx responses were stored and replayed; 409 code name; no prune.
 
 **Decision:** Release claim on throw; delete claim on non-2xx (so corrected retries work); 409 code `request_in_progress`; `idempotency:prune` (72h) scheduled daily. Flutter reuses one key per save attempt until success or form change.
+
+## 2026-10-01 — Phase 2A.1 review fixes
+
+**Context:** 2A review: every `DomainException` rendered as `insufficient_stock`; bad input could 500; duplicate product lines not merged; client could set `source`; drafts locked the customer row; sales deletable; no audit log on sales.
+
+**Decision:**
+- Typed exceptions under `App\Exceptions`: `ApiDomainException(message, errorCode, status, details, errors)` with `SaleNotEditableException` (409 `sale_not_editable`), `InsufficientStockException` (422, per-item list), `PriceChangedException` (409, new priced order), `CreditLimitExceededException` (409, `override_flag: override_credit_limit`) and `InvalidInputException` (422 `validation_failed`, field-keyed `errors`; the service-level second line of defence). Extra payload goes under `details` so it can never collide with envelope keys. The blanket `DomainException` mapping is gone; `AdjustStock` now throws `InsufficientStockException`.
+- Form Requests: customer/product `exists` rules exclude soft-deleted and inactive rows; `override_reason` is `required_with` the override price. `PricingService` re-checks (unknown/inactive product, quantity, override reason, negative price) and throws `InvalidInputException`.
+- `PricingService` merges lines by (product, override price, trimmed reason), first-appearance order. A reason sent without an override price is dropped. `PricedOrder::quantitiesByProduct()` sums per product for the 2B stock check (one product can still sit on several lines with different override prices).
+- `source` is not accepted from the staff API; `CreateDraftSale::execute(..., SaleSource $source = Staff)` is set by calling code (the portal will pass `Portal`).
+- Drafts read the customer without `lockForUpdate`. **InnoDB limit:** inserting a `sales` row takes a *shared* lock on the parent `customers` row for the FK check. Concurrent drafts for one customer no longer serialize, and editing an existing draft never touches the customer row, but creating a *new* draft still waits until a payment or confirm holding that customer row commits. Accepted: those transactions are short. Covered by `tests/Mysql/DraftSaleNoCustomerLockTest.php`.
+- Sales are never deleted: `SalePolicy::delete` is false and `Sale::deleting` throws. `amount_paid` and `balance_due` were removed from `Sale` fillable (the 2A architect note had been missed); actions set them explicitly.
+- `Sale` uses `LogsActivity` (status, totals, payment fields, confirm/cancel/deliver fields, dirty only). Draft actions run under `CauserResolver::withCauser($user)` so the acting user is recorded even outside an HTTP request. Each new price override logs a `price_overridden` activity with reason, base price and unit price; an unchanged override is not logged again when the draft is re-saved.
+- `config/app.php` timezone is `Africa/Accra` (UTC+0, no DST; the explicit name states the intent).

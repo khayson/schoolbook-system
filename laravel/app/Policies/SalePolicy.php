@@ -27,8 +27,11 @@ class SalePolicy
         return $user->isOwner();
     }
 
+    /**
+     * Financial records are never deleted (spec rule 5).
+     */
     public function delete(User $user, Sale $sale): bool
     {
-        return $user->isOwner();
+        return false;
     }
 }

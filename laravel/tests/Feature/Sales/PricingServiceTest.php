@@ -3,6 +3,7 @@
 use App\DTOs\Pricing\PriceLineInput;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\PricingService;
 use Illuminate\Support\Carbon;
 
@@ -31,7 +32,7 @@ test('pricing service returns base selling prices with no rules', function () {
 });
 
 test('pricing preview endpoint uses pricing service', function () {
-    $user = \App\Models\User::factory()->owner()->create();
+    $user = User::factory()->owner()->create();
     $token = $user->createToken('test')->plainTextToken;
     $product = Product::factory()->create(['selling_price' => 2500]);
 

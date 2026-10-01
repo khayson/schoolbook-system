@@ -68,7 +68,7 @@ test('import rejects ghs amounts with more than two decimals', function () {
     ]);
 
     expect(fn () => app(ImportProductsFromCsv::class)->execute($user, $csv))
-        ->toThrow(\InvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 test('import resolves lookup names case insensitively', function () {

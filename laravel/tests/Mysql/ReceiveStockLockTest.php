@@ -21,13 +21,13 @@ test('ReceiveStock times out with 1205 when another connection holds the product
         $config['database'],
     );
 
-    $holder = new \PDO($dsn, $config['username'], $config['password'], [
-        \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+    $holder = new PDO($dsn, $config['username'], $config['password'], [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     ]);
     $holder->beginTransaction();
     $lock = $holder->prepare('SELECT id FROM products WHERE id = ? FOR UPDATE');
     $lock->execute([$product->id]);
-    expect($lock->fetch(\PDO::FETCH_ASSOC))->not->toBeFalse();
+    expect($lock->fetch(PDO::FETCH_ASSOC))->not->toBeFalse();
 
     DB::connection()->statement('SET SESSION innodb_lock_wait_timeout = 1');
 

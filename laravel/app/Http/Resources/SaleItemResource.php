@@ -2,10 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\SaleItem;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin \App\Models\SaleItem */
+/** @mixin SaleItem */
 class SaleItemResource extends JsonResource
 {
     public function toArray(Request $request): array

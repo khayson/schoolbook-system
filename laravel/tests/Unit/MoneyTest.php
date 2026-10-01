@@ -16,10 +16,10 @@ test('ghsToPesewas converts exact decimal strings without floats', function () {
 
 test('ghsToPesewas rejects more than two decimal places', function () {
     expect(fn () => Money::ghsToPesewas('1.234'))
-        ->toThrow(\InvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 
     expect(fn () => Money::ghsToPesewas('0.001'))
-        ->toThrow(\InvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 test('pesewasToGhs formats without float drift', function () {

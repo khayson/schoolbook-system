@@ -3,11 +3,11 @@
 namespace App\Actions\Inventory;
 
 use App\Enums\StockMovementType;
+use App\Exceptions\InsufficientStockException;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\User;
-use DomainException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -34,9 +34,13 @@ class AdjustStock
             $balanceAfter = $product->stock_on_hand + $quantity;
 
             if ($balanceAfter < 0 && ! Setting::getValue('allow_negative_stock', false)) {
-                throw new DomainException(
-                    "Insufficient stock for product [{$product->sku}]. Resulting quantity would be {$balanceAfter}."
-                );
+                throw new InsufficientStockException([[
+                    'product_id' => $product->id,
+                    'sku' => (string) $product->sku,
+                    'title' => (string) $product->title,
+                    'requested' => -$quantity,
+                    'available' => (int) $product->stock_on_hand,
+                ]]);
             }
 
             $occurredAt = Carbon::now();

@@ -74,12 +74,12 @@ test('owner can receive stock via api', function () {
     $response = $this->withToken($token)
         ->withHeader('Idempotency-Key', 'receive-stock-api-1')
         ->postJson('/api/v1/stock/receipts', [
-        'received_at' => '2026-04-01T09:00:00Z',
-        'notes' => 'Morning delivery',
-        'items' => [
-            ['product_id' => $product->id, 'quantity' => 12, 'unit_cost' => 4800],
-        ],
-    ]);
+            'received_at' => '2026-04-01T09:00:00Z',
+            'notes' => 'Morning delivery',
+            'items' => [
+                ['product_id' => $product->id, 'quantity' => 12, 'unit_cost' => 4800],
+            ],
+        ]);
 
     $response->assertCreated()
         ->assertJsonPath('data.receipt_no', 'GRN-2026-000001')
@@ -98,14 +98,14 @@ test('rejects non-positive quantity and negative unit cost', function () {
         'items' => [
             ['product_id' => $product->id, 'quantity' => 0, 'unit_cost' => 100],
         ],
-    ]))->toThrow(\InvalidArgumentException::class);
+    ]))->toThrow(InvalidArgumentException::class);
 
     expect(fn () => $receive->execute($user, [
         'received_at' => '2026-04-01',
         'items' => [
             ['product_id' => $product->id, 'quantity' => 2, 'unit_cost' => -1],
         ],
-    ]))->toThrow(\InvalidArgumentException::class);
+    ]))->toThrow(InvalidArgumentException::class);
 });
 
 test('merges identical cost lines but keeps separate costs and locks each product once', function () {
@@ -163,10 +163,10 @@ test('stock movements cannot be updated or deleted', function () {
     $movement = StockMovement::query()->firstOrFail();
 
     expect(fn () => $movement->update(['note' => 'tamper']))
-        ->toThrow(\LogicException::class);
+        ->toThrow(LogicException::class);
 
     expect(fn () => $movement->delete())
-        ->toThrow(\LogicException::class);
+        ->toThrow(LogicException::class);
 });
 
 test('rolled back receipt does not burn a GRN sequence number', function () {
