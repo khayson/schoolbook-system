@@ -7,8 +7,62 @@ Auth header: `Authorization: Bearer <token>`.
 ## Conventions
 
 - Lists: `{ data, meta, links }` with `?page=`, `?per_page=` (default 25, max 100), `?search=`, `?sort=`
-- Errors: `{ message, code, errors }` with HTTP 401 / 403 / 404 / 409 / 422
+- Errors: `{ message, code, errors, details? }` with HTTP 401 / 403 / 404 / 409 / 422 (see [Errors](#errors))
 - Mutating money endpoints require `Idempotency-Key`
+
+## Errors
+
+Every error response uses one envelope:
+
+```json
+{
+  "message": "Human-readable summary.",
+  "code": "machine_readable_code",
+  "errors": { "items.0.product_id": ["The selected items.0.product_id is invalid."] },
+  "details": { }
+}
+```
+
+- `message`: show to the user as-is.
+- `code`: branch on this, never on `message` or the HTTP status alone.
+- `errors`: field errors keyed by request path (e.g. `items.2.quantity`). Always an object; `{}` when there are none.
+- `details`: present only for business-rule errors that carry extra data (below). Absent otherwise.
+
+### Business-rule codes
+
+| Code | HTTP | When | `details` |
+|---|---|---|---|
+| `validation_failed` | 422 | Form Request validation, or the same rule re-checked inside a service (unknown/inactive product or customer, missing override reason, quantity ≤ 0) | none; see `errors` |
+| `sale_not_editable` | 409 | Updating (or, from 2B, confirming/cancelling) a sale that is not a draft | `{ sale_id, status }` |
+| `insufficient_stock` | 422 | Stock would go negative and `allow_negative_stock` is off. Lists **every** short product | `{ items: [ { product_id, sku, title, requested, available } ] }` |
+| `price_changed` | 409 | Confirming a draft whose prices no longer match. Nothing was written | `{ priced_order }` (same shape as `POST /pricing/preview` `data`) |
+| `credit_limit_exceeded` | 409 | Outstanding balance + this sale > customer credit limit. A warning: resend with the flag in `override_flag` set to `true` | `{ credit_limit, outstanding, sale_total, projected_balance, override_flag: "override_credit_limit" }` |
+
+Example (`insufficient_stock`):
+
+```json
+{
+  "message": "Insufficient stock for one or more products.",
+  "code": "insufficient_stock",
+  "errors": {},
+  "details": {
+    "items": [
+      { "product_id": 7, "sku": "ENG-1", "title": "English 1", "requested": 5, "available": 2 }
+    ]
+  }
+}
+```
+
+### Other codes
+
+| Code | HTTP | When |
+|---|---|---|
+| `unauthenticated` | 401 | Missing or invalid Bearer token |
+| `forbidden` | 403 | Authenticated but not allowed (e.g. non-owner on staff endpoints) |
+| `not_found` | 404 | Unknown route or record |
+| `idempotency_key_required` | 422 | Idempotent endpoint called without `Idempotency-Key` |
+| `idempotency_key_mismatch` | 422 | Key reused with a different request body |
+| `request_in_progress` | 409 | Key reused while the first request is still running; retry shortly with the same key |
 
 ## Auth
 
@@ -212,4 +266,4 @@ Manual adjustment or damage write-off. `note` is required. `quantity` is signed 
 }
 ```
 
-Response `201` with a `StockMovement` resource. If resulting stock would be negative and `allow_negative_stock` is false, `422` with `code: insufficient_stock`.
+Response `201` with a `StockMovement` resource. If resulting stock would be negative and `allow_negative_stock` is false, `422` with `code: insufficient_stock` and `details.items` (see [Errors](#errors)).
