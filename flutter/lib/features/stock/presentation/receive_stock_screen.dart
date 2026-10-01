@@ -38,6 +38,8 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
   bool _searching = false;
   bool _submitting = false;
   String? _error;
+  /// One key per save attempt; reused on retries until success or a new attempt.
+  String? _pendingIdempotencyKey;
 
   @override
   void dispose() {
@@ -81,6 +83,7 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
       return;
     }
     setState(() {
+      _pendingIdempotencyKey = null;
       _lines.add(
         ReceiveStockLine(
           product: product,
@@ -114,12 +117,12 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
       _error = null;
     });
 
-    final idempotencyKey =
+    _pendingIdempotencyKey ??=
         '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
 
     try {
       await context.read<StockRepository>().createReceipt(
-            idempotencyKey: idempotencyKey,
+            idempotencyKey: _pendingIdempotencyKey!,
             supplierReference: _referenceController.text.trim().isEmpty
                 ? null
                 : _referenceController.text.trim(),
@@ -139,6 +142,7 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
       if (!mounted) {
         return;
       }
+      _pendingIdempotencyKey = null;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Stock received')),
       );
@@ -195,9 +199,13 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
           else
             ..._lines.map((line) => _LineEditor(
                   line: line,
-                  onChanged: () => setState(() {}),
+                  onChanged: () {
+                    _pendingIdempotencyKey = null;
+                    setState(() {});
+                  },
                   onRemove: () {
                     setState(() {
+                      _pendingIdempotencyKey = null;
                       _lines.remove(line);
                     });
                   },

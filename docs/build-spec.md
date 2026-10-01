@@ -119,7 +119,7 @@ Each of `laravel/` and `flutter/` has its own `.env`/config, dependency files, t
 10. **Auditing.** Financial and stock models log changes via activity log with the acting user.
 11. **No N+1.** Eager load; list endpoints paginate (default 25, max 100).
 12. **Tests are part of the task.** Money and stock logic need unit + feature tests before the task is done.
-13. **Morph map.** `Relation::enforceMorphMap()` in `AppServiceProvider` — morph columns store short aliases only, never FQCNs. Document aliases: `user`, `product`, `goods_receipt`, `sale`, `payment`, `stock_count`, `sale_return`, `purchase_order`. Add new aliases before writing new reference types.
+13. **Morph map.** `Relation::enforceMorphMap()` in `AppServiceProvider` — morph columns store short aliases only, never FQCNs. Document aliases: `user`, `product`, `customer`, `goods_receipt`, `sale`, `payment`, `stock_count`, `sale_return`, `purchase_order`. Add new aliases before writing new reference types.
 14. **Lock order (sales).** When confirming a sale, acquire locks in this order: **products (sorted by id) → customer → invoice number sequence (last, held briefly)**.
 15. **Invoice year.** The invoice number's year comes from the **confirmation date**, not the sale date.
 16. **Migrations are append-only.** Every schema change is a **new migration**. Never edit a migration that has already been shipped/run outside a fresh local DB.

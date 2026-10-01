@@ -48,3 +48,9 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - Reusable `idempotent` middleware + `idempotency_keys` table; applied to `POST /stock/receipts` now (confirm/payments later).
 - `Money::ghsToPesewas` / Flutter `parseGhsToPesewas` parse decimal strings only (no float multiply); >2 decimals rejected.
 - Spec §§5.14–5.16: lock order products→customer→invoice sequence last; invoice year from confirmation date; never edit shipped migrations.
+
+## 2026-10-01 — Idempotency claim lifecycle (Phase 2A start)
+
+**Context:** Review of `EnsureIdempotency`: failed actions left `response_status=0` (permanent 409); non-2xx responses were stored and replayed; 409 code name; no prune.
+
+**Decision:** Release claim on throw; delete claim on non-2xx (so corrected retries work); 409 code `request_in_progress`; `idempotency:prune` (72h) scheduled daily. Flutter reuses one key per save attempt until success or form change.

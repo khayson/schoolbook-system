@@ -38,7 +38,7 @@ composer run dev
 # Or API-only without Vite: php artisan serve
 ```
 
-Admin panel: `http://localhost:8000/admin`
+Admin panel: `http://127.0.0.1:8000/admin`
 
 ### Flutter
 

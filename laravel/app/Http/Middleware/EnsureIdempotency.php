@@ -7,6 +7,7 @@ use Closure;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class EnsureIdempotency
 {
@@ -68,7 +69,20 @@ class EnsureIdempotency
             return $this->replayOrReject($existing, $hash);
         }
 
-        $response = $next($request);
+        try {
+            $response = $next($request);
+        } catch (Throwable $e) {
+            $record->delete();
+
+            throw $e;
+        }
+
+        // Only successful responses are replayable; release the claim otherwise.
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+            $record->delete();
+
+            return $response;
+        }
 
         $record->update([
             'response_status' => $response->getStatusCode(),
@@ -93,7 +107,7 @@ class EnsureIdempotency
         if (! $existing->isComplete()) {
             return response()->json([
                 'message' => 'A request with this Idempotency-Key is already in progress.',
-                'code' => 'idempotency_key_in_progress',
+                'code' => 'request_in_progress',
             ], 409);
         }
 

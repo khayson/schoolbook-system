@@ -1,12 +1,15 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\LanguageController;
 use App\Http\Controllers\Api\V1\LevelController;
 use App\Http\Controllers\Api\V1\LevelGroupController;
+use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\PublisherController;
+use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\SubjectController;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +45,15 @@ Route::prefix('v1')->group(function () {
         Route::get('stock/receipts', [GoodsReceiptController::class, 'index']);
         Route::get('stock/receipts/{goods_receipt}', [GoodsReceiptController::class, 'show']);
         Route::post('stock/adjustments', [StockAdjustmentController::class, 'store']);
+
+        Route::apiResource('customers', CustomerController::class);
+
+        Route::post('pricing/preview', [PricingController::class, 'preview']);
+
+        Route::get('sales', [SaleController::class, 'index']);
+        Route::post('sales', [SaleController::class, 'store']);
+        Route::get('sales/{sale}', [SaleController::class, 'show']);
+        Route::put('sales/{sale}', [SaleController::class, 'update']);
 
     });
 
