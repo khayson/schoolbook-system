@@ -27,6 +27,31 @@ class SalePolicy
         return $user->isOwner();
     }
 
+    public function confirm(User $user, Sale $sale): bool
+    {
+        return $user->isOwner();
+    }
+
+    public function cancel(User $user, Sale $sale): bool
+    {
+        return $user->isOwner();
+    }
+
+    public function void(User $user, Sale $sale): bool
+    {
+        return $user->isOwner();
+    }
+
+    public function deliver(User $user, Sale $sale): bool
+    {
+        return $user->isOwner();
+    }
+
+    public function invoice(User $user, Sale $sale): bool
+    {
+        return $user->isOwner();
+    }
+
     /**
      * Financial records are never deleted (spec rule 5).
      */

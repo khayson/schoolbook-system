@@ -68,3 +68,21 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - Sales are never deleted: `SalePolicy::delete` is false and `Sale::deleting` throws. `amount_paid` and `balance_due` were removed from `Sale` fillable (the 2A architect note had been missed); actions set them explicitly.
 - `Sale` uses `LogsActivity` (status, totals, payment fields, confirm/cancel/deliver fields, dirty only). Draft actions run under `CauserResolver::withCauser($user)` so the acting user is recorded even outside an HTTP request. Each new price override logs a `price_overridden` activity with reason, base price and unit price; an unchanged override is not logged again when the draft is re-saved.
 - `config/app.php` timezone is `Africa/Accra` (UTC+0, no DST; the explicit name states the intent).
+
+## 2026-10-01 — Phase 2B: confirm, cancel, void, deliver, invoice
+
+**Context:** 2B prompt plus reviewer additions (item immutability, deactivated products at confirm, one transition guard).
+
+**Decision:**
+- **Lock order** for every sale state change, in `Actions/Sales/Concerns/LocksSaleRows`: sale row → its items → products (ascending id, one at a time) → customer → invoice sequence (last). All of these are locking reads and run before any plain read in the transaction, because MySQL REPEATABLE READ fixes the snapshot at the first non-locking read; `PricingService` (plain reads) therefore sees product rows no older than the ones we hold. The credit check's outstanding sum uses `sharedLock()` for the same reason.
+- **Price change:** compared per line (product, quantity, unit price, line total, same order and count) plus order totals. A base-price change under an unchanged override is not a change; the verified base price is still written to the snapshot. On 409 nothing is written. To accept new prices the client re-saves the draft (`PUT /sales/{id}` with `{}` reprices), then confirms again; no new "accept" flag was added to confirm.
+- **Due date:** request → draft's `due_date` → confirmation date + `default_payment_terms_days`.
+- **Inactive/deleted product or inactive customer at confirm:** rejected by the repricing step as `422 validation_failed` keyed to `items.N.product_id` / `customer_id`.
+- **Transitions:** `SaleStatus::canTransitionTo()` holds the state machine; actions call `Sale::assertCanTransitionTo()`. Every refusal is `409 sale_not_editable` with `details.action` (`update|confirm|cancel|void|deliver|invoice`) rather than a second code, so clients handle "the sale changed under you" one way. `requested → confirmed|cancelled` is allowed for the later portal flow.
+- **Item immutability:** `SaleItem` creating/updating/deleting throw unless the parent sale's status in the database is `draft`. `ConfirmSale` rewrites the verified snapshot while the locked row is still draft, then flips the status.
+- **Void schema:** spec 6.5 had no void columns; added `voided_at`, `voided_by`, `void_reason` in a new migration rather than reusing `cancel_*` (cancel and void are different transitions). Void reverses at each line's snapshot `unit_cost`, keeps `invoice_no`, and in 2B is refused with `409 sale_has_payments` when `amount_paid > 0`; 2C replaces that with allocation reversal. It already takes the customer lock so 2C needs no lock-order change.
+- **Invoice PDF:** `RenderInvoicePdf` action (shared with Filament in 2D), confirmed sales only; `Money::formatGhsGrouped()` for display.
+- **401 envelope:** unauthenticated API requests now return `{message, code: "unauthenticated", errors: {}}` (previously Laravel's default body without `code`).
+- **Note for 2C:** `RecordPayment` will lock customer → sales. `VoidSale` locks sale → … → customer. For the same sale these orders are opposite, so a void racing a payment on that invoice can deadlock; InnoDB aborts one and it can be retried. 2C should either lock the customer before the sale in `VoidSale` (read the sale's customer_id first) or retry on deadlock. To be settled in 2C.
+- `sales.idempotency_key` stays unused (the middleware table covers confirm). Drop it in a 2C migration unless 2C finds a use.
+

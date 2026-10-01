@@ -67,4 +67,17 @@ class Money
     {
         return 'GHS '.self::pesewasToGhs($pesewas);
     }
+
+    /**
+     * Display only (invoices, receipts): thousands separators, e.g. "GHS 12,345.60".
+     * Integer arithmetic throughout; number_format only ever sees whole cedis.
+     */
+    public static function formatGhsGrouped(?int $pesewas): string
+    {
+        $pesewas ??= 0;
+        $sign = $pesewas < 0 ? '-' : '';
+        $absolute = abs($pesewas);
+
+        return sprintf('GHS %s%s.%02d', $sign, number_format(intdiv($absolute, 100)), $absolute % 100);
+    }
 }

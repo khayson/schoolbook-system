@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PaymentStatus;
 use App\Enums\SaleSource;
 use App\Enums\SaleStatus;
+use App\Exceptions\SaleNotEditableException;
 use Database\Factories\SaleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -38,6 +39,9 @@ use Spatie\Activitylog\Support\LogOptions;
     'confirmed_at',
     'cancelled_at',
     'cancel_reason',
+    'voided_at',
+    'voided_by',
+    'void_reason',
     'idempotency_key',
 ])]
 class Sale extends Model
@@ -75,6 +79,9 @@ class Sale extends Model
                 'confirmed_at',
                 'cancelled_at',
                 'cancel_reason',
+                'voided_by',
+                'voided_at',
+                'void_reason',
                 'delivered_at',
             ])
             ->logOnlyDirty()
@@ -98,6 +105,7 @@ class Sale extends Model
             'delivered_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'voided_at' => 'datetime',
         ];
     }
 
@@ -121,8 +129,25 @@ class Sale extends Model
         return $this->belongsTo(User::class, 'confirmed_by');
     }
 
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by');
+    }
+
     public function isDraft(): bool
     {
         return $this->status === SaleStatus::Draft;
+    }
+
+    /**
+     * Every status change goes through here so illegal moves fail in one place.
+     *
+     * @throws SaleNotEditableException
+     */
+    public function assertCanTransitionTo(SaleStatus $to, string $action): void
+    {
+        if (! $this->status->canTransitionTo($to)) {
+            throw new SaleNotEditableException($this, $action);
+        }
     }
 }

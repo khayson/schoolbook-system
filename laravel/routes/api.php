@@ -54,6 +54,12 @@ Route::prefix('v1')->group(function () {
         Route::post('sales', [SaleController::class, 'store']);
         Route::get('sales/{sale}', [SaleController::class, 'show']);
         Route::put('sales/{sale}', [SaleController::class, 'update']);
+        Route::post('sales/{sale}/confirm', [SaleController::class, 'confirm'])
+            ->middleware('idempotent');
+        Route::post('sales/{sale}/cancel', [SaleController::class, 'cancel']);
+        Route::post('sales/{sale}/void', [SaleController::class, 'void']);
+        Route::post('sales/{sale}/deliver', [SaleController::class, 'deliver']);
+        Route::get('sales/{sale}/invoice', [SaleController::class, 'invoice']);
 
     });
 

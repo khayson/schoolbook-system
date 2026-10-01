@@ -1,5 +1,10 @@
 <?php
 
+use App\Actions\Sales\CreateDraftSale;
+use App\Models\Customer;
+use App\Models\Product;
+use App\Models\Sale;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -45,3 +50,44 @@ pest()->extend(TestCase::class)
 expect()->extend('toBeOne', function () {
     return $this->toBe(1);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Sales helpers
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Draft through the real action. $lines: list of [Product, quantity] or
+ * [Product, quantity, override_unit_price, override_reason].
+ *
+ * @param  list<array{0: Product, 1: int, 2?: int, 3?: string}>  $lines
+ */
+function makeDraftSale(User $user, array $lines, ?Customer $customer = null, array $extra = []): Sale
+{
+    $customer ??= Customer::factory()->create();
+
+    return app(CreateDraftSale::class)->execute($user, [
+        'customer_id' => $customer->id,
+        'items' => array_map(fn (array $line): array => array_filter([
+            'product_id' => $line[0]->id,
+            'quantity' => $line[1],
+            'override_unit_price' => $line[2] ?? null,
+            'override_reason' => $line[3] ?? null,
+        ], fn ($value) => $value !== null), $lines),
+        ...$extra,
+    ]);
+}
+
+function stockedProduct(int $stock, int $price = 1000, int $cost = 600, array $attributes = []): Product
+{
+    $product = Product::factory()->create([
+        'selling_price' => $price,
+        'cost_price' => $cost,
+        ...$attributes,
+    ]);
+    $product->stock_on_hand = $stock;
+    $product->save();
+
+    return $product;
+}

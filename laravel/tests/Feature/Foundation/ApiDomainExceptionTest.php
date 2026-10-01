@@ -70,5 +70,6 @@ test('sale not editable carries the sale status', function () {
 
     expect($e->status())->toBe(409)
         ->and($e->errorCode())->toBe('sale_not_editable')
-        ->and($e->details())->toBe(['sale_id' => $sale->id, 'status' => 'void']);
+        ->and($e->details())->toBe(['sale_id' => $sale->id, 'status' => 'void', 'action' => 'update'])
+        ->and($e->getMessage())->toBe('This sale is void and cannot be updated.');
 });

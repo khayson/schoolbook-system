@@ -267,3 +267,46 @@ Manual adjustment or damage write-off. `note` is required. `quantity` is signed 
 ```
 
 Response `201` with a `StockMovement` resource. If resulting stock would be negative and `allow_negative_stock` is false, `422` with `code: insufficient_stock` and `details.items` (see [Errors](#errors)).
+
+## Sales
+
+All sales routes require Bearer token + owner. Money is pesewas. A sale moves `draft -> confirmed -> void` or `draft -> cancelled`; delivery is a timestamp, not a status. Any action on a sale in the wrong status returns `409 sale_not_editable` with `details.{sale_id, status, action}`.
+
+### `POST /sales/{id}/confirm`
+
+Requires `Idempotency-Key`. Same key + same body replays the original `200` (header `Idempotency-Replayed: true`) with the same `invoice_no`; no second stock movement.
+
+```json
+{ "due_date": "2026-11-30", "override_credit_limit": false }
+```
+
+Both fields optional. `due_date` defaults to the draft's `due_date`, else confirmation date + `default_payment_terms_days`.
+
+In one transaction: reprices the draft at its `sale_date`, checks stock (summed per product), checks the credit limit, writes `sale_out` movements, refreshes each line's `unit_cost` from the product, then assigns `invoice_no` (`INV-YYYY-000001`, year of the **confirmation** date). Response `200` with the `Sale` resource: `status: confirmed`, `balance_due = total`, `amount_paid: 0`, `payment_status: unpaid`.
+
+Failures write nothing:
+
+| Status | `code` | Client action |
+|---|---|---|
+| 409 | `price_changed` | Show `details.priced_order`. To accept, re-save the draft (`PUT /sales/{id}` with `{}` reprices it at current prices), then confirm again. The same `Idempotency-Key` may be reused. |
+| 422 | `insufficient_stock` | Show every line in `details.items`. |
+| 409 | `credit_limit_exceeded` | Warning. Ask the user, then resend with `override_credit_limit: true` (logged in the activity log). |
+| 422 | `validation_failed` | A product or the customer was deactivated or deleted after drafting; `errors` names the line (`items.N.product_id`) or `customer_id`. |
+| 409 | `sale_not_editable` | Already confirmed, cancelled or void. Reload the sale. |
+
+### `POST /sales/{id}/cancel`
+
+Drafts only. Optional `{ "reason": "..." }`. Response `200`, `status: cancelled`. No stock or money effect.
+
+### `POST /sales/{id}/void`
+
+Confirmed sales only. `{ "reason": "..." }` is required. Writes a `sale_void_in` movement per line at the line's snapshot `unit_cost`, restores `stock_on_hand`, sets `status: void`, `balance_due: 0`, `voided_at`, `voided_by`, `void_reason`. The `invoice_no` is kept. Until payments land (Phase 2C), a sale with `amount_paid > 0` returns `409 sale_has_payments`.
+
+### `POST /sales/{id}/deliver`
+
+Confirmed sales only. Sets `delivered_at`; calling it again keeps the original timestamp. Response `200`.
+
+### `GET /sales/{id}/invoice`
+
+`application/pdf` download named `INV-YYYY-NNNNNN.pdf`. Business name, address, phone and footer come from settings. Confirmed sales only; drafts, cancelled and void sales return `409 sale_not_editable` (`details.action: invoice`).
+

@@ -2,17 +2,27 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Sales\CancelSale;
+use App\Actions\Sales\ConfirmSale;
 use App\Actions\Sales\CreateDraftSale;
+use App\Actions\Sales\MarkDelivered;
+use App\Actions\Sales\RenderInvoicePdf;
 use App\Actions\Sales\UpdateDraftSale;
+use App\Actions\Sales\VoidSale;
 use App\Http\Controllers\Concerns\PaginatesApiLists;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\CancelSaleRequest;
+use App\Http\Requests\Api\V1\ConfirmSaleRequest;
+use App\Http\Requests\Api\V1\DeliverSaleRequest;
 use App\Http\Requests\Api\V1\StoreDraftSaleRequest;
 use App\Http\Requests\Api\V1\UpdateDraftSaleRequest;
+use App\Http\Requests\Api\V1\VoidSaleRequest;
 use App\Http\Resources\SaleResource;
 use App\Models\Sale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Symfony\Component\HttpFoundation\Response;
 
 class SaleController extends Controller
 {
@@ -62,5 +72,32 @@ class SaleController extends Controller
         $sale = $updateDraftSale->execute($request->user(), $sale, $request->validated());
 
         return new SaleResource($sale);
+    }
+
+    public function confirm(ConfirmSaleRequest $request, Sale $sale, ConfirmSale $confirmSale): SaleResource
+    {
+        return new SaleResource($confirmSale->execute($request->user(), $sale, $request->validated()));
+    }
+
+    public function cancel(CancelSaleRequest $request, Sale $sale, CancelSale $cancelSale): SaleResource
+    {
+        return new SaleResource($cancelSale->execute($request->user(), $sale, $request->validated('reason')));
+    }
+
+    public function void(VoidSaleRequest $request, Sale $sale, VoidSale $voidSale): SaleResource
+    {
+        return new SaleResource($voidSale->execute($request->user(), $sale, $request->validated('reason')));
+    }
+
+    public function deliver(DeliverSaleRequest $request, Sale $sale, MarkDelivered $markDelivered): SaleResource
+    {
+        return new SaleResource($markDelivered->execute($request->user(), $sale));
+    }
+
+    public function invoice(Sale $sale, RenderInvoicePdf $renderInvoice): Response
+    {
+        $this->authorize('invoice', $sale);
+
+        return $renderInvoice->execute($sale)->download($renderInvoice->filename($sale));
     }
 }
