@@ -1,0 +1,63 @@
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Laravel (also covered by laravel/.gitignore)
+laravel/vendor/
+laravel/node_modules/
+laravel/public/hot
+laravel/public/storage
+laravel/storage/*.key
+laravel/storage/pail
+laravel/storage/logs/
+laravel/storage/framework/cache/
+laravel/storage/framework/sessions/
+laravel/storage/framework/views/
+laravel/bootstrap/cache/*.php
+laravel/.phpunit.result.cache
+laravel/.phpunit.cache/
+laravel/Homestead.json
+laravel/Homestead.yaml
+laravel/auth.json
+
+# Flutter (also covered by flutter/.gitignore)
+flutter/.dart_tool/
+flutter/.flutter-plugins
+flutter/.flutter-plugins-dependencies
+flutter/.packages
+flutter/.pub-cache/
+flutter/.pub/
+flutter/build/
+flutter/.idea/
+flutter/**/*.iml
+flutter/android/.gradle/
+flutter/android/local.properties
+flutter/android/key.properties
+flutter/ios/Pods/
+flutter/ios/.symlinks/
+flutter/macos/Flutter/ephemeral/
+flutter/linux/flutter/ephemeral/
+flutter/windows/flutter/ephemeral/
+
+# Coverage / tooling
+coverage/
+*.lcov
+.turbo/
