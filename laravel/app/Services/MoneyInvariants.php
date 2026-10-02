@@ -38,7 +38,10 @@ class MoneyInvariants
      */
     public function check(?array $customerIds = null): array
     {
-        return [
+        // One transaction so every query reads the same MySQL REPEATABLE READ snapshot
+        // (taken at the first read). Otherwise a payment committing between two queries
+        // could show up as a false violation in the nightly run.
+        return DB::transaction(fn (): array => [
             ...$this->saleAmountPaid($customerIds),
             ...$this->saleBalanceDue($customerIds),
             ...$this->salePaymentStatus($customerIds),
@@ -46,7 +49,7 @@ class MoneyInvariants
             ...$this->customerCreditBalance($customerIds),
             ...$this->customerOutstanding($customerIds),
             ...$this->allocationLedger($customerIds),
-        ];
+        ]);
     }
 
     /**

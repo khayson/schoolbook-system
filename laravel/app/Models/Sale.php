@@ -42,7 +42,6 @@ use Spatie\Activitylog\Support\LogOptions;
     'voided_at',
     'voided_by',
     'void_reason',
-    'idempotency_key',
 ])]
 class Sale extends Model
 {

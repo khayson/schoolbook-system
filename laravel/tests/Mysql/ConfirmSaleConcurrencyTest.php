@@ -120,3 +120,22 @@ test('the same sale confirmed twice at once is confirmed exactly once', function
         ->and($product->fresh()->stock_on_hand)->toBe(6)
         ->and(StockMovement::query()->where('reference_id', $sale->id)->count())->toBe(1);
 });
+
+test('confirmations sharing no product still get unique, gapless invoice numbers without deadlock', function () {
+    // No common product lock serializes these: they meet only at the invoice sequence.
+    // (This is the case that exposed the INSERT IGNORE shared-lock deadlock in 2C.2.)
+    $user = User::factory()->owner()->create();
+
+    $saleIds = [];
+    for ($i = 0; $i < 6; $i++) {
+        $customer = Customer::factory()->create(['credit_limit' => null]);
+        $saleIds[] = makeDraftSale($user, [[stockedProduct(stock: 5, price: 700), 1]], $customer)->id;
+    }
+
+    $results = runConfirmWorkers($saleIds, $user->id);
+    $year = (int) now()->format('Y');
+
+    expect(array_column($results, 'exit'))->toBe(array_fill(0, 6, 0), json_encode($results))
+        ->and(Sale::query()->whereIn('id', $saleIds)->pluck('invoice_no')->sort()->values()->all())
+        ->toBe(array_map(fn (int $n): string => sprintf('INV-%d-%06d', $year, $n), range(1, 6)));
+});

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Sales;
 
+use App\Actions\Payments\Concerns\LocksLedgerRows;
 use App\Actions\Sales\Concerns\LocksSaleRows;
 use App\DTOs\Pricing\AppliedRuleSummary;
 use App\DTOs\Pricing\PricedOrder;
@@ -19,6 +20,7 @@ use App\Models\SaleItem;
 use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Services\AllocationLedger;
 use App\Services\NumberSequenceService;
 use App\Services\PricingService;
 use Illuminate\Database\Eloquent\Collection;
@@ -36,16 +38,20 @@ use Spatie\Activitylog\Support\CauserResolver;
  */
 class ConfirmSale
 {
-    use LocksSaleRows;
+    use LocksLedgerRows, LocksSaleRows;
 
     public function __construct(
         private readonly PricingService $pricing,
         private readonly NumberSequenceService $numberSequence,
+        private readonly AllocationLedger $ledger,
         private readonly CauserResolver $causer,
     ) {}
 
     /**
-     * @param  array{due_date?: string|\DateTimeInterface|null, override_credit_limit?: bool}  $options
+     * apply_credit: after confirming, apply the customer's credit (FIFO over payments) to
+     * this invoice, in the same transaction.
+     *
+     * @param  array{due_date?: string|\DateTimeInterface|null, override_credit_limit?: bool, apply_credit?: bool}  $options
      */
     public function execute(User $user, Sale $sale, array $options = []): Sale
     {
@@ -53,6 +59,10 @@ class ConfirmSale
             // 1. Customer, then sale, then items (locking reads; see LocksSaleRows).
             [$customer, $locked] = $this->lockCustomerAndSale($sale);
             $locked->assertCanTransitionTo(SaleStatus::Confirmed, 'confirm');
+
+            // Payments come right after the sale in the global lock order.
+            $applyCredit = (bool) ($options['apply_credit'] ?? false);
+            $creditPayments = $applyCredit ? $this->lockCreditPaymentsFifo($customer) : collect();
 
             $items = $this->lockItems($locked);
             if ($items->isEmpty()) {
@@ -78,7 +88,8 @@ class ConfirmSale
             $this->assertStockAvailable($priced, $products);
 
             // 5. Credit limit (customer row already locked in step 1).
-            $this->checkCreditLimit($locked, $customer, $priced->total, $user, (bool) ($options['override_credit_limit'] ?? false));
+            $creditToApply = $applyCredit ? min($priced->total, (int) $customer->credit_balance) : 0;
+            $this->checkCreditLimit($locked, $customer, $priced->total, $creditToApply, $user, (bool) ($options['override_credit_limit'] ?? false));
 
             $confirmedAt = Carbon::now();
 
@@ -148,10 +159,14 @@ class ConfirmSale
             $customer->outstanding_balance += $priced->total;
             $customer->save();
 
+            if ($creditToApply > 0) {
+                $this->ledger->applyCredit($customer, $creditPayments, $locked, $creditToApply, $user);
+            }
+
             return $locked;
         }));
 
-        return $confirmed->fresh(['customer', 'items.product', 'createdBy']);
+        return $confirmed->fresh(['customer', 'items.product', 'createdBy', 'allocations']);
     }
 
     /**
@@ -231,22 +246,24 @@ class ConfirmSale
     /**
      * Warning, not a block (spec 9.1): the client resends with override_credit_limit.
      * Reads the cached outstanding_balance from the customer row this transaction holds
-     * locked; every money action maintains that cache under the same lock.
+     * locked; every money action maintains that cache under the same lock. Credit applied
+     * on confirm reduces the exposure.
      */
-    private function checkCreditLimit(Sale $sale, Customer $customer, int $total, User $user, bool $override): void
+    private function checkCreditLimit(Sale $sale, Customer $customer, int $total, int $creditApplied, User $user, bool $override): void
     {
         if ($customer->credit_limit === null) {
             return;
         }
 
         $outstanding = (int) $customer->outstanding_balance;
+        $projected = $outstanding + $total - $creditApplied;
 
-        if ($outstanding + $total <= $customer->credit_limit) {
+        if ($projected <= $customer->credit_limit) {
             return;
         }
 
         if (! $override) {
-            throw new CreditLimitExceededException($customer->credit_limit, $outstanding, $total);
+            throw new CreditLimitExceededException($customer->credit_limit, $outstanding, $total, $creditApplied);
         }
 
         activity()
@@ -258,7 +275,8 @@ class ConfirmSale
                 'credit_limit' => $customer->credit_limit,
                 'outstanding' => $outstanding,
                 'sale_total' => $total,
-                'projected_balance' => $outstanding + $total,
+                'credit_applied' => $creditApplied,
+                'projected_balance' => $projected,
             ])
             ->log('credit_limit_overridden');
     }

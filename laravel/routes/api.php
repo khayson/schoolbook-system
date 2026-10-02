@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\CustomerCreditController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\LanguageController;
 use App\Http\Controllers\Api\V1\LevelController;
 use App\Http\Controllers\Api\V1\LevelGroupController;
+use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\PublisherController;
@@ -47,6 +49,8 @@ Route::prefix('v1')->group(function () {
         Route::post('stock/adjustments', [StockAdjustmentController::class, 'store']);
 
         Route::apiResource('customers', CustomerController::class);
+        Route::post('customers/{customer}/apply-credit', [CustomerCreditController::class, 'apply'])
+            ->middleware('idempotent');
 
         Route::post('pricing/preview', [PricingController::class, 'preview']);
 
@@ -60,6 +64,13 @@ Route::prefix('v1')->group(function () {
         Route::post('sales/{sale}/void', [SaleController::class, 'void']);
         Route::post('sales/{sale}/deliver', [SaleController::class, 'deliver']);
         Route::get('sales/{sale}/invoice', [SaleController::class, 'invoice']);
+
+        Route::get('payments', [PaymentController::class, 'index']);
+        Route::post('payments', [PaymentController::class, 'store'])
+            ->middleware('idempotent');
+        Route::get('payments/{payment}', [PaymentController::class, 'show']);
+        Route::post('payments/{payment}/void', [PaymentController::class, 'void']);
+        Route::get('payments/{payment}/receipt', [PaymentController::class, 'receipt']);
 
     });
 

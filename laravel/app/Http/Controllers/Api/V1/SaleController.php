@@ -62,7 +62,7 @@ class SaleController extends Controller
     {
         $this->authorize('view', $sale);
 
-        $sale->load(['customer', 'items.product', 'createdBy']);
+        $sale->load(['customer', 'items.product', 'createdBy', 'allocations.payment']);
 
         return new SaleResource($sale);
     }

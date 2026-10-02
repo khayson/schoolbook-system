@@ -246,19 +246,21 @@ requested (portal, later) ──approve──> confirmed
 ```
 - **draft**: editable, no invoice number, no stock effect.
 - **confirm** (`ConfirmSale`): reprice (7.6), check stock, assign `invoice_no`, create `sale_out` movements, set `balance_due = total`, optionally apply customer credit (`apply_credit: true`), set `due_date` from payment terms if absent. All in one transaction with an idempotency key.
-- **cancel**: drafts only. **void**: confirmed, **undelivered** sales only, with a mandatory reason (a sale with `delivered_at` set returns `409 sale_delivered`; delivered goods come back through returns, Phase 5; amended Phase 2B.1). Void creates `sale_void_in` movements and reverses allocations (the payment amounts return to the customer as `unallocated_amount`/`credit_balance`).
+- **cancel**: drafts only. **void**: confirmed, **undelivered** sales only, with a mandatory reason (a sale with `delivered_at` set returns `409 sale_delivered`; delivered goods come back through returns, Phase 5; amended Phase 2B.1). Payments applied to the sale are reversed through the ledger, not refused (2C.2). Void creates `sale_void_in` movements and reverses allocations (the payment amounts return to the customer as `unallocated_amount`/`credit_balance`).
 - Customer credit limit: if `outstanding + this sale total > credit_limit`, return a **warning** (not a block). The client confirms with `override_credit_limit: true`.
 
 ### 9.2 Payment status
 Derived from allocations: `unpaid` (paid = 0), `partial` (0 < paid < total), `paid` (paid >= total). Recalculated inside the same transaction whenever allocations change.
 
 ### 9.3 Recording a payment (`RecordPayment`)
-- Input: customer, amount, method, reference, date, and optionally explicit `allocations: [{sale_id, amount}]`.
-- If no allocations are given, **auto-allocate oldest invoice first** (by `due_date`, then `sale_date`, then id) across the customer's confirmed sales with `balance_due > 0`.
+- Input: customer, amount (> 0), method, reference (required except for cash), date (`paid_at`, not in the future), notes, and optionally explicit `allocations: [{sale_id, amount}]` or `auto_allocate` (default true).
+- Explicit allocations: each sale is the customer's, confirmed, with amount ≤ its `balance_due`; the total ≤ the payment amount.
+- If no allocations are given and `auto_allocate` is true, **auto-allocate oldest invoice first** (by `due_date`, then `sale_date`, then id) across the customer's confirmed sales with `balance_due > 0`. `auto_allocate: false` puts everything on credit.
 - Any remainder is stored in `payments.unallocated_amount` and added to `customers.credit_balance`.
-- Assign a receipt number; generate the receipt PDF on demand.
-- **Void payment**: mandatory reason; reverses its allocations, recalculates the affected sales and customer credit.
-- `AllocateCredit`: applies a customer's credit balance to selected unpaid sales.
+- Assign a receipt number (sequence `rct`, taken last, year of the recording date); generate the receipt PDF on demand.
+- **Void payment**: mandatory reason; inserts a reversal row for every effective allocation (sales owe that money again), removes the payment's money from `credit_balance`, sets the payment void with `unallocated_amount = 0`.
+- `AllocateCredit`: applies a customer's credit balance to chosen sales or oldest first, consuming payments' `unallocated_amount` FIFO (`paid_at`, then id).
+- `ConfirmSale` with `apply_credit: true` applies credit to the new invoice in the same transaction (credit payments locked right after the sale).
 
 ### 9.4 Customer money views
 - **Outstanding balance** = sum of `balance_due` over the customer's confirmed sales.

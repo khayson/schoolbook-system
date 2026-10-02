@@ -11,6 +11,7 @@ use App\Exceptions\InvalidInputException;
 use App\Exceptions\SaleNotEditableException;
 use App\Exceptions\SaleStateConflictException;
 use App\Models\Customer;
+use App\Models\PaymentAllocation;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Setting;
@@ -159,18 +160,25 @@ test('void requires a reason', function () {
     expect($sale->fresh()->status)->toBe(SaleStatus::Confirmed);
 });
 
-test('void is refused once a payment has been applied', function () {
-    $product = stockedProduct(stock: 5);
-    $sale = confirmedSale($this->owner, [[$product, 2]]);
-    applyLedgerPayment($sale, 500, $this->owner);
+test('voiding a part-paid sale returns the money to customer credit through reversal rows', function () {
+    $product = stockedProduct(stock: 5, price: 1000);
+    $customer = Customer::factory()->create(['credit_limit' => null]);
+    $sale = confirmedSale($this->owner, [[$product, 2]], $customer);
+    $payment = recordPayment($this->owner, $customer, 500);
 
-    $this->withToken($this->token)->postJson("/api/v1/sales/{$sale->id}/void", ['reason' => 'Wrong'])
-        ->assertStatus(409)
-        ->assertJsonPath('code', 'sale_has_payments')
-        ->assertJsonPath('details.amount_paid', 500);
+    $this->withToken($this->token)->postJson("/api/v1/sales/{$sale->id}/void", ['reason' => 'Wrong school'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'void')
+        ->assertJsonPath('data.amount_paid', 0)
+        ->assertJsonPath('data.balance_due', 0);
 
-    expect($sale->fresh()->status)->toBe(SaleStatus::Confirmed)
-        ->and($product->fresh()->stock_on_hand)->toBe(3);
+    $reversal = PaymentAllocation::query()->whereNotNull('reversal_of_id')->sole();
+
+    expect($reversal->amount)->toBe(-500)
+        ->and($payment->fresh()->unallocated_amount)->toBe(500)
+        ->and($customer->fresh()->credit_balance)->toBe(500)
+        ->and($customer->fresh()->outstanding_balance)->toBe(0)
+        ->and($product->fresh()->stock_on_hand)->toBe(5);
 });
 
 test('a delivered sale cannot be voided', function () {

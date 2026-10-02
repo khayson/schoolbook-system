@@ -16,6 +16,7 @@ class ConfirmSaleRequest extends FormRequest
         return [
             'due_date' => ['nullable', 'date'],
             'override_credit_limit' => ['sometimes', 'boolean'],
+            'apply_credit' => ['sometimes', 'boolean'],
         ];
     }
 }

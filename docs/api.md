@@ -38,8 +38,13 @@ Every error response uses one envelope:
 | `price_changed` | 409 | Confirming a draft whose prices no longer match. Nothing was written | `{ priced_order }` (same shape as `POST /pricing/preview` `data`) |
 | `sale_state_conflict` | 409 | The sale changed (e.g. reassigned to another customer) between loading and locking. Nothing written; reload and retry | `{ sale_id, retry: true }` |
 | `sale_delivered` | 409 | Voiding a sale that has been delivered | `{ sale_id, delivered_at }` |
-| `sale_has_payments` | 409 | Voiding a sale with payments applied (until Phase 2C) | `{ sale_id, amount_paid }` |
-| `credit_limit_exceeded` | 409 | Outstanding balance + this sale > customer credit limit. A warning: resend with the flag in `override_flag` set to `true` | `{ credit_limit, outstanding, sale_total, projected_balance, override_flag: "override_credit_limit" }` |
+| `sale_not_payable` | 422 | An allocation names a sale that cannot take money | `{ sale_id, reason: not_found\|other_customer\|not_confirmed\|fully_paid, status? }` |
+| `allocation_exceeds_balance` | 422 | An allocation is more than that invoice's balance due | `{ sale_id, invoice_no, balance_due, requested }` |
+| `allocation_exceeds_payment` | 422 | Allocations add up to more than the payment amount | `{ amount, allocated_total }` |
+| `allocation_exceeds_credit` | 422 | Credit allocations add up to more than the customer's credit | `{ credit_balance, requested }` |
+| `no_credit_available` | 409 | Applying credit for a customer with none | `{ customer_id, credit_balance }` |
+| `payment_already_void` | 409 | Voiding a void payment, or asking for its receipt | `{ payment_id, receipt_no, action: void\|receipt }` |
+| `credit_limit_exceeded` | 409 | Outstanding balance + this sale − credit applied (`apply_credit`) > customer credit limit. A warning: resend with the flag in `override_flag` set to `true` | `{ credit_limit, outstanding, sale_total, credit_applied, projected_balance, override_flag: "override_credit_limit" }` |
 
 Example (`insufficient_stock`):
 
@@ -280,12 +285,12 @@ All sales routes require Bearer token + owner. Money is pesewas. A sale moves `d
 Requires `Idempotency-Key`. Same key + same body replays the original `200` (header `Idempotency-Replayed: true`) with the same `invoice_no`; no second stock movement.
 
 ```json
-{ "due_date": "2026-11-30", "override_credit_limit": false }
+{ "due_date": "2026-11-30", "override_credit_limit": false, "apply_credit": true }
 ```
 
-Both fields optional. `due_date` defaults to the draft's `due_date`, else confirmation date + `default_payment_terms_days`.
+All fields optional. `apply_credit: true` applies the customer's credit (FIFO over their payments) to this invoice in the same transaction; with no credit it does nothing. Credit applied also lowers the credit-limit exposure. `due_date` defaults to the draft's `due_date`, else confirmation date + `default_payment_terms_days`.
 
-In one transaction: reprices the draft at its `sale_date`, checks stock (summed per product), checks the credit limit, writes `sale_out` movements, refreshes each line's `unit_cost` from the product, then assigns `invoice_no` (`INV-YYYY-000001`, year of the **confirmation** date). Response `200` with the `Sale` resource: `status: confirmed`, `balance_due = total`, `amount_paid: 0`, `payment_status: unpaid`.
+In one transaction: reprices the draft at its `sale_date`, checks stock (summed per product), checks the credit limit, writes `sale_out` movements, refreshes each line's `unit_cost` from the product, then assigns `invoice_no` (`INV-YYYY-000001`, year of the **confirmation** date). Response `200` with the `Sale` resource (including `allocations`): `status: confirmed`, `balance_due = total − credit applied`, `payment_status` derived (`unpaid`, `partial`, or `paid`; a zero-total sale is `paid`).
 
 Failures write nothing:
 
@@ -304,9 +309,9 @@ Drafts only. Optional `{ "reason": "..." }`. Response `200`, `status: cancelled`
 
 ### `POST /sales/{id}/void`
 
-Confirmed sales only. `{ "reason": "..." }` is required. Writes a `sale_void_in` movement per line at the line's snapshot `unit_cost`, restores `stock_on_hand`, sets `status: void`, `balance_due: 0`, `voided_at`, `voided_by`, `void_reason`. The `invoice_no` is kept.
+Confirmed sales only. `{ "reason": "..." }` is required. Writes a `sale_void_in` movement per line at the line's snapshot `unit_cost`, restores `stock_on_hand`, sets `status: void`, `balance_due: 0`, `voided_at`, `voided_by`, `void_reason`. The `invoice_no` is kept. Money already applied is reversed through the ledger (one negative reversal row per allocation): it returns to each payment's `unallocated_amount` and the customer's `credit_balance`, ready for `POST /customers/{id}/apply-credit`. `amount_paid` and `balance_due` become 0.
 
-Refusals (nothing written): `409 sale_delivered` if `delivered_at` is set (delivered goods come back through returns, Phase 5); `409 sale_has_payments` if `amount_paid > 0` (until Phase 2C adds allocation reversal); `409 sale_state_conflict` as for confirm; `409 sale_not_editable` if not confirmed.
+Refusals (nothing written): `409 sale_delivered` if `delivered_at` is set (delivered goods come back through returns, Phase 5); `409 sale_state_conflict` as for confirm; `409 sale_not_editable` if not confirmed.
 
 ### `POST /sales/{id}/deliver`
 
@@ -315,4 +320,68 @@ Confirmed sales only. Sets `delivered_at`; calling it again keeps the original t
 ### `GET /sales/{id}/invoice`
 
 `application/pdf` download named `INV-YYYY-NNNNNN.pdf`. Business name, address, phone and footer come from settings. Confirmed sales only; drafts, cancelled and void sales return `409 sale_not_editable` (`details.action: invoice`).
+
+`GET /sales/{id}` includes `allocations`: the sale's ledger rows `{ id, payment_id, receipt_no, sale_id, amount, reversal_of_id, created_by, created_at }`. Negative rows are reversals.
+
+## Payments
+
+All payment routes require Bearer token + owner. Amounts are pesewas. A payment's money is either applied to invoices (allocations) or held as customer credit (`unallocated_amount`). Allocations form an immutable ledger: corrections add negative reversal rows, nothing is edited or deleted.
+
+### `POST /payments`
+
+Requires `Idempotency-Key` (replay returns the original `201`; same key with a different body is `422 idempotency_key_mismatch`).
+
+```json
+{
+  "customer_id": 12,
+  "amount": 350000,
+  "method": "momo",
+  "reference": "MP261002.1234.A1",
+  "paid_at": "2026-10-02",
+  "notes": "Term 1 books",
+  "auto_allocate": true,
+  "allocations": [ { "sale_id": 41, "amount": 200000 } ]
+}
+```
+
+- `amount` integer > 0. `method`: `cash`, `momo`, `bank_transfer`, `cheque`. `reference` is required for every method except `cash` (it traces the real transaction). `paid_at` defaults to now and cannot be in the future.
+- **Allocation:** if `allocations` is given, exactly those invoices are paid (each must be this customer's confirmed sale; amount ≤ its `balance_due`; total ≤ `amount`; sale ids distinct). Otherwise, if `auto_allocate` (default `true`), invoices are paid **oldest due first** (`due_date`, then `sale_date`, then id). `auto_allocate: false` with no `allocations` puts the whole amount on credit.
+- The remainder becomes `unallocated_amount` and is added to the customer's `credit_balance`.
+- Receipt number `RCT-YYYY-NNNNNN`, year of the **recording** date (not `paid_at`).
+
+Response `201` with the `Payment` resource including `allocations` (`invoice_no`, `amount`) and `customer` (with `credit_balance`, `outstanding_balance`).
+
+Errors (nothing written): `422 validation_failed`, `422 sale_not_payable`, `422 allocation_exceeds_balance`, `422 allocation_exceeds_payment`.
+
+### `GET /payments`
+
+Paginated, newest `paid_at` first. Filters: `customer_id`, `method`, `status` (`valid`|`void`), `from`, `to` (dates on `paid_at`, inclusive).
+
+### `GET /payments/{id}`
+
+Payment with `customer`, `allocations` (with `invoice_no`; reversals are negative rows with `reversal_of_id`).
+
+### `POST /payments/{id}/void`
+
+`{ "reason": "Cheque bounced" }` (required). Adds a reversal row for every allocation still in effect, so each invoice owes that money again; removes the payment's remaining amount from the customer's credit; sets `status: void`, `unallocated_amount: 0`, `voided_at`, `voided_by`, `void_reason`. A void payment returns `409 payment_already_void`.
+
+### `GET /payments/{id}/receipt`
+
+`application/pdf` download named `RCT-YYYY-NNNNNN.pdf`: business details, receipt no., date, customer, method and reference, amount, per-invoice breakdown with each invoice's remaining balance, unapplied amount, customer credit and outstanding balance. Void payments return `409 payment_already_void` (`details.action: receipt`).
+
+### `POST /customers/{id}/apply-credit`
+
+Requires `Idempotency-Key` (a retry must not apply credit twice). Body optional:
+
+```json
+{ "allocations": [ { "sale_id": 41, "amount": 50000 } ] }
+```
+
+Without `allocations`, credit goes to the oldest-due invoices first. Credit is drawn from the customer's payments FIFO (`paid_at`, then id). Response `200`:
+
+```json
+{ "data": { "applied_total": 50000, "customer": { "credit_balance": 0, "outstanding_balance": 120000 }, "allocations": [ { "receipt_no": "RCT-2026-000004", "invoice_no": "INV-2026-000041", "amount": 50000 } ] } }
+```
+
+Errors: `409 no_credit_available`, `422 allocation_exceeds_credit`, `422 sale_not_payable`, `422 allocation_exceeds_balance`.
 

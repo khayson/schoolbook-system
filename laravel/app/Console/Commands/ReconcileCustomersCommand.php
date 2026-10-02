@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\DTOs\Ledger\InvariantViolation;
 use App\Services\MoneyInvariants;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Checks the money invariants (spec 9.5). Report-only by default; exits non-zero when
@@ -56,6 +57,21 @@ class ReconcileCustomersCommand extends Command
         $this->info('All money invariants hold.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Scheduler onFailure hook: a non-zero exit must reach someone. Re-checks so the log
+     * carries the current count. Email/notifications can hang off this later.
+     */
+    public static function logScheduledFailure(): void
+    {
+        $violations = app(MoneyInvariants::class)->check();
+
+        Log::critical('customers:reconcile found money invariant violations', [
+            'violations' => count($violations),
+            'invariants' => array_count_values(array_map(fn (InvariantViolation $v): string => $v->invariant, $violations)),
+            'customers' => array_values(array_unique(array_filter(array_map(fn (InvariantViolation $v): ?int => $v->customerId, $violations)))),
+        ]);
     }
 
     /**

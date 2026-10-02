@@ -2,6 +2,7 @@
 
 use App\Actions\Sales\ConfirmSale;
 use App\Actions\Sales\VoidSale;
+use App\Console\Commands\ReconcileCustomersCommand;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentRecordStatus;
 use App\Enums\PaymentStatus;
@@ -13,9 +14,11 @@ use App\Models\Sale;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\MoneyInvariants;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function () {
@@ -49,7 +52,7 @@ function seedReceivables(User $owner): array
     app(ConfirmSale::class)->execute($owner, makeDraftSale($owner, [[$product, 2]], $reseller));
     makeDraftSale($owner, [[$product, 1]], $reseller);
 
-    applyLedgerPayment($paid, 6000, $owner);
+    recordPayment($owner, $school, 6000, ['allocations' => [['sale_id' => $paid->id, 'amount' => 6000]]]);
 
     return [$school->fresh(), $reseller->fresh(), $paid->fresh(), $open->fresh()];
 }
@@ -313,4 +316,34 @@ test('payment enums', function () {
         ->and(PaymentStatus::derive(1000, 1))->toBe(PaymentStatus::Partial)
         ->and(PaymentStatus::derive(1000, 1000))->toBe(PaymentStatus::Paid)
         ->and(PaymentStatus::derive(0, 0))->toBe(PaymentStatus::Paid);
+});
+
+test('a failed scheduled reconcile is logged as critical with the violation count', function () {
+    [$school] = seedReceivables($this->owner);
+    DB::table('customers')->where('id', $school->id)->update(['outstanding_balance' => 1, 'credit_balance' => 2]);
+
+    Log::spy();
+
+    ReconcileCustomersCommand::logScheduledFailure();
+
+    Log::shouldHaveReceived('critical')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'customers:reconcile')
+        && $context['violations'] === 2
+        && $context['invariants'] === ['customer_credit_balance' => 1, 'customer_outstanding' => 1]
+        && $context['customers'] === [$school->id]);
+});
+
+test('the reconcile command is scheduled with a failure hook', function () {
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($e) => str_contains((string) $e->command, 'customers:reconcile'));
+
+    expect($event)->not->toBeNull()
+        ->and($event->expression)->toBe('30 2 * * *');
+
+    // onFailure registers an after-callback; run it against clean data to prove it is wired.
+    Log::spy();
+    $event->exitCode = 1;
+    foreach ((new ReflectionProperty($event, 'afterCallbacks'))->getValue($event) as $callback) {
+        app()->call($callback);
+    }
+    Log::shouldHaveReceived('critical')->once();
 });

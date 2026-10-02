@@ -13,4 +13,6 @@ Artisan::command('inspire', function () {
 Schedule::command(PruneIdempotencyKeysCommand::class)->daily();
 
 // Report-only; a non-zero exit flags drift in the cached money balances.
-Schedule::command(ReconcileCustomersCommand::class)->dailyAt('02:30');
+Schedule::command(ReconcileCustomersCommand::class)
+    ->dailyAt('02:30')
+    ->onFailure(fn () => ReconcileCustomersCommand::logScheduledFailure());

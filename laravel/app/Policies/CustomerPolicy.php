@@ -27,6 +27,11 @@ class CustomerPolicy
         return $user->isOwner();
     }
 
+    public function applyCredit(User $user, Customer $customer): bool
+    {
+        return $user->isOwner();
+    }
+
     public function delete(User $user, Customer $customer): bool
     {
         return $user->isOwner();

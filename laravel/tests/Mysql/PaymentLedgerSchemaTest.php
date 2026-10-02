@@ -65,3 +65,14 @@ test('backfill and invariant queries run on MySQL', function () {
     expect(collect(app(MoneyInvariants::class)->check())->pluck('invariant')->all())
         ->toContain('sale_amount_paid', 'sale_balance_due');
 });
+
+test('a zero-amount allocation row is rejected at the database', function () {
+    $user = User::factory()->owner()->create();
+    $customer = Customer::factory()->create(['credit_limit' => null]);
+    $sale = app(ConfirmSale::class)->execute($user, makeDraftSale($user, [[stockedProduct(stock: 5, price: 1000), 1]], $customer));
+    $paymentId = insertPaymentRow($customer->id, $user->id, 1000);
+
+    expect(fn () => DB::table('payment_allocations')->insert([
+        'payment_id' => $paymentId, 'sale_id' => $sale->id, 'amount' => 0, 'created_by' => $user->id, 'created_at' => now(),
+    ]))->toThrow(QueryException::class);
+});

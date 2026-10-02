@@ -38,6 +38,7 @@ class SaleResource extends JsonResource
             'voided_at' => $this->voided_at,
             'void_reason' => $this->void_reason,
             'items' => SaleItemResource::collection($this->whenLoaded('items')),
+            'allocations' => PaymentAllocationResource::collection($this->whenLoaded('allocations')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
