@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
 import 'package:schoolbook/features/auth/presentation/login_screen.dart';
+import 'package:schoolbook/features/customers/presentation/customer_detail_screen.dart';
+import 'package:schoolbook/features/customers/presentation/customer_form_screen.dart';
+import 'package:schoolbook/features/customers/presentation/customers_list_screen.dart';
 import 'package:schoolbook/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:schoolbook/features/payments/presentation/payment_detail_screen.dart';
+import 'package:schoolbook/features/payments/presentation/payments_list_screen.dart';
+import 'package:schoolbook/features/payments/presentation/record_payment_screen.dart';
 import 'package:schoolbook/features/products/presentation/product_detail_screen.dart';
 import 'package:schoolbook/features/products/presentation/product_form_screen.dart';
 import 'package:schoolbook/features/products/presentation/product_scan_screen.dart';
@@ -76,6 +82,48 @@ GoRouter createAppRouter(AuthProvider authProvider) {
       GoRoute(
         path: '/stock/receive',
         builder: (context, state) => const ReceiveStockScreen(),
+      ),
+      GoRoute(
+        path: '/customers',
+        builder: (context, state) => const CustomersListScreen(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const CustomerFormScreen(),
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (context, state) => CustomerDetailScreen(
+              customerId: int.parse(state.pathParameters['id']!),
+            ),
+            routes: [
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) => CustomerFormScreen(
+                  customerId: int.parse(state.pathParameters['id']!),
+                ),
+              ),
+              GoRoute(
+                path: 'pay',
+                builder: (context, state) => RecordPaymentScreen(
+                  customerId: int.parse(state.pathParameters['id']!),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/payments',
+        builder: (context, state) => const PaymentsListScreen(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (context, state) => PaymentDetailScreen(
+              paymentId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+        ],
       ),
     ],
   );

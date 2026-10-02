@@ -1,16 +1,25 @@
-/// API error mapped from Laravel JSON error responses.
+/// API error mapped from the Laravel error envelope:
+/// `{ message, code, errors: {field: [..]}, details?: {...} }` (docs/api.md, Errors).
 class ApiException implements Exception {
   ApiException({
     required this.message,
     this.statusCode,
     this.code,
     this.fieldErrors = const {},
+    this.details = const {},
+    this.isNetworkError = false,
   });
 
-  final String message;
-  final int? statusCode;
-  final String? code;
-  final Map<String, List<String>> fieldErrors;
+  /// No response reached us (offline, timeout, connection reset). The request may or
+  /// may not have been processed, so a retry must reuse the same idempotency key.
+  factory ApiException.network([String? message]) {
+    return ApiException(
+      message: message ??
+          'No connection to the server. Nothing is lost: retrying is safe.',
+      code: 'network_error',
+      isNetworkError: true,
+    );
+  }
 
   factory ApiException.fromDio(dynamic responseData, {int? statusCode}) {
     if (responseData is Map<String, dynamic>) {
@@ -29,11 +38,15 @@ class ApiException implements Exception {
           }
         }
       }
+      final rawDetails = responseData['details'];
       return ApiException(
         message: message,
         statusCode: statusCode,
         code: code,
         fieldErrors: fieldErrors,
+        details: rawDetails is Map
+            ? rawDetails.map((k, v) => MapEntry(k.toString(), v))
+            : const {},
       );
     }
     return ApiException(
@@ -41,6 +54,18 @@ class ApiException implements Exception {
       statusCode: statusCode,
     );
   }
+
+  final String message;
+  final int? statusCode;
+  final String? code;
+  final Map<String, List<String>> fieldErrors;
+
+  /// Machine-readable extras for business errors (e.g. `existing_receipt_no`).
+  final Map<String, dynamic> details;
+  final bool isNetworkError;
+
+  /// First message for [field], e.g. `reference` or `allocations.0.amount`.
+  String? fieldError(String field) => fieldErrors[field]?.first;
 
   @override
   String toString() => message;

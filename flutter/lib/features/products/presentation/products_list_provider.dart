@@ -7,10 +7,9 @@ import 'package:schoolbook/features/products/domain/product.dart';
 
 class ProductsListProvider extends ChangeNotifier {
   ProductsListProvider({
-    required ProductsRepository productsRepository,
-    required LookupsRepository lookupsRepository,
-  })  : _productsRepository = productsRepository,
-        _lookupsRepository = lookupsRepository;
+    required this._productsRepository,
+    required this._lookupsRepository,
+  });
 
   final ProductsRepository _productsRepository;
   final LookupsRepository _lookupsRepository;

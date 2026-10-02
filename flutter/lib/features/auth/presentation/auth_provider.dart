@@ -6,8 +6,7 @@ import 'package:schoolbook/features/auth/domain/auth_user.dart';
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthProvider extends ChangeNotifier {
-  AuthProvider({required AuthRepository repository})
-      : _repository = repository;
+  AuthProvider({required this._repository});
 
   final AuthRepository _repository;
 

@@ -3,11 +3,15 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:schoolbook/core/api_client.dart';
 import 'package:schoolbook/core/auth_token_store.dart';
+import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
+import 'package:schoolbook/core/pdf_sharer.dart';
 import 'package:schoolbook/core/router.dart';
 import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/features/auth/data/auth_repository.dart';
 import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
 import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
+import 'package:schoolbook/features/customers/data/customers_repository.dart';
+import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/presentation/products_list_provider.dart';
 import 'package:schoolbook/features/stock/data/stock_repository.dart';
@@ -72,6 +76,20 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
         Provider<StockRepository>(
           create: (context) =>
               StockRepository(apiClient: context.read<ApiClient>()),
+        ),
+        Provider<CustomersRepository>(
+          create: (context) =>
+              CustomersRepository(apiClient: context.read<ApiClient>()),
+        ),
+        Provider<PaymentsRepository>(
+          create: (context) =>
+              PaymentsRepository(apiClient: context.read<ApiClient>()),
+        ),
+        Provider<PendingSubmissionStore>(
+          create: (_) => PendingSubmissionStore(),
+        ),
+        Provider<PdfSharer>(
+          create: (_) => const SystemPdfSharer(),
         ),
         ChangeNotifierProvider<ProductsListProvider>(
           create: (context) => ProductsListProvider(

@@ -1,6 +1,15 @@
 /// Display and parse helpers for integer pesewas (1 GHS = 100 pesewas).
 /// Parsing never uses floating-point arithmetic.
 abstract final class Money {
+  /// Largest single amount accepted from input: GHS 1,000,000,000.00 (same cap as the
+  /// server's `Money::MAX_PESEWAS`).
+  static const int maxPesewas = 100000000000;
+
+  /// Plain digits, or thousands correctly grouped in threes (1,250 / 1,250,000.50),
+  /// with at most 2 decimals. Same rule as the admin's GHS input.
+  static final RegExp _pattern =
+      RegExp(r'^(\d{1,10}|\d{1,3}(,\d{3}){1,3})(\.(\d{1,2}))?$');
+
   /// Formats [pesewas] as `GHS 12.34`.
   static String formatPesewas(int pesewas) {
     final sign = pesewas < 0 ? '-' : '';
@@ -11,26 +20,30 @@ abstract final class Money {
     return 'GHS $sign$wholeGrouped.${fraction.toString().padLeft(2, '0')}';
   }
 
-  /// Parses a user-entered GHS amount to pesewas, or null if invalid.
-  /// Rejects more than 2 decimal places. No floats.
-  static int? parseGhsToPesewas(String input) {
-    final normalized = input.trim().replaceAll(',', '');
-    if (normalized.isEmpty) {
-      return null;
-    }
+  /// Formats pesewas as an editable GHS string without the prefix: `1250.50`.
+  static String toGhsInput(int pesewas) {
+    final whole = pesewas.abs() ~/ 100;
+    final fraction = pesewas.abs() % 100;
+    return '${pesewas < 0 ? '-' : ''}$whole.${fraction.toString().padLeft(2, '0')}';
+  }
 
-    final match = RegExp(r'^(\d+)(?:\.(\d{1,2}))?$').firstMatch(normalized);
+  /// Parses a user-entered GHS amount to pesewas, or null if invalid.
+  /// Rejects more than 2 decimal places, misplaced commas and amounts over
+  /// [maxPesewas]. No floats.
+  static int? parseGhsToPesewas(String input) {
+    final trimmed = input.trim();
+    final match = _pattern.firstMatch(trimmed);
     if (match == null) {
       return null;
     }
 
-    final whole = int.parse(match.group(1)!);
-    final fractionRaw = match.group(2);
-    final fraction = fractionRaw == null
-        ? 0
-        : int.parse(fractionRaw.padRight(2, '0'));
+    final whole = int.parse(match.group(1)!.replaceAll(',', ''));
+    final fractionRaw = match.group(4);
+    final fraction =
+        fractionRaw == null ? 0 : int.parse(fractionRaw.padRight(2, '0'));
 
-    return whole * 100 + fraction;
+    final pesewas = whole * 100 + fraction;
+    return pesewas > maxPesewas ? null : pesewas;
   }
 
   /// Formats pesewas for compact list subtitles (same as [formatPesewas]).

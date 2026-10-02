@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:schoolbook/core/auth_token_store.dart';
 import 'package:schoolbook/core/config/api_config.dart';
@@ -8,11 +10,10 @@ typedef UnauthorizedHandler = void Function();
 /// Shared Dio client with auth header injection and error mapping.
 class ApiClient {
   ApiClient({
-    required AuthTokenStore tokenStore,
+    required this._tokenStore,
     String baseUrl = ApiConfig.defaultBaseUrl,
-    UnauthorizedHandler? onUnauthorized,
-  })  : _tokenStore = tokenStore,
-        _onUnauthorized = onUnauthorized {
+    this._onUnauthorized,
+  }) {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
@@ -91,16 +92,40 @@ class ApiClient {
     return _request(() => _dio.delete<T>(path));
   }
 
+  /// Binary download (PDF invoices and receipts).
+  Future<List<int>> getBytes(String path) async {
+    final response = await _request(
+      () => _dio.get<List<int>>(
+        path,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {'Accept': 'application/pdf, application/json'},
+        ),
+      ),
+    );
+    return response.data ?? const [];
+  }
+
   Future<Response<T>> _request<T>(
     Future<Response<T>> Function() call,
   ) async {
     try {
       return await call();
     } on DioException catch (e) {
-      throw ApiException.fromDio(
-        e.response?.data,
-        statusCode: e.response?.statusCode,
-      );
+      if (e.response == null) {
+        // Offline / timeout / reset: outcome unknown. Callers keep the idempotency key.
+        throw ApiException.network();
+      }
+      var data = e.response?.data;
+      if (data is List<int>) {
+        // Error body of a bytes request (e.g. 409 on a void receipt) is JSON.
+        try {
+          data = jsonDecode(utf8.decode(data));
+        } on FormatException {
+          data = null;
+        }
+      }
+      throw ApiException.fromDio(data, statusCode: e.response?.statusCode);
     }
   }
 }

@@ -7,9 +7,8 @@ import 'package:schoolbook/features/auth/domain/auth_user.dart';
 class AuthRepository {
   AuthRepository({
     required ApiClient apiClient,
-    required AuthTokenStore tokenStore,
-  })  : _api = apiClient,
-        _tokenStore = tokenStore;
+    required this._tokenStore,
+  }) : _api = apiClient;
 
   final ApiClient _api;
   final AuthTokenStore _tokenStore;
