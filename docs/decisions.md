@@ -47,7 +47,7 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 **Decision:**
 - Reusable `idempotent` middleware + `idempotency_keys` table; applied to `POST /stock/receipts` now (confirm/payments later).
 - `Money::ghsToPesewas` / Flutter `parseGhsToPesewas` parse decimal strings only (no float multiply); >2 decimals rejected.
-- Spec §§5.14–5.16: lock order products→customer→invoice sequence last; invoice year from confirmation date; never edit shipped migrations.
+- Spec §§5.14–5.16: lock order products→customer→invoice sequence last (**superseded by Phase 2B.1**: customer → sale → items → products → sequence); invoice year from confirmation date; never edit shipped migrations.
 
 ## 2026-10-01 — Idempotency claim lifecycle (Phase 2A start)
 
@@ -74,7 +74,7 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 **Context:** 2B prompt plus reviewer additions (item immutability, deactivated products at confirm, one transition guard).
 
 **Decision:**
-- **Lock order** for every sale state change, in `Actions/Sales/Concerns/LocksSaleRows`: sale row → its items → products (ascending id, one at a time) → customer → invoice sequence (last). All of these are locking reads and run before any plain read in the transaction, because MySQL REPEATABLE READ fixes the snapshot at the first non-locking read; `PricingService` (plain reads) therefore sees product rows no older than the ones we hold. The credit check's outstanding sum uses `sharedLock()` for the same reason.
+- **Lock order** (**superseded by Phase 2B.1**, see below) for every sale state change, in `Actions/Sales/Concerns/LocksSaleRows`: sale row → its items → products (ascending id, one at a time) → customer → invoice sequence (last). All of these are locking reads and run before any plain read in the transaction, because MySQL REPEATABLE READ fixes the snapshot at the first non-locking read; `PricingService` (plain reads) therefore sees product rows no older than the ones we hold. The credit check's outstanding sum uses `sharedLock()` for the same reason.
 - **Price change:** compared per line (product, quantity, unit price, line total, same order and count) plus order totals. A base-price change under an unchanged override is not a change; the verified base price is still written to the snapshot. On 409 nothing is written. To accept new prices the client re-saves the draft (`PUT /sales/{id}` with `{}` reprices), then confirms again; no new "accept" flag was added to confirm.
 - **Due date:** request → draft's `due_date` → confirmation date + `default_payment_terms_days`.
 - **Inactive/deleted product or inactive customer at confirm:** rejected by the repricing step as `422 validation_failed` keyed to `items.N.product_id` / `customer_id`.
@@ -83,6 +83,17 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - **Void schema:** spec 6.5 had no void columns; added `voided_at`, `voided_by`, `void_reason` in a new migration rather than reusing `cancel_*` (cancel and void are different transitions). Void reverses at each line's snapshot `unit_cost`, keeps `invoice_no`, and in 2B is refused with `409 sale_has_payments` when `amount_paid > 0`; 2C replaces that with allocation reversal. It already takes the customer lock so 2C needs no lock-order change.
 - **Invoice PDF:** `RenderInvoicePdf` action (shared with Filament in 2D), confirmed sales only; `Money::formatGhsGrouped()` for display.
 - **401 envelope:** unauthenticated API requests now return `{message, code: "unauthenticated", errors: {}}` (previously Laravel's default body without `code`).
-- **Note for 2C:** `RecordPayment` will lock customer → sales. `VoidSale` locks sale → … → customer. For the same sale these orders are opposite, so a void racing a payment on that invoice can deadlock; InnoDB aborts one and it can be retried. 2C should either lock the customer before the sale in `VoidSale` (read the sale's customer_id first) or retry on deadlock. To be settled in 2C.
+- **Note for 2C** (**resolved in Phase 2B.1**): `RecordPayment` will lock customer → sales. `VoidSale` locks sale → … → customer. For the same sale these orders are opposite, so a void racing a payment on that invoice can deadlock; InnoDB aborts one and it can be retried. 2C should either lock the customer before the sale in `VoidSale` (read the sale's customer_id first) or retry on deadlock. To be settled in 2C.
 - `sales.idempotency_key` stays unused (the middleware table covers confirm). Drop it in a 2C migration unless 2C finds a use.
 
+## 2026-10-02 — Phase 2B.1: global lock order, delivered sales
+
+**Context:** 2B review. The 2B order (sale → items → products → customer) and the coming payment order (customer → sales) are opposite for the same sale, so a void racing a payment could deadlock. "InnoDB aborts one, client retries" is not acceptable for money code.
+
+**Decision:**
+- **One global lock order (spec 5.14):** customer → sale(s) → sale items → products (ascending id) → invoice sequence (last). Every money action locks the customer first, which serializes them per customer, so the order of sale locks among them cannot cycle. Stock-only actions lock products only. `CancelSale` and `MarkDelivered` lock only the sale row (nothing after it), which is consistent with the order.
+- `LocksSaleRows::lockCustomerAndSale()` takes `customer_id` from the sale loaded outside the transaction (route binding), locks the customer, locks the sale, and if the locked sale now has a different customer (a draft was reassigned meanwhile) throws `409 sale_state_conflict` (`details.retry: true`) before anything is written. No plain read happens before these locks, so the MySQL snapshot rule from 2B still holds. `ConfirmSale` reuses the locked customer for pricing instead of reading it again.
+- **Proof:** `tests/Mysql/SaleLockOrderTest.php` holds the customer lock on one connection, starts a void worker, waits until the worker is blocked on the customer (via `information_schema.PROCESSLIST`; the test user has no PROCESS privilege for `INNODB_TRX`), then locks the sale from a second connection with a 1 s timeout. With the old sale-first order this fails with 1205 (verified by temporarily swapping the order).
+- **Void refuses delivered sales:** `409 sale_delivered`. Voiding would put books back in stock that have physically left; delivered goods come back through returns (Phase 5). Spec 9.1 amended.
+- **Locks held shorter:** `ConfirmSale` and `VoidSale` reload the sale for the response after commit, not inside the transaction.
+- Unchanged for now, to be replaced in 2C: the credit check's `sharedLock()` sum over confirmed sales (2C adds a cached `customers.outstanding_balance` kept under the customer lock, plus a reconcile command). `apply_credit` on confirm is 2C.

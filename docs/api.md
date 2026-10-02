@@ -36,6 +36,9 @@ Every error response uses one envelope:
 | `sale_not_editable` | 409 | Updating (or, from 2B, confirming/cancelling) a sale that is not a draft | `{ sale_id, status }` |
 | `insufficient_stock` | 422 | Stock would go negative and `allow_negative_stock` is off. Lists **every** short product | `{ items: [ { product_id, sku, title, requested, available } ] }` |
 | `price_changed` | 409 | Confirming a draft whose prices no longer match. Nothing was written | `{ priced_order }` (same shape as `POST /pricing/preview` `data`) |
+| `sale_state_conflict` | 409 | The sale changed (e.g. reassigned to another customer) between loading and locking. Nothing written; reload and retry | `{ sale_id, retry: true }` |
+| `sale_delivered` | 409 | Voiding a sale that has been delivered | `{ sale_id, delivered_at }` |
+| `sale_has_payments` | 409 | Voiding a sale with payments applied (until Phase 2C) | `{ sale_id, amount_paid }` |
 | `credit_limit_exceeded` | 409 | Outstanding balance + this sale > customer credit limit. A warning: resend with the flag in `override_flag` set to `true` | `{ credit_limit, outstanding, sale_total, projected_balance, override_flag: "override_credit_limit" }` |
 
 Example (`insufficient_stock`):
@@ -293,6 +296,7 @@ Failures write nothing:
 | 409 | `credit_limit_exceeded` | Warning. Ask the user, then resend with `override_credit_limit: true` (logged in the activity log). |
 | 422 | `validation_failed` | A product or the customer was deactivated or deleted after drafting; `errors` names the line (`items.N.product_id`) or `customer_id`. |
 | 409 | `sale_not_editable` | Already confirmed, cancelled or void. Reload the sale. |
+| 409 | `sale_state_conflict` | The draft was moved to another customer while this request ran. Nothing was written; reload and retry (`details.retry: true`). |
 
 ### `POST /sales/{id}/cancel`
 
@@ -300,7 +304,9 @@ Drafts only. Optional `{ "reason": "..." }`. Response `200`, `status: cancelled`
 
 ### `POST /sales/{id}/void`
 
-Confirmed sales only. `{ "reason": "..." }` is required. Writes a `sale_void_in` movement per line at the line's snapshot `unit_cost`, restores `stock_on_hand`, sets `status: void`, `balance_due: 0`, `voided_at`, `voided_by`, `void_reason`. The `invoice_no` is kept. Until payments land (Phase 2C), a sale with `amount_paid > 0` returns `409 sale_has_payments`.
+Confirmed sales only. `{ "reason": "..." }` is required. Writes a `sale_void_in` movement per line at the line's snapshot `unit_cost`, restores `stock_on_hand`, sets `status: void`, `balance_due: 0`, `voided_at`, `voided_by`, `void_reason`. The `invoice_no` is kept.
+
+Refusals (nothing written): `409 sale_delivered` if `delivered_at` is set (delivered goods come back through returns, Phase 5); `409 sale_has_payments` if `amount_paid > 0` (until Phase 2C adds allocation reversal); `409 sale_state_conflict` as for confirm; `409 sale_not_editable` if not confirmed.
 
 ### `POST /sales/{id}/deliver`
 

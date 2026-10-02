@@ -120,7 +120,7 @@ Each of `laravel/` and `flutter/` has its own `.env`/config, dependency files, t
 11. **No N+1.** Eager load; list endpoints paginate (default 25, max 100).
 12. **Tests are part of the task.** Money and stock logic need unit + feature tests before the task is done.
 13. **Morph map.** `Relation::enforceMorphMap()` in `AppServiceProvider` — morph columns store short aliases only, never FQCNs. Document aliases: `user`, `product`, `customer`, `goods_receipt`, `sale`, `payment`, `stock_count`, `sale_return`, `purchase_order`. Add new aliases before writing new reference types.
-14. **Lock order (sales).** When confirming a sale, acquire locks in this order: **products (sorted by id) → customer → invoice number sequence (last, held briefly)**.
+14. **Lock order (global, money and stock actions).** Acquire row locks in this order: **customer → sale(s) → sale items → products (sorted by id) → invoice number sequence (last, held briefly)**. Every money action locks the customer first, which serializes them per customer; stock-only actions (receipts, adjustments) lock products only. Take the customer id from the sale loaded outside the transaction, lock the customer, lock the sale, then verify the sale still belongs to that customer (else `409 sale_state_conflict`). All locking reads come before the first plain read in the transaction. Amended Phase 2B.1; replaces "products → customer → sequence".
 15. **Invoice year.** The invoice number's year comes from the **confirmation date**, not the sale date.
 16. **Migrations are append-only.** Every schema change is a **new migration**. Never edit a migration that has already been shipped/run outside a fresh local DB.
 
@@ -245,7 +245,7 @@ requested (portal, later) ──approve──> confirmed
 ```
 - **draft**: editable, no invoice number, no stock effect.
 - **confirm** (`ConfirmSale`): reprice (7.6), check stock, assign `invoice_no`, create `sale_out` movements, set `balance_due = total`, optionally apply customer credit (`apply_credit: true`), set `due_date` from payment terms if absent. All in one transaction with an idempotency key.
-- **cancel**: drafts only. **void**: confirmed sales only, with a mandatory reason. Void creates `sale_void_in` movements and reverses allocations (the payment amounts return to the customer as `unallocated_amount`/`credit_balance`).
+- **cancel**: drafts only. **void**: confirmed, **undelivered** sales only, with a mandatory reason (a sale with `delivered_at` set returns `409 sale_delivered`; delivered goods come back through returns, Phase 5; amended Phase 2B.1). Void creates `sale_void_in` movements and reverses allocations (the payment amounts return to the customer as `unallocated_amount`/`credit_balance`).
 - Customer credit limit: if `outstanding + this sale total > credit_limit`, return a **warning** (not a block). The client confirms with `override_credit_limit: true`.
 
 ### 9.2 Payment status

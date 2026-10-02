@@ -9,6 +9,7 @@ use App\Enums\SaleStatus;
 use App\Enums\StockMovementType;
 use App\Exceptions\InvalidInputException;
 use App\Exceptions\SaleNotEditableException;
+use App\Exceptions\SaleStateConflictException;
 use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\SaleItem;
@@ -165,6 +166,50 @@ test('void is refused once a payment has been applied', function () {
         ->and($product->fresh()->stock_on_hand)->toBe(3);
 });
 
+test('a delivered sale cannot be voided', function () {
+    $product = stockedProduct(stock: 10);
+    $sale = confirmedSale($this->owner, [[$product, 4]]);
+    app(MarkDelivered::class)->execute($this->owner, $sale);
+
+    $this->withToken($this->token)->postJson("/api/v1/sales/{$sale->id}/void", ['reason' => 'Changed mind'])
+        ->assertStatus(409)
+        ->assertJsonPath('code', 'sale_delivered')
+        ->assertJsonPath('details.sale_id', $sale->id);
+
+    expect($sale->fresh()->status)->toBe(SaleStatus::Confirmed)
+        ->and($sale->fresh()->balance_due)->toBe($sale->total)
+        ->and($product->fresh()->stock_on_hand)->toBe(6)
+        ->and(StockMovement::query()->where('type', StockMovementType::SaleVoidIn)->count())->toBe(0);
+});
+
+test('a sale moved to another customer after it was loaded returns 409 sale_state_conflict', function (string $actionClass, array $args) {
+    $product = stockedProduct(stock: 10);
+    $original = Customer::factory()->create();
+    $stale = makeDraftSale($this->owner, [[$product, 1]], $original);
+
+    // Another request reassigns the draft after this one loaded it.
+    app(UpdateDraftSale::class)->execute($this->owner, $stale->fresh(), ['customer_id' => Customer::factory()->create()->id]);
+
+    expect(fn () => app($actionClass)->execute($this->owner, $stale, ...$args))
+        ->toThrow(SaleStateConflictException::class);
+
+    expect($stale->fresh()->status)->toBe(SaleStatus::Draft)
+        ->and($product->fresh()->stock_on_hand)->toBe(10)
+        ->and(StockMovement::query()->count())->toBe(0);
+})->with([
+    'confirm' => [ConfirmSale::class, []],
+    'void' => [VoidSale::class, ['reason']],
+]);
+
+test('sale_state_conflict renders as a retryable 409', function () {
+    $sale = Sale::factory()->create(['created_by' => $this->owner->id]);
+    $e = new SaleStateConflictException($sale);
+
+    expect($e->status())->toBe(409)
+        ->and($e->toEnvelope()['code'])->toBe('sale_state_conflict')
+        ->and($e->details())->toBe(['sale_id' => $sale->id, 'retry' => true]);
+});
+
 test('voiding a draft via api returns 409', function () {
     $sale = makeDraftSale($this->owner, [[stockedProduct(stock: 5), 1]]);
 
@@ -228,10 +273,9 @@ test('no action ever changes the items of a confirmed sale', function () {
         expect($attempt)->toThrow(SaleNotEditableException::class);
     }
 
-    app(MarkDelivered::class)->execute($this->owner, $sale);
     app(VoidSale::class)->execute($this->owner, $sale->fresh(), 'Test');
 
-    foreach ([UpdateDraftSale::class, ConfirmSale::class, CancelSale::class] as $actionClass) {
+    foreach ([UpdateDraftSale::class, ConfirmSale::class, CancelSale::class, MarkDelivered::class] as $actionClass) {
         expect(fn () => app($actionClass)->execute($this->owner, $sale->fresh(), ...($actionClass === UpdateDraftSale::class ? [['notes' => 'x']] : [])))
             ->toThrow(SaleNotEditableException::class);
     }

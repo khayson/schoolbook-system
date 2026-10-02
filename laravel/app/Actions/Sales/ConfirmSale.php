@@ -29,9 +29,10 @@ use Spatie\Activitylog\Support\CauserResolver;
 /**
  * Draft -> confirmed (spec 9.1). One transaction; any exception writes nothing.
  *
- * Order: lock sale, items, products (sorted) -> reprice and compare -> stock check ->
- * lock customer and credit check -> sale_out movements -> verified item snapshots ->
- * invoice number LAST (held briefly) -> sale fields.
+ * Locks (global order, spec 5.14): customer -> sale -> items -> products (sorted) ->
+ * invoice sequence LAST. Then: reprice and compare -> stock check -> credit check ->
+ * sale_out movements -> verified item snapshots -> invoice number -> sale fields.
+ * The reload for the response happens after commit so no lock is held for it.
  */
 class ConfirmSale
 {
@@ -48,9 +49,9 @@ class ConfirmSale
      */
     public function execute(User $user, Sale $sale, array $options = []): Sale
     {
-        return $this->causer->withCauser($user, fn () => DB::transaction(function () use ($user, $sale, $options) {
-            // 1. Sale row, then its items (locking reads; see LocksSaleRows).
-            $locked = $this->lockSale($sale->id);
+        $confirmed = $this->causer->withCauser($user, fn () => DB::transaction(function () use ($user, $sale, $options) {
+            // 1. Customer, then sale, then items (locking reads; see LocksSaleRows).
+            [$customer, $locked] = $this->lockCustomerAndSale($sale);
             $locked->assertCanTransitionTo(SaleStatus::Confirmed, 'confirm');
 
             $items = $this->lockItems($locked);
@@ -61,10 +62,9 @@ class ConfirmSale
             // 2. Products in ascending id order. unit_cost comes from these locked rows.
             $products = $this->lockProducts($items->pluck('product_id'));
 
-            // 3. Reprice with the sale date. Inactive or deleted products and inactive
-            //    customers fail here as 422s keyed to the offending field/line.
-            $customer = Customer::query()->find($locked->customer_id);
-            if ($customer === null || ! $customer->is_active) {
+            // 3. Reprice with the sale date (first plain reads happen inside PricingService).
+            //    Inactive or deleted products and customers fail as 422s keyed to the line/field.
+            if ($customer->trashed() || ! $customer->is_active) {
                 throw new InvalidInputException('customer_id', 'The customer on this sale is inactive or no longer exists.');
             }
 
@@ -77,8 +77,7 @@ class ConfirmSale
             // 4. Stock, summed per product, all shortages reported together.
             $this->assertStockAvailable($priced, $products);
 
-            // 5. Customer lock, then credit limit.
-            $customer = $this->lockCustomer($locked->customer_id);
+            // 5. Credit limit (customer row already locked in step 1).
             $this->checkCreditLimit($locked, $customer, $priced->total, $user, (bool) ($options['override_credit_limit'] ?? false));
 
             $confirmedAt = Carbon::now();
@@ -145,8 +144,10 @@ class ConfirmSale
             $locked->balance_due = $priced->total;
             $locked->save();
 
-            return $locked->fresh()->load(['customer', 'items.product', 'createdBy']);
+            return $locked;
         }));
+
+        return $confirmed->fresh(['customer', 'items.product', 'createdBy']);
     }
 
     /**

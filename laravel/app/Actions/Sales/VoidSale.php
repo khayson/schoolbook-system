@@ -6,6 +6,7 @@ use App\Actions\Sales\Concerns\LocksSaleRows;
 use App\Enums\SaleStatus;
 use App\Enums\StockMovementType;
 use App\Exceptions\InvalidInputException;
+use App\Exceptions\SaleDeliveredException;
 use App\Exceptions\SaleHasPaymentsException;
 use App\Models\Sale;
 use App\Models\StockMovement;
@@ -19,8 +20,8 @@ use Spatie\Activitylog\Support\CauserResolver;
  * snapshot unit cost. The invoice number stays on the sale (issued numbers are never
  * reused or removed).
  *
- * Phase 2B: refused once any payment is applied. Phase 2C extends this to reverse
- * allocations into customer credit.
+ * Refused once delivered (stock has physically left; returns arrive in Phase 5) and,
+ * until Phase 2C adds allocation reversal, once any payment is applied.
  */
 class VoidSale
 {
@@ -37,10 +38,14 @@ class VoidSale
             throw new InvalidInputException('reason', 'A reason is required to void a sale.');
         }
 
-        return $this->causer->withCauser($user, fn () => DB::transaction(function () use ($user, $sale, $reason) {
-            // Same lock order as ConfirmSale: sale -> items -> products (sorted) -> customer.
-            $locked = $this->lockSale($sale->id);
+        $voided = $this->causer->withCauser($user, fn () => DB::transaction(function () use ($user, $sale, $reason) {
+            // Global lock order (spec 5.14): customer -> sale -> items -> products (sorted).
+            [, $locked] = $this->lockCustomerAndSale($sale);
             $locked->assertCanTransitionTo(SaleStatus::Void, 'void');
+
+            if ($locked->delivered_at !== null) {
+                throw new SaleDeliveredException($locked);
+            }
 
             if ($locked->amount_paid > 0) {
                 throw new SaleHasPaymentsException($locked);
@@ -48,7 +53,6 @@ class VoidSale
 
             $items = $this->lockItems($locked);
             $products = $this->lockProducts($items->pluck('product_id'));
-            $this->lockCustomer($locked->customer_id);
 
             $voidedAt = Carbon::now();
 
@@ -83,7 +87,9 @@ class VoidSale
             $locked->balance_due = 0;
             $locked->save();
 
-            return $locked->fresh()->load(['customer', 'items.product', 'createdBy']);
+            return $locked;
         }));
+
+        return $voided->fresh(['customer', 'items.product', 'createdBy']);
     }
 }
