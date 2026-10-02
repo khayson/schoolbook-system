@@ -131,7 +131,7 @@ class ConfirmSale
             $locked->fill([
                 'invoice_no' => $invoiceNo,
                 'status' => SaleStatus::Confirmed,
-                'payment_status' => PaymentStatus::Unpaid,
+                'payment_status' => PaymentStatus::derive($priced->total, 0),
                 'due_date' => $this->dueDate($locked, $options, $confirmedAt),
                 'subtotal' => $priced->subtotal,
                 'discount_total' => $priced->discountTotal,
@@ -143,6 +143,10 @@ class ConfirmSale
             $locked->amount_paid = 0;
             $locked->balance_due = $priced->total;
             $locked->save();
+
+            // Cached receivable, on the customer row locked in step 1.
+            $customer->outstanding_balance += $priced->total;
+            $customer->save();
 
             return $locked;
         }));
@@ -226,8 +230,8 @@ class ConfirmSale
 
     /**
      * Warning, not a block (spec 9.1): the client resends with override_credit_limit.
-     * Called with the customer row locked; the outstanding sum is a locking read so it
-     * cannot miss a payment committed after this transaction's snapshot.
+     * Reads the cached outstanding_balance from the customer row this transaction holds
+     * locked; every money action maintains that cache under the same lock.
      */
     private function checkCreditLimit(Sale $sale, Customer $customer, int $total, User $user, bool $override): void
     {
@@ -235,11 +239,7 @@ class ConfirmSale
             return;
         }
 
-        $outstanding = (int) Sale::query()
-            ->where('customer_id', $customer->id)
-            ->where('status', SaleStatus::Confirmed)
-            ->sharedLock()
-            ->sum('balance_due');
+        $outstanding = (int) $customer->outstanding_balance;
 
         if ($outstanding + $total <= $customer->credit_limit) {
             return;

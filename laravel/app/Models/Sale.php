@@ -119,6 +119,14 @@ class Sale extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    /**
+     * The allocation ledger for this sale; amount_paid is the sum of these rows.
+     */
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

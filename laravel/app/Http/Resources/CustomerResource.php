@@ -24,6 +24,7 @@ class CustomerResource extends JsonResource
             'email' => $this->email,
             'credit_limit' => $this->credit_limit,
             'credit_balance' => $this->credit_balance,
+            'outstanding_balance' => $this->outstanding_balance,
             'notes' => $this->notes,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,

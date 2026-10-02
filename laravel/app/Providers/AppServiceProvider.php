@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Models\Customer;
 use App\Models\GoodsReceipt;
+use App\Models\Payment;
+use App\Models\PaymentAllocation;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
@@ -32,7 +34,8 @@ class AppServiceProvider extends ServiceProvider
             'customer' => Customer::class,
             'goods_receipt' => GoodsReceipt::class,
             'sale' => Sale::class,
-            'payment' => 'App\Models\Payment',
+            'payment' => Payment::class,
+            'payment_allocation' => PaymentAllocation::class,
             'stock_count' => 'App\Models\StockCount',
             'sale_return' => 'App\Models\SaleReturn',
             'purchase_order' => 'App\Models\PurchaseOrder',

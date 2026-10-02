@@ -120,9 +120,10 @@ Each of `laravel/` and `flutter/` has its own `.env`/config, dependency files, t
 11. **No N+1.** Eager load; list endpoints paginate (default 25, max 100).
 12. **Tests are part of the task.** Money and stock logic need unit + feature tests before the task is done.
 13. **Morph map.** `Relation::enforceMorphMap()` in `AppServiceProvider` — morph columns store short aliases only, never FQCNs. Document aliases: `user`, `product`, `customer`, `goods_receipt`, `sale`, `payment`, `stock_count`, `sale_return`, `purchase_order`. Add new aliases before writing new reference types.
-14. **Lock order (global, money and stock actions).** Acquire row locks in this order: **customer → sale(s) → sale items → products (sorted by id) → invoice number sequence (last, held briefly)**. Every money action locks the customer first, which serializes them per customer; stock-only actions (receipts, adjustments) lock products only. Take the customer id from the sale loaded outside the transaction, lock the customer, lock the sale, then verify the sale still belongs to that customer (else `409 sale_state_conflict`). All locking reads come before the first plain read in the transaction. Amended Phase 2B.1; replaces "products → customer → sequence".
+14. **Lock order (global, money and stock actions).** Acquire row locks in this order: **customer → sale(s) (ascending id) → payments (ascending id) → sale items → products (ascending id) → number sequence (last, held briefly)**. Every money action locks the customer first, which serializes them per customer; stock-only actions (receipts, adjustments) lock products only. Take the customer id from the record loaded outside the transaction, lock the customer, lock the sale/payment, then verify it still belongs to that customer (else `409 sale_state_conflict`). All locking reads come before the first plain read in the transaction. Amended Phase 2B.1 (customer first) and 2C.1 (payments after sales).
 15. **Invoice year.** The invoice number's year comes from the **confirmation date**, not the sale date.
 16. **Migrations are append-only.** Every schema change is a **new migration**. Never edit a migration that has already been shipped/run outside a fresh local DB.
+17. **Money invariants.** The allocation ledger (`payment_allocations`) is the source of truth; `sales.amount_paid`, `sales.balance_due`, `sales.payment_status`, `payments.unallocated_amount`, `customers.credit_balance` and `customers.outstanding_balance` are caches of it, maintained under the customer lock. The invariants in §9.5 hold after every action, are asserted in tests, and are checked nightly by `customers:reconcile` (report-only; `--fix` rebuilds caches from the ledger, never edits ledger rows).
 
 ---
 
@@ -153,15 +154,15 @@ Conventions: `id` bigint PK, `created_at`/`updated_at` on all tables, `deleted_a
 - **stock_count_items**: `stock_count_id`, `product_id`, `system_qty`, `counted_qty`, `variance`. Applying creates `count_adjustment` movements.
 
 ### 6.4 Customers
-- **customers** (SD): `code` (CUS-0001), name, `type` enum(`school`,`reseller`,`individual`), `region` (Ghana region), district, address, contact_person, phone, email, `credit_limit` nullable, `credit_balance` default 0 (unallocated advance money, cached), notes, is_active.
+- **customers** (SD): `code` (CUS-0001), name, `type` enum(`school`,`reseller`,`individual`), `region` (Ghana region), district, address, contact_person, phone, email, `credit_limit` nullable, `credit_balance` default 0 (unallocated advance money, cached), `outstanding_balance` default 0 (sum of `balance_due` over confirmed sales, cached; added 2C.1 with a backfill), notes, is_active. Cached balances are not mass-assignable.
 
 ### 6.5 Sales
 - **sales**: `invoice_no` unique nullable until confirmed (INV-YYYY-000001), `customer_id`, `status` enum(`draft`,`requested`,`confirmed`,`cancelled`,`void`), `payment_status` enum(`unpaid`,`partial`,`paid`), `source` enum(`staff`,`portal`) default staff, `sale_date`, `due_date` nullable, `subtotal`, `discount_total`, `tax_total` default 0, `total`, `amount_paid`, `balance_due`, `delivered_at` nullable, notes, `created_by`, `confirmed_by`/`confirmed_at`, `cancelled_at`, `cancel_reason`, `voided_at`, `voided_by` (FK users, nullable), `void_reason` (added Phase 2B, see decisions), `idempotency_key` nullable unique.
 - **sale_items**: `sale_id`, `product_id`, `product_title` (snapshot), `quantity`, `base_price`, `unit_price`, `discount_amount` (line total discount), `tax_amount` default 0, `line_total`, `unit_cost` (snapshot), `applied_rules` json nullable, `is_price_overridden` bool, `override_reason` nullable.
 
 ### 6.6 Payments
-- **payments**: `receipt_no` unique (RCT-YYYY-000001), `customer_id`, `amount`, `method` enum(`cash`,`momo`,`bank_transfer`,`cheque`), `reference` nullable, `paid_at`, `unallocated_amount` default 0, `status` enum(`valid`,`void`), `void_reason` nullable, notes, `received_by`, `idempotency_key` unique nullable.
-- **payment_allocations** (immutable): `payment_id`, `sale_id`, `amount`. A void creates reversal handling (see 9.3), not deletion.
+- **payments** (never deleted, no soft delete): `receipt_no` unique (RCT-YYYY-000001), `customer_id` (restrict), `amount` (> 0, DB check on MySQL), `method` enum(`cash`,`momo`,`bank_transfer`,`cheque`), `reference` nullable (required for non-cash, validated), `paid_at`, `unallocated_amount` default 0 (cached; ≤ `amount`), `status` enum(`valid`,`void`), `void_reason`, `voided_at`, `voided_by` nullable, notes, `received_by`. Index (`customer_id`,`status`,`paid_at`). Idempotency is handled by the `idempotency_keys` table, not a column.
+- **payment_allocations** (ledger, immutable: never updated or deleted): `payment_id`, `sale_id`, `amount` **signed** bigint, `reversal_of_id` nullable unique self-FK, `created_by`, `created_at` only. A positive row applies money from a payment to a sale. Voiding a payment or a sale inserts a **reversal row** per effective allocation: same payment and sale, `amount` = −original, `reversal_of_id` = original (each original reversed at most once). A sale's `amount_paid` is the sum of its rows. Indexes (`sale_id`), (`payment_id`).
 
 ### 6.7 Pricing rules
 - **price_rules**: see section 7.
@@ -263,6 +264,15 @@ Derived from allocations: `unpaid` (paid = 0), `partial` (0 < paid < total), `pa
 - **Outstanding balance** = sum of `balance_due` over the customer's confirmed sales.
 - **Statement** (JSON and PDF): opening balance, invoices, payments and a running balance for a date range.
 - **Aging** buckets by days past `due_date`: current, 1 to 30, 31 to 60, 61 to 90, 90+.
+
+### 9.5 Money invariants (2C.1)
+Checked by `App\Services\MoneyInvariants` (tests and `customers:reconcile`):
+- **Sale:** `amount_paid` = sum of its allocation rows. Confirmed: `balance_due` = `total` − `amount_paid` and `payment_status` = derived (9.2; a zero-total sale is `paid`). Not confirmed: `balance_due` = 0.
+- **Payment:** valid: sum of its allocation rows + `unallocated_amount` = `amount`. Void: sum of its rows = 0 and `unallocated_amount` = 0.
+- **Customer:** `credit_balance` = sum of `unallocated_amount` over valid payments; `outstanding_balance` = sum of `balance_due` over confirmed sales.
+- **Ledger:** originals are positive; a reversal negates exactly one original on the same payment and sale.
+
+The credit-limit check (9.1) reads the locked customer's `outstanding_balance`.
 
 ---
 

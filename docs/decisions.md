@@ -97,3 +97,18 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - **Void refuses delivered sales:** `409 sale_delivered`. Voiding would put books back in stock that have physically left; delivered goods come back through returns (Phase 5). Spec 9.1 amended.
 - **Locks held shorter:** `ConfirmSale` and `VoidSale` reload the sale for the response after commit, not inside the transaction.
 - Unchanged for now, to be replaced in 2C: the credit check's `sharedLock()` sum over confirmed sales (2C adds a cached `customers.outstanding_balance` kept under the customer lock, plus a reconcile command). `apply_credit` on confirm is 2C.
+
+## 2026-10-02 — Phase 2C.1: payment schema, cached balances, money invariants
+
+**Context:** Reviewer design for 2C: allocations as a signed ledger with reversal rows, explicit money invariants, a cached `customers.outstanding_balance` read by the credit check, and payments in the global lock order.
+
+**Decision:**
+- **Schema (new migrations only):** `payments` (no soft delete; MySQL CHECKs `amount > 0` and `unallocated_amount <= amount`; SQLite cannot add CHECKs after creation, so tests on SQLite rely on validation + invariants), `payment_allocations` (signed `amount`, `reversal_of_id` nullable **unique** self-FK so an allocation can be reversed only once, `created_at` only), `customers.outstanding_balance` plus a separate, idempotent data-only backfill migration (separate so it can be re-run and tested on its own), receivables indexes on `sales`.
+- **Models:** `Payment` (activity-logged, delete throws, `unallocated_amount` not fillable), `PaymentAllocation` (update and delete throw). `PaymentPolicy::delete` is false. Morph aliases `payment` (now a real class) and `payment_allocation`. New enums `PaymentMethod` (`requiresReference()` for non-cash) and `PaymentRecordStatus` (valid/void), kept apart from the sale's `PaymentStatus`, which gained `derive(total, amountPaid)`.
+- **Cached outstanding balance:** `ConfirmSale` adds the total and `VoidSale` subtracts the prior `balance_due`, both on the customer row locked first. The credit check now reads that locked row; the shared-lock sum is gone. `ConfirmSale` sets `payment_status` via `derive()`, so a zero-total sale confirms as `paid`.
+- **Invariants:** one class, `App\Services\MoneyInvariants`. `check(?customerIds)` is read-only set-based SQL that works on SQLite and MySQL; `balance_due` is compared as `balance_due + amount_paid = total` so MySQL never subtracts unsigned columns. It also checks ledger shape (positive originals; a reversal negates one original on the same payment and sale). `repair(customerId)` rebuilds every cache from the ledger under customer → sales → payments locks; ledger rows are never repaired, only reported.
+- **`customers:reconcile`:** report-only by default, exits non-zero on any violation; `--fix` repairs affected customers then re-checks and still fails if ledger problems remain; `--customer=` limits scope. Scheduled daily at 02:30.
+- **Tests:** the confirm, lifecycle and invoice suites assert the invariants after every test (`afterEach`). Verified the hook bites by temporarily removing the `outstanding_balance` update from `VoidSale`: the lifecycle suite failed with `customer_outstanding`. Until `RecordPayment` exists, tests use an `applyLedgerPayment()` fixture that writes a consistent payment + allocation + caches; 2C.2 replaces it with the real action.
+- **Lock order (spec 5.14):** customer → sales (ascending id) → payments (ascending id) → sale items → products (ascending id) → number sequence last.
+- Still open from 2B: `sales.idempotency_key` is unused; proposing to drop it in 2C.2 (and the spec 6.6 `payments.idempotency_key` was not created, for the same reason).
+

@@ -1,11 +1,19 @@
 <?php
 
 use App\Actions\Sales\CreateDraftSale;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentRecordStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Customer;
+use App\Models\Payment;
+use App\Models\PaymentAllocation;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
+use App\Services\MoneyInvariants;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /*
@@ -90,4 +98,56 @@ function stockedProduct(int $stock, int $price = 1000, int $cost = 600, array $a
     $product->save();
 
     return $product;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Money invariants
+|--------------------------------------------------------------------------
+*/
+
+function assertMoneyInvariants(): void
+{
+    $violations = app(MoneyInvariants::class)->check();
+
+    expect($violations)->toBe([], implode("\n", array_map('strval', $violations)));
+}
+
+/**
+ * Fixture until RecordPayment exists (2C.2): a valid cash payment fully allocated to one
+ * confirmed sale, with every cache kept consistent with the ledger.
+ */
+function applyLedgerPayment(Sale $sale, int $amount, User $user): Payment
+{
+    return DB::transaction(function () use ($sale, $amount, $user): Payment {
+        $customer = Customer::query()->whereKey($sale->customer_id)->lockForUpdate()->firstOrFail();
+        $sale = Sale::query()->whereKey($sale->id)->lockForUpdate()->firstOrFail();
+
+        $payment = Payment::query()->create([
+            'receipt_no' => 'RCT-TEST-'.Str::upper(Str::random(8)),
+            'customer_id' => $customer->id,
+            'amount' => $amount,
+            'method' => PaymentMethod::Cash,
+            'paid_at' => now(),
+            'status' => PaymentRecordStatus::Valid,
+            'received_by' => $user->id,
+        ]);
+
+        PaymentAllocation::query()->create([
+            'payment_id' => $payment->id,
+            'sale_id' => $sale->id,
+            'amount' => $amount,
+            'created_by' => $user->id,
+        ]);
+
+        $sale->amount_paid += $amount;
+        $sale->balance_due -= $amount;
+        $sale->payment_status = PaymentStatus::derive($sale->total, $sale->amount_paid);
+        $sale->save();
+
+        $customer->outstanding_balance -= $amount;
+        $customer->save();
+
+        return $payment;
+    });
 }

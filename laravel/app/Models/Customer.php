@@ -37,6 +37,7 @@ class Customer extends Model
             'region' => GhanaRegion::class,
             'credit_limit' => 'integer',
             'credit_balance' => 'integer',
+            'outstanding_balance' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -44,5 +45,10 @@ class Customer extends Model
     public function sales(): HasMany
     {
         return $this->hasMany(Sale::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
     }
 }

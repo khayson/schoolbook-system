@@ -27,7 +27,11 @@ beforeEach(function () {
     $this->token = $this->owner->createToken('test')->plainTextToken;
 });
 
-afterEach(fn () => Carbon::setTestNow());
+afterEach(function () {
+    // Every scenario must leave the money caches consistent with the ledger.
+    assertMoneyInvariants();
+    Carbon::setTestNow();
+});
 
 function confirmedSale(User $owner, array $lines, ?Customer $customer = null): Sale
 {
@@ -54,7 +58,12 @@ test('sale status transitions follow the spec state machine', function () {
 });
 
 test('illegal moves fail through the transition guard', function (string $from, string $actionClass, array $args) {
-    $sale = Sale::factory()->create(['status' => $from, 'created_by' => $this->owner->id]);
+    // A zero-total confirmed sale is fully paid by definition (PaymentStatus::derive).
+    $sale = Sale::factory()->create([
+        'status' => $from,
+        'payment_status' => $from === 'confirmed' ? 'paid' : 'unpaid',
+        'created_by' => $this->owner->id,
+    ]);
 
     expect(fn () => app($actionClass)->execute($this->owner, $sale, ...$args))
         ->toThrow(SaleNotEditableException::class);
@@ -153,9 +162,7 @@ test('void requires a reason', function () {
 test('void is refused once a payment has been applied', function () {
     $product = stockedProduct(stock: 5);
     $sale = confirmedSale($this->owner, [[$product, 2]]);
-    $sale->amount_paid = 500;
-    $sale->balance_due = $sale->total - 500;
-    $sale->save();
+    applyLedgerPayment($sale, 500, $this->owner);
 
     $this->withToken($this->token)->postJson("/api/v1/sales/{$sale->id}/void", ['reason' => 'Wrong'])
         ->assertStatus(409)

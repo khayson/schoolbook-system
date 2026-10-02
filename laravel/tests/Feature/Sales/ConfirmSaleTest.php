@@ -24,7 +24,11 @@ beforeEach(function () {
     $this->token = $this->owner->createToken('test')->plainTextToken;
 });
 
-afterEach(fn () => Carbon::setTestNow());
+afterEach(function () {
+    // Every scenario must leave the money caches consistent with the ledger.
+    assertMoneyInvariants();
+    Carbon::setTestNow();
+});
 
 function confirmViaApi($test, Sale $sale, array $body = [], string $key = 'confirm-key-1')
 {

@@ -40,7 +40,7 @@ class VoidSale
 
         $voided = $this->causer->withCauser($user, fn () => DB::transaction(function () use ($user, $sale, $reason) {
             // Global lock order (spec 5.14): customer -> sale -> items -> products (sorted).
-            [, $locked] = $this->lockCustomerAndSale($sale);
+            [$customer, $locked] = $this->lockCustomerAndSale($sale);
             $locked->assertCanTransitionTo(SaleStatus::Void, 'void');
 
             if ($locked->delivered_at !== null) {
@@ -84,8 +84,13 @@ class VoidSale
                 'voided_by' => $user->id,
                 'void_reason' => $reason,
             ]);
+            $priorBalanceDue = $locked->balance_due;
             $locked->balance_due = 0;
             $locked->save();
+
+            // Cached receivable, on the customer row locked first.
+            $customer->outstanding_balance -= $priorBalanceDue;
+            $customer->save();
 
             return $locked;
         }));
