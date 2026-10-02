@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Customers;
 use App\Filament\Resources\Customers\Pages\CreateCustomer;
 use App\Filament\Resources\Customers\Pages\EditCustomer;
 use App\Filament\Resources\Customers\Pages\ListCustomers;
+use App\Filament\Resources\Customers\RelationManagers\PaymentsRelationManager;
+use App\Filament\Resources\Customers\RelationManagers\SalesRelationManager;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Customers\Tables\CustomersTable;
 use App\Models\Customer;
@@ -26,6 +28,8 @@ class CustomerResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    protected static ?string $recordTitleAttribute = 'name';
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingLibrary;
 
     public static function form(Schema $schema): Schema
@@ -38,6 +42,14 @@ class CustomerResource extends Resource
         return CustomersTable::configure($table);
     }
 
+    public static function getRelations(): array
+    {
+        return [
+            SalesRelationManager::class,
+            PaymentsRelationManager::class,
+        ];
+    }
+
     public static function getPages(): array
     {
         return [
@@ -45,6 +57,19 @@ class CustomerResource extends Resource
             'create' => CreateCustomer::route('/create'),
             'edit' => EditCustomer::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Customers are deactivated, never deleted (they carry financial history).
+     */
+    public static function canDelete($record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
     }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder

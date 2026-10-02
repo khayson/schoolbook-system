@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Pages;
 
 use App\Actions\Catalog\ImportProductsFromCsv;
 use App\Filament\Resources\Products\ProductResource;
+use App\Filament\Support\InteractsWithCurrentUser;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\FileUpload;
@@ -13,6 +14,8 @@ use InvalidArgumentException;
 
 class ListProducts extends ListRecords
 {
+    use InteractsWithCurrentUser;
+
     protected static string $resource = ProductResource::class;
 
     protected function getHeaderActions(): array

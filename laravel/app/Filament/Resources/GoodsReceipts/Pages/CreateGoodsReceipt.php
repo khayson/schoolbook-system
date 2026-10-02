@@ -4,11 +4,14 @@ namespace App\Filament\Resources\GoodsReceipts\Pages;
 
 use App\Actions\Inventory\ReceiveStock;
 use App\Filament\Resources\GoodsReceipts\GoodsReceiptResource;
+use App\Filament\Support\InteractsWithCurrentUser;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
 class CreateGoodsReceipt extends CreateRecord
 {
+    use InteractsWithCurrentUser;
+
     protected static string $resource = GoodsReceiptResource::class;
 
     protected function handleRecordCreation(array $data): Model
