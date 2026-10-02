@@ -256,6 +256,7 @@ Derived from allocations: `unpaid` (paid = 0), `partial` (0 < paid < total), `pa
 
 ### 9.3 Recording a payment (`RecordPayment`)
 - Input: customer, amount (> 0), method, reference (required except for cash), date (`paid_at`, not in the future), notes, and optionally explicit `allocations: [{sale_id, amount}]` or `auto_allocate` (default true).
+- **Duplicate references (2D.2):** a non-cash reference may be on only one valid payment per method (case and spaces ignored), enforced by a unique index on the generated column `payments.reference_key`; a repeat is `409 duplicate_reference`. Voiding releases it.
 - Explicit allocations: each sale is the customer's, confirmed, with amount ≤ its `balance_due`; the total ≤ the payment amount.
 - If no allocations are given and `auto_allocate` is true, **auto-allocate oldest invoice first** (by `due_date`, then `sale_date`, then id) across the customer's confirmed sales with `balance_due > 0`. `auto_allocate: false` puts everything on credit.
 - Any remainder is stored in `payments.unallocated_amount` and added to `customers.credit_balance`.

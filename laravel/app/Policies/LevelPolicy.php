@@ -3,10 +3,14 @@
 namespace App\Policies;
 
 use App\Models\Level;
+use App\Models\Product;
 use App\Models\User;
+use App\Policies\Concerns\RefusesDeletingInUse;
 
 class LevelPolicy
 {
+    use RefusesDeletingInUse;
+
     public function viewAny(User $user): bool
     {
         return $user->isOwner();
@@ -27,8 +31,11 @@ class LevelPolicy
         return $user->isOwner();
     }
 
-    public function delete(User $user, Level $level): bool
+    /**
+     * delete / deleteAny / restore / forceDelete come from RefusesDeletingInUse.
+     */
+    protected function isInUse(mixed $model): bool
     {
-        return $user->isOwner();
+        return Product::withTrashed()->where('level_id', $model->id)->exists();
     }
 }

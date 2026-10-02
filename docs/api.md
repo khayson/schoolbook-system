@@ -43,6 +43,7 @@ Every error response uses one envelope:
 | `allocation_exceeds_payment` | 422 | Allocations add up to more than the payment amount | `{ amount, allocated_total }` |
 | `allocation_exceeds_credit` | 422 | Credit allocations add up to more than the customer's credit | `{ credit_balance, requested }` |
 | `no_credit_available` | 409 | Applying credit for a customer with none | `{ customer_id, credit_balance }` |
+| `duplicate_reference` | 409 | A non-cash payment's reference (MoMo transaction id, bank reference, cheque number) is already on a valid payment of the same method. Matching ignores case and spaces. Void the existing payment to release it | `{ method, reference, existing_payment_id, existing_receipt_no, existing_customer_id, existing_amount, existing_paid_at }` |
 | `payment_already_void` | 409 | Voiding a void payment, or asking for its receipt | `{ payment_id, receipt_no, action: void\|receipt }` |
 | `credit_limit_exceeded` | 409 | Outstanding balance + this sale − credit applied (`apply_credit`) > customer credit limit. A warning: resend with the flag in `override_flag` set to `true` | `{ credit_limit, outstanding, sale_total, credit_applied, projected_balance, override_flag: "override_credit_limit" }` |
 
@@ -351,7 +352,9 @@ Requires `Idempotency-Key` (replay returns the original `201`; same key with a d
 
 Response `201` with the `Payment` resource including `allocations` (`invoice_no`, `amount`) and `customer` (with `credit_balance`, `outstanding_balance`).
 
-Errors (nothing written): `422 validation_failed`, `422 sale_not_payable`, `422 allocation_exceeds_balance`, `422 allocation_exceeds_payment`.
+- **One reference, one valid payment:** for `momo`, `bank_transfer` and `cheque`, the same reference (case and spaces ignored) cannot be on two valid payments of the same method. A repeat returns `409 duplicate_reference` naming the existing receipt; voiding that payment releases the reference. Enforced by a unique index in the database, so two simultaneous requests cannot both succeed. Cash references are free text and not checked.
+
+Errors (nothing written): `422 validation_failed`, `422 sale_not_payable`, `422 allocation_exceeds_balance`, `422 allocation_exceeds_payment`, `409 duplicate_reference`.
 
 ### `GET /payments`
 

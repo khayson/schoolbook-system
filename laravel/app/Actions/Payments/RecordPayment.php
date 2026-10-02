@@ -6,12 +6,14 @@ use App\Actions\Payments\Concerns\LocksLedgerRows;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentRecordStatus;
 use App\Exceptions\AllocationExceedsPaymentException;
+use App\Exceptions\DuplicatePaymentReferenceException;
 use App\Exceptions\InvalidInputException;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\AllocationLedger;
 use App\Services\Money;
 use App\Services\NumberSequenceService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Support\CauserResolver;
@@ -25,6 +27,11 @@ use Spatie\Activitylog\Support\CauserResolver;
  * i.e. customer credit.
  *
  * Locks: customer -> the sales being paid (ascending id) -> receipt sequence LAST.
+ *
+ * A non-cash reference may be on only one valid payment per method (MoMo transaction id,
+ * bank reference, cheque number): 409 duplicate_reference. The friendly pre-check is a
+ * plain read; the guarantee is the unique index on the generated reference_key column,
+ * whose violation (two simultaneous requests) maps to the same error.
  */
 class RecordPayment
 {
@@ -73,6 +80,11 @@ class RecordPayment
                 $plan = [];
             }
 
+            $referenceKey = Payment::referenceKey($method, $reference);
+            if ($referenceKey !== null && ($existing = Payment::query()->where('reference_key', $referenceKey)->first()) !== null) {
+                throw new DuplicatePaymentReferenceException($method->value, (string) $reference, $existing);
+            }
+
             // Receipt number last; year of the recording date (not paid_at).
             $recordedAt = Carbon::now();
             $year = (int) $recordedAt->format('Y');
@@ -91,7 +103,21 @@ class RecordPayment
             ]);
             // The whole amount arrives as credit; allocations then move it onto invoices.
             $payment->unallocated_amount = $amount;
-            $payment->save();
+
+            try {
+                $payment->save();
+            } catch (UniqueConstraintViolationException $e) {
+                if (! str_contains($e->getMessage(), 'reference_key')) {
+                    throw $e;
+                }
+
+                // Lost the race to a concurrent request; its row is committed, so a locking read sees it.
+                throw new DuplicatePaymentReferenceException(
+                    $method->value,
+                    (string) $reference,
+                    Payment::query()->where('reference_key', $referenceKey)->sharedLock()->first(),
+                );
+            }
 
             $customer->credit_balance += $amount;
             $customer->save();

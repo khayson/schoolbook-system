@@ -16,7 +16,10 @@ use InvalidArgumentException;
  */
 final class GhsInput
 {
-    public const PATTERN = '/^\d{1,10}(\.\d{1,2})?$/';
+    /**
+     * Plain digits or correctly grouped thousands (1,250 / 1,250,000.50), at most 2 decimals.
+     */
+    public const PATTERN = '/^(\d{1,10}|\d{1,3}(,\d{3}){1,3})(\.\d{1,2})?$/';
 
     public static function make(string $name): TextInput
     {
@@ -31,7 +34,7 @@ final class GhsInput
                     $fail('The amount is larger than the system accepts.');
                 }
             })
-            ->validationMessages(['regex' => 'Enter an amount like 1250 or 1250.50 (digits, at most 2 decimals).'])
+            ->validationMessages(['regex' => 'Enter an amount like 1250, 1,250 or 1,250.50 (at most 2 decimals).'])
             ->formatStateUsing(fn (mixed $state): ?string => is_int($state) ? Money::pesewasToGhs($state) : $state)
             ->dehydrateStateUsing(fn (mixed $state): ?int => self::toPesewas($state));
     }
@@ -46,7 +49,8 @@ final class GhsInput
         }
 
         try {
-            return Money::ghsToPesewas(is_int($state) ? $state : trim((string) $state));
+            // Thousands separators are display only: strip them, then parse the exact decimal.
+            return Money::ghsToPesewas(is_int($state) ? $state : str_replace(',', '', trim((string) $state)));
         } catch (InvalidArgumentException) {
             return null;
         }

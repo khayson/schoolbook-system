@@ -81,6 +81,9 @@ test('GHS parsing never goes through floats', function (string $typed, int $pese
     ['0.29', 29],
     ['1.10', 110],
     ['1250', 125000],
+    ['1,250', 125000],
+    ['1,250.29', 125029],
+    ['1,000,000.10', 100000010],
 ]);
 
 test('payment form validation', function (array $overrides, string $field) {
@@ -92,7 +95,9 @@ test('payment form validation', function (array $overrides, string $field) {
     expect(Payment::query()->count())->toBe(0);
 })->with([
     'three decimals' => [['amount' => '1.234'], 'amount'],
-    'comma' => [['amount' => '1,000'], 'amount'],
+    'misplaced comma' => [['amount' => '1,00'], 'amount'],
+    'comma in decimals' => [['amount' => '12,50.00'], 'amount'],
+    'comma after decimals' => [['amount' => '1.000,50'], 'amount'],
     'negative' => [['amount' => '-5'], 'amount'],
     'blank' => [['amount' => ''], 'amount'],
     'over the cap' => [['amount' => '1000000000.01'], 'amount'],

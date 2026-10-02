@@ -2,11 +2,15 @@
 
 namespace App\Policies;
 
+use App\Models\Product;
 use App\Models\Publisher;
 use App\Models\User;
+use App\Policies\Concerns\RefusesDeletingInUse;
 
 class PublisherPolicy
 {
+    use RefusesDeletingInUse;
+
     public function viewAny(User $user): bool
     {
         return $user->isOwner();
@@ -27,8 +31,11 @@ class PublisherPolicy
         return $user->isOwner();
     }
 
-    public function delete(User $user, Publisher $publisher): bool
+    /**
+     * delete / deleteAny / restore / forceDelete come from RefusesDeletingInUse.
+     */
+    protected function isInUse(mixed $model): bool
     {
-        return $user->isOwner();
+        return Product::withTrashed()->where('publisher_id', $model->id)->exists();
     }
 }

@@ -2,6 +2,7 @@
 
 uses()->group('mysql');
 
+use App\Actions\Payments\VoidPayment;
 use App\Actions\Sales\ConfirmSale;
 use App\Enums\SaleStatus;
 use App\Models\Customer;
@@ -168,4 +169,100 @@ test('concurrent payments get unique, gapless receipt numbers', function () {
         ->toBe(array_map(fn (int $n): string => sprintf('RCT-%d-%06d', $year, $n), range(1, 6)));
 
     expectNoInvariantViolations();
+});
+
+test('two simultaneous payments with the same MoMo reference: exactly one is recorded', function () {
+    $owner = User::factory()->owner()->create();
+    // Different customers, so the customer lock does not serialize them: they meet only at the unique index.
+    $a = Customer::factory()->create(['credit_limit' => null]);
+    $b = Customer::factory()->create(['credit_limit' => null]);
+
+    $results = runLedgerWorkers([
+        ['record_payment', (string) $a->id, (string) $owner->id, '5000', '{start}', '0', 'momo', 'MP261002.RACE'],
+        ['record_payment', (string) $b->id, (string) $owner->id, '5000', '{start}', '0', 'momo', 'mp261002.race'],
+    ]);
+
+    $exits = array_column($results, 'exit');
+    sort($exits);
+    $outs = array_column($results, 'out');
+
+    expect($exits)->toBe([0, 8], json_encode($results))
+        ->and($outs)->toContain('duplicate_reference')
+        ->and(Payment::query()->where('method', 'momo')->count())->toBe(1)
+        ->and($a->fresh()->credit_balance + $b->fresh()->credit_balance)->toBe(5000);
+
+    expectNoInvariantViolations();
+});
+
+test('generated reference_key works on MySQL and a void frees it', function () {
+    $owner = User::factory()->owner()->create();
+    $customer = Customer::factory()->create(['credit_limit' => null]);
+
+    $first = recordPayment($owner, $customer, 100, ['method' => 'cheque', 'reference' => '000 77']);
+    expect($first->fresh()->reference_key)->toBe('cheque:00077');
+
+    app(VoidPayment::class)->execute($owner, $first, 'Bounced');
+    expect($first->fresh()->reference_key)->toBeNull();
+
+    $again = recordPayment($owner, $customer, 100, ['method' => 'cheque', 'reference' => '00077']);
+    expect($again->fresh()->reference_key)->toBe('cheque:00077');
+
+    expectNoInvariantViolations();
+});
+
+test('the unique index (not the pre-check) catches a reference committed while the request was in flight', function () {
+    $owner = User::factory()->owner()->create();
+    $a = Customer::factory()->create(['credit_limit' => null]);
+    $b = Customer::factory()->create(['credit_limit' => null]);
+
+    // Connection A records the reference but does not commit yet: the worker's plain
+    // pre-check cannot see it, so the worker's INSERT waits on the unique index.
+    $config = config('database.connections.mysql_testing');
+    $pdo = new PDO(
+        sprintf('mysql:host=%s;port=%s;dbname=%s', $config['host'], $config['port'], $config['database']),
+        $config['username'],
+        $config['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+    );
+    $pdo->beginTransaction();
+    $pdo->prepare("insert into payments (receipt_no, customer_id, amount, method, reference, paid_at, unallocated_amount, status, received_by, created_at, updated_at)
+        values ('RCT-HELD-1', ?, 700, 'momo', 'MP-INFLIGHT', now(), 0, 'valid', ?, now(), now())")
+        ->execute([$a->id, $owner->id]);
+
+    $script = base_path('tests/Mysql/bin/ledger_worker.php');
+    $proc = proc_open(
+        [PHP_BINARY, $script, 'record_payment', (string) $b->id, (string) $owner->id, '700', '0', '0', 'momo', 'MP-INFLIGHT'],
+        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $pipes,
+        base_path(),
+    );
+    fclose($pipes[0]);
+
+    // Wait until the worker is blocked on its INSERT, then commit A.
+    $observer = new PDO(
+        sprintf('mysql:host=%s;port=%s;dbname=%s', $config['host'], $config['port'], $config['database']),
+        $config['username'],
+        $config['password'],
+    );
+    $deadline = microtime(true) + 20;
+    while (microtime(true) < $deadline) {
+        $waiting = (int) $observer->query("select count(*) from information_schema.PROCESSLIST where ID <> connection_id() and INFO like 'insert into `payments`%'")->fetchColumn();
+        if ($waiting > 0) {
+            break;
+        }
+        usleep(100_000);
+    }
+    expect($waiting)->toBe(1, 'worker never blocked on the unique index');
+    $pdo->commit();
+
+    $out = trim(stream_get_contents($pipes[1]));
+    $err = trim(stream_get_contents($pipes[2]));
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exit = proc_close($proc);
+
+    expect($exit)->toBe(8, $out.' '.$err)
+        ->and($out)->toBe('duplicate_reference')
+        ->and(Payment::query()->where('reference', 'MP-INFLIGHT')->pluck('receipt_no')->all())->toBe(['RCT-HELD-1'])
+        ->and($b->fresh()->credit_balance)->toBe(0);
 });

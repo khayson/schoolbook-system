@@ -92,6 +92,11 @@ final class DomainErrorNotifier
             'allocation_exceeds_payment' => ['Allocations exceed the payment', [
                 "Allocated {$ghs($d['allocated_total'])} from a payment of {$ghs($d['amount'])}.",
             ]],
+            'duplicate_reference' => ['Payment already recorded', [
+                "This {$d['method']} reference ({$d['reference']}) is already on receipt ".($d['existing_receipt_no'] ?? '?')
+                    .(isset($d['existing_amount']) ? " for {$ghs($d['existing_amount'])}" : '').'.',
+                'If that payment was recorded by mistake, void it first; otherwise check the reference.',
+            ]],
             'allocation_exceeds_credit' => ['Not enough credit', [
                 "Requested {$ghs($d['requested'])}, available credit {$ghs($d['credit_balance'])}.",
             ]],

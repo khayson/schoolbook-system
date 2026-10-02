@@ -16,7 +16,10 @@ Source of truth: [`docs/build-spec.md`](docs/build-spec.md). Agent rules: [`CLAU
 ## Requirements
 
 - Windows + PowerShell
-- PHP 8.4, Composer
+- PHP 8.4 with the **`intl`** extension (Filament requires it; table pagination calls `Number::format`), plus Composer
+  - Check with the same shell you run artisan from: `where php`, `php -v`, `php -m | findstr intl`, and `composer check-platform-reqs` (all lines must say success).
+  - Several PHP installs can be on `PATH` (e.g. Kora, Herd, Herd Lite). PowerShell resolves `php.cmd`/`php.bat` first; Git Bash only finds `php.exe` and may pick a different build (Herd Lite has no `intl`). Run PHP commands from PowerShell, or make sure every shell resolves to the same PHP 8.4 build with `intl`.
+  - Server checklist: PHP 8.4, extensions `intl`, `pdo_mysql`, `mbstring`, `gd` (DomPDF), `fileinfo`; MySQL 8.0.16+ / MariaDB 10.2+ (CHECK constraints are enforced).
 - Flutter 3.47.x stable
 - MySQL 8 / MariaDB
 

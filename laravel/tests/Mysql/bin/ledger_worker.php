@@ -3,7 +3,7 @@
 /**
  * Concurrent money-action worker for MySQL tests (Windows-safe via proc_open).
  *
- *   ledger_worker.php record_payment <customer_id> <user_id> <amount> <start_at> [allocate_to_sale_id]
+ *   ledger_worker.php record_payment <customer_id> <user_id> <amount> <start_at> [allocate_to_sale_id|0] [method] [reference]
  *   ledger_worker.php void_sale      <sale_id>     <user_id> <start_at>
  *   ledger_worker.php confirm        <sale_id>     <user_id> <start_at>
  *
@@ -46,13 +46,16 @@ try {
             $customer = Customer::query()->findOrFail((int) $argv[2]);
             $user = User::query()->findOrFail((int) $argv[3]);
             $amount = (int) $argv[4];
-            $saleId = isset($argv[6]) ? (int) $argv[6] : null;
+            $saleId = isset($argv[6]) && (int) $argv[6] > 0 ? (int) $argv[6] : null;
+            $method = $argv[7] ?? 'cash';
+            $reference = $argv[8] ?? null;
             $waitUntil((float) $argv[5]);
 
             $payment = app(RecordPayment::class)->execute($user, array_filter([
                 'customer_id' => $customer->id,
                 'amount' => $amount,
-                'method' => 'cash',
+                'method' => $method,
+                'reference' => $reference,
                 'allocations' => $saleId ? [['sale_id' => $saleId, 'amount' => $amount]] : null,
             ], fn ($v) => $v !== null));
             fwrite(STDOUT, $payment->receipt_no."\n");
