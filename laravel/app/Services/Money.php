@@ -7,6 +7,13 @@ use InvalidArgumentException;
 class Money
 {
     /**
+     * Largest single money amount accepted from input: GHS 1,000,000,000.00. Far above any
+     * real school order or payment, far below the 64-bit column limit, so absurd input is a
+     * 422 instead of a database error.
+     */
+    public const MAX_PESEWAS = 100_000_000_000;
+
+    /**
      * Convert a GHS amount to integer pesewas without floating-point math.
      *
      * Accepts whole numbers or strings with at most 2 decimal places

@@ -60,6 +60,11 @@ class NumberSequenceService
      * in the steady state this adds no lock at all. SQLite has no row locks and a single
      * writer, so it uses the default connection.
      */
+    public function prepare(string $key, int $year): void
+    {
+        $this->ensureRowExists($key, $year);
+    }
+
     private function ensureRowExists(string $key, int $year): void
     {
         $connection = $this->sequenceConnection();

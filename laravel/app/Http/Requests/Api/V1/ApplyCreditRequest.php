@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Services\Money;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ApplyCreditRequest extends FormRequest
@@ -19,7 +20,7 @@ class ApplyCreditRequest extends FormRequest
         return [
             'allocations' => ['sometimes', 'nullable', 'array'],
             'allocations.*.sale_id' => ['required', 'integer', 'distinct'],
-            'allocations.*.amount' => ['required', 'integer', 'min:1'],
+            'allocations.*.amount' => ['required', 'integer', 'min:1', 'max:'.Money::MAX_PESEWAS],
         ];
     }
 }

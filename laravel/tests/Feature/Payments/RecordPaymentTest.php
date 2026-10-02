@@ -185,6 +185,7 @@ test('the action rejects bad input as 422-mapped exceptions', function (array $e
     'cheque with blank reference' => [['method' => 'cheque', 'reference' => '   '], 100, 'reference'],
     'unknown method' => [['method' => 'bitcoin'], 100, 'method'],
     'future date' => [['paid_at' => '2026-10-03'], 100, 'paid_at'],
+    'absurd amount' => [[], 100_000_000_001, 'amount'],
 ]);
 
 test('cash needs no reference; non-cash keeps its reference', function () {

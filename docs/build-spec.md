@@ -124,6 +124,8 @@ Each of `laravel/` and `flutter/` has its own `.env`/config, dependency files, t
 15. **Invoice year.** The invoice number's year comes from the **confirmation date**, not the sale date.
 16. **Migrations are append-only.** Every schema change is a **new migration**. Never edit a migration that has already been shipped/run outside a fresh local DB.
 17. **Money invariants.** The allocation ledger (`payment_allocations`) is the source of truth; `sales.amount_paid`, `sales.balance_due`, `sales.payment_status`, `payments.unallocated_amount`, `customers.credit_balance` and `customers.outstanding_balance` are caches of it, maintained under the customer lock. The invariants in §9.5 hold after every action, are asserted in tests, and are checked nightly by `customers:reconcile` (report-only; `--fix` rebuilds caches from the ledger, never edits ledger rows).
+18. **Sequence rows are never created inside a business transaction.** A business transaction only ever takes the existing counter row with one exclusive lock. Next year's `inv`, `rct` and `grn` rows are created by `sequences:prepare` (scheduled 15 December; idempotent). As a fallback, `NumberSequenceService` creates a missing row on a separate autocommit connection before the transaction locks it (an `INSERT IGNORE` inside the transaction holds a shared lock until commit and deadlocks concurrent allocators; decision 2026-10-02, Phase 2C.2).
+19. **Input money cap.** Any single amount accepted from input is at most `Money::MAX_PESEWAS` (GHS 1,000,000,000.00); larger values are a `422`, never a database error.
 
 ---
 
@@ -259,7 +261,7 @@ Derived from allocations: `unpaid` (paid = 0), `partial` (0 < paid < total), `pa
 - Any remainder is stored in `payments.unallocated_amount` and added to `customers.credit_balance`.
 - Assign a receipt number (sequence `rct`, taken last, year of the recording date); generate the receipt PDF on demand.
 - **Void payment**: mandatory reason; inserts a reversal row for every effective allocation (sales owe that money again), removes the payment's money from `credit_balance`, sets the payment void with `unallocated_amount = 0`.
-- `AllocateCredit`: applies a customer's credit balance to chosen sales or oldest first, consuming payments' `unallocated_amount` FIFO (`paid_at`, then id).
+- `AllocateCredit`: applies a customer's credit balance to chosen sales or oldest first, consuming payments' `unallocated_amount` FIFO (`paid_at`, then id). With credit but no open invoices, oldest-first succeeds with `applied_total: 0` (credit unchanged); with no credit at all it is `409 no_credit_available`.
 - `ConfirmSale` with `apply_credit: true` applies credit to the new invoice in the same transaction (credit payments locked right after the sale).
 
 ### 9.4 Customer money views

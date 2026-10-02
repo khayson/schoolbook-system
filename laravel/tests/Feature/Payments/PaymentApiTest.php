@@ -106,6 +106,8 @@ test('payment validation', function (array $body, string $field) {
     'duplicate sale ids' => [['allocations' => [['sale_id' => 1, 'amount' => 1], ['sale_id' => 1, 'amount' => 1]]], 'allocations.0.sale_id'],
     'zero allocation' => [['allocations' => [['sale_id' => 1, 'amount' => 0]]], 'allocations.0.amount'],
     'unknown customer' => [['customer_id' => 999999], 'customer_id'],
+    'absurd amount' => [['amount' => 100_000_000_001], 'amount'],
+    'absurd allocation' => [['allocations' => [['sale_id' => 1, 'amount' => 100_000_000_001]]], 'allocations.0.amount'],
 ]);
 
 test('business-rule failures use their documented codes', function () {
@@ -324,4 +326,24 @@ test('unauthenticated requests get 401 on payment endpoints', function (string $
 
 test('sales.idempotency_key has been dropped', function () {
     expect(Schema::hasColumn('sales', 'idempotency_key'))->toBeFalse();
+});
+
+test('apply-credit rejects an absurd allocation amount', function () {
+    recordPayment($this->owner, $this->customer, 100, ['auto_allocate' => false]);
+
+    $this->withToken($this->token)->withHeader('Idempotency-Key', 'big')
+        ->postJson("/api/v1/customers/{$this->customer->id}/apply-credit", ['allocations' => [['sale_id' => 1, 'amount' => 100_000_000_001]]])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('allocations.0.amount');
+});
+
+test('apply-credit with credit but no open invoices succeeds with applied_total 0', function () {
+    recordPayment($this->owner, $this->customer, 900, ['auto_allocate' => false]);
+
+    $this->withToken($this->token)->withHeader('Idempotency-Key', 'nothing-open')
+        ->postJson("/api/v1/customers/{$this->customer->id}/apply-credit")
+        ->assertOk()
+        ->assertJsonPath('data.applied_total', 0)
+        ->assertJsonPath('data.allocations', [])
+        ->assertJsonPath('data.customer.credit_balance', 900);
 });

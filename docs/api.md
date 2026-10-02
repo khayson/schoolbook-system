@@ -344,7 +344,7 @@ Requires `Idempotency-Key` (replay returns the original `201`; same key with a d
 }
 ```
 
-- `amount` integer > 0. `method`: `cash`, `momo`, `bank_transfer`, `cheque`. `reference` is required for every method except `cash` (it traces the real transaction). `paid_at` defaults to now and cannot be in the future.
+- `amount` integer > 0 and ≤ 100,000,000,000 (GHS 1 billion; same cap on allocation amounts). `method`: `cash`, `momo`, `bank_transfer`, `cheque`. `reference` is required for every method except `cash` (it traces the real transaction). `paid_at` defaults to now and cannot be in the future.
 - **Allocation:** if `allocations` is given, exactly those invoices are paid (each must be this customer's confirmed sale; amount ≤ its `balance_due`; total ≤ `amount`; sale ids distinct). Otherwise, if `auto_allocate` (default `true`), invoices are paid **oldest due first** (`due_date`, then `sale_date`, then id). `auto_allocate: false` with no `allocations` puts the whole amount on credit.
 - The remainder becomes `unallocated_amount` and is added to the customer's `credit_balance`.
 - Receipt number `RCT-YYYY-NNNNNN`, year of the **recording** date (not `paid_at`).
@@ -377,7 +377,7 @@ Requires `Idempotency-Key` (a retry must not apply credit twice). Body optional:
 { "allocations": [ { "sale_id": 41, "amount": 50000 } ] }
 ```
 
-Without `allocations`, credit goes to the oldest-due invoices first. Credit is drawn from the customer's payments FIFO (`paid_at`, then id). Response `200`:
+Without `allocations`, credit goes to the oldest-due invoices first. If the customer has credit but no open invoices, the response is `200` with `applied_total: 0`, no allocations, and the credit untouched. Credit is drawn from the customer's payments FIFO (`paid_at`, then id). Response `200`:
 
 ```json
 { "data": { "applied_total": 50000, "customer": { "credit_balance": 0, "outstanding_balance": 120000 }, "allocations": [ { "receipt_no": "RCT-2026-000004", "invoice_no": "INV-2026-000041", "amount": 50000 } ] } }

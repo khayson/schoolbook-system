@@ -10,6 +10,7 @@ use App\Exceptions\InvalidInputException;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\AllocationLedger;
+use App\Services\Money;
 use App\Services\NumberSequenceService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -115,6 +116,9 @@ class RecordPayment
         $amount = (int) ($data['amount'] ?? 0);
         if ($amount <= 0) {
             throw new InvalidInputException('amount', 'The amount must be greater than zero.');
+        }
+        if ($amount > Money::MAX_PESEWAS) {
+            throw new InvalidInputException('amount', 'The amount is larger than any single payment the system accepts.');
         }
 
         $method = $data['method'] instanceof PaymentMethod

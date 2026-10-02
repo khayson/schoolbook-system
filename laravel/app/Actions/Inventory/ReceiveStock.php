@@ -45,6 +45,7 @@ class ReceiveStock
                     ->firstOrFail();
             }
 
+            // Sequence last (spec 5.14): only after every product lock is held.
             $sequenceNumber = $this->numberSequence->next('grn', $year);
             $receiptNo = $this->numberSequence->format('GRN', $year, $sequenceNumber);
 

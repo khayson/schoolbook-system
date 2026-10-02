@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\PrepareSequencesCommand;
 use App\Console\Commands\PruneIdempotencyKeysCommand;
 use App\Console\Commands\ReconcileCustomersCommand;
 use Illuminate\Foundation\Inspiring;
@@ -16,3 +17,6 @@ Schedule::command(PruneIdempotencyKeysCommand::class)->daily();
 Schedule::command(ReconcileCustomersCommand::class)
     ->dailyAt('02:30')
     ->onFailure(fn () => ReconcileCustomersCommand::logScheduledFailure());
+
+// Next year's inv/rct/grn rows exist before the first request of the year needs them.
+Schedule::command(PrepareSequencesCommand::class)->yearlyOn(12, 15, '01:00');

@@ -127,3 +127,10 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - **Extras:** `MoneyInvariants::check()` runs in one transaction (one MySQL snapshot). The scheduled `customers:reconcile` has `->onFailure()` → `Log::critical` with the violation count, per-invariant counts and customer ids. New migrations drop `sales.idempotency_key` (no references) and add MySQL `CHECK (payment_allocations.amount <> 0)`. Tests use the real `RecordPayment` (fixture removed) and every payment, void-payment and void-sale test file asserts the invariants in `afterEach`.
 - **Process:** mutation checks now use a temporary WIP commit, restore the file from it, then `git reset --soft`; real work is never at risk. Mutations run this time: old sequence code (deadlocks reproduced) and `reverse()` without the credit update (invariants fail with `customer_credit_balance`).
 
+## 2026-10-02 — Phase 2D.0: carry-over
+
+- **Amount cap:** `Money::MAX_PESEWAS` = 100,000,000,000 (GHS 1 billion) on payment amounts and explicit/credit allocation amounts (Form Requests), and re-checked in `RecordPayment`. Spec rule 19.
+- **ReceiveStock and "sequence last":** checked the code; it already locks every product before taking the GRN number (unchanged since Phase 1), so no behaviour change; added a comment naming the rule. Reported back to the reviewer.
+- **`sequences:prepare`** (`--year`, default next year): creates `inv`, `rct`, `grn` rows through `NumberSequenceService::prepare()` (the same side-connection path), idempotent, never resets a counter. Scheduled `yearlyOn(12, 15, '01:00')`. Spec rule 18 records that sequence rows are never created inside a business transaction.
+- **apply-credit with no open invoices:** `200` with `applied_total: 0` (documented in spec 9.3 and api.md; tested).
+
