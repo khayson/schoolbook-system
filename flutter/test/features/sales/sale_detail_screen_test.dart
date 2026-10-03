@@ -6,6 +6,7 @@ import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/pdf_sharer.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
+import 'package:schoolbook/features/sales/domain/sale.dart';
 import 'package:schoolbook/features/sales/presentation/sale_detail_screen.dart';
 
 import '../../support/fakes.dart';
@@ -177,4 +178,101 @@ void main() {
 
     expect(find.text('pay 1'), findsOneWidget);
   });
+
+  group('a refused cancel/void/deliver refetches and shows the real state', () {
+    ApiException conflict(String code) => ApiException(message: 'This sale is void and cannot be voided.', code: code, statusCode: 409);
+
+    testWidgets('void after it was already voided', (tester) async {
+      sales.sale = testSale(status: 'confirmed', invoiceNo: 'INV-2026-000003');
+      sales
+        ..actionError = conflict('sale_not_editable')
+        ..afterError = testSale(status: 'void', invoiceNo: 'INV-2026-000003');
+      await pumpDetail(tester);
+
+      await tester.tap(find.byKey(const Key('sale_void')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('reason_field')), 'Retry after lost connection');
+      await tester.tap(find.byKey(const Key('reason_submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This invoice was already voided.'), findsOneWidget);
+      expect(find.textContaining('Something went wrong'), findsNothing);
+      expect(find.text('Void'), findsOneWidget, reason: 'status chip shows the refetched state');
+      expect(find.byKey(const Key('sale_void')), findsNothing);
+    });
+
+    testWidgets('cancel after the draft was already cancelled', (tester) async {
+      sales
+        ..actionError = conflict('sale_not_editable')
+        ..afterError = testSale(status: 'cancelled');
+      await pumpDetail(tester);
+
+      await tester.tap(find.byKey(const Key('sale_cancel')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('reason_submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This draft was already cancelled.'), findsOneWidget);
+      expect(find.text('Cancelled'), findsOneWidget);
+      expect(find.byKey(const Key('sale_confirm')), findsNothing);
+    });
+
+    testWidgets('deliver after the invoice was voided elsewhere', (tester) async {
+      sales.sale = testSale(status: 'confirmed', invoiceNo: 'INV-2026-000004');
+      sales
+        ..actionError = conflict('sale_not_editable')
+        ..afterError = testSale(status: 'void', invoiceNo: 'INV-2026-000004');
+      await pumpDetail(tester);
+
+      await tester.tap(find.byKey(const Key('sale_deliver')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('deliver_confirm')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This invoice was voided, so it cannot be delivered.'), findsOneWidget);
+    });
+
+    testWidgets('a real failure (not a state conflict) is still shown as an error', (tester) async {
+      sales.sale = testSale(status: 'confirmed', invoiceNo: 'INV-2026-000005');
+      sales.actionError = ApiException(message: 'Server error', statusCode: 500);
+      await pumpDetail(tester);
+
+      await tester.tap(find.byKey(const Key('sale_deliver')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('deliver_confirm')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Something went wrong'), findsOneWidget);
+    });
+  });
+
+  test('alreadyChangedMessage covers every action and falls back plainly', () {
+    expect(alreadyChangedMessage(SaleAction.voidSale, testSale(status: 'confirmed', invoiceNo: 'I').copyDelivered()),
+        'This invoice has been delivered, so it can no longer be voided.');
+    expect(alreadyChangedMessage(SaleAction.cancel, testSale(status: 'confirmed')),
+        'This sale was confirmed meanwhile, so it can no longer be cancelled.');
+    expect(alreadyChangedMessage(SaleAction.deliver, testSale(status: 'confirmed').copyDelivered()),
+        'This invoice was already marked as delivered.');
+    expect(alreadyChangedMessage(SaleAction.deliver, null), 'This sale changed in the meantime. Showing its current state.');
+  });
 }
+
+extension on Sale {
+  Sale copyDelivered() => Sale(
+        id: id,
+        invoiceNo: invoiceNo,
+        customerId: customerId,
+        customer: customer,
+        status: status,
+        paymentStatus: paymentStatus,
+        saleDate: saleDate,
+        subtotal: subtotal,
+        discountTotal: discountTotal,
+        total: total,
+        amountPaid: amountPaid,
+        balanceDue: balanceDue,
+        deliveredAt: DateTime(2026, 10, 3),
+        items: items,
+      );
+}
+

@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 /**
  * Catalog + opening stock for the Phase 2 acceptance run (docs/acceptance-phase2.md).
@@ -26,6 +27,12 @@ class AcceptanceSeeder extends Seeder
 
     public function run(): void
     {
+        // Fake books and stock must never reach a real shop. Only ever run on purpose
+        // (--class=AcceptanceSeeder), so refuse loudly rather than skip quietly.
+        if (! app()->environment(['local', 'testing'])) {
+            throw new RuntimeException('AcceptanceSeeder only runs in the local or testing environment (current: '.app()->environment().').');
+        }
+
         $owner = User::query()->where('role', 'owner')->firstOrFail();
         $level = Level::query()->where('name', 'Primary 4')->first() ?? Level::query()->firstOrFail();
         $subject = Subject::query()->firstOrFail();

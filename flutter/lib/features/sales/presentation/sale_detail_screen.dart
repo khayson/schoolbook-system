@@ -152,7 +152,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     if (reason == null) {
       return;
     }
-    await _act(() => _actions.cancel(_sale!, reason: reason.isEmpty ? null : reason), 'Draft cancelled');
+    await _act(SaleAction.cancel, () => _actions.cancel(_sale!, reason: reason.isEmpty ? null : reason), 'Draft cancelled');
   }
 
   Future<void> _void() async {
@@ -167,7 +167,7 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     if (reason == null) {
       return;
     }
-    await _act(() => _actions.voidSale(_sale!, reason), 'Invoice voided');
+    await _act(SaleAction.voidSale, () => _actions.voidSale(_sale!, reason), 'Invoice voided');
   }
 
   Future<void> _deliver() async {
@@ -183,11 +183,14 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       ),
     );
     if (ok == true) {
-      await _act(() => _actions.deliver(_sale!), 'Marked as delivered');
+      await _act(SaleAction.deliver, () => _actions.deliver(_sale!), 'Marked as delivered');
     }
   }
 
-  Future<void> _act(Future<Sale> Function() action, String done) async {
+  /// Cancel, void and deliver are not key-protected: after a lost connection the retry
+  /// may find the sale already changed (409). That is not a failure: refetch and say
+  /// what actually happened.
+  Future<void> _act(SaleAction kind, Future<Sale> Function() action, String done) async {
     try {
       final sale = await action();
       if (!mounted) {
@@ -197,9 +200,17 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       _snack(done);
       await _load();
     } on ApiException catch (e) {
-      if (mounted) {
-        _showError(e);
+      if (!mounted) {
+        return;
       }
+      if (isStateConflict(e)) {
+        await _load();
+        if (mounted) {
+          _snack(alreadyChangedMessage(kind, _sale));
+        }
+        return;
+      }
+      _showError(e);
     }
   }
 
@@ -338,6 +349,42 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       ),
     );
   }
+}
+
+enum SaleAction { cancel, voidSale, deliver }
+
+/// The sale was changed by someone (or an earlier attempt) in the meantime.
+bool isStateConflict(ApiException e) =>
+    e.code == 'sale_not_editable' || e.code == 'sale_state_conflict' || e.code == 'sale_delivered';
+
+/// Plain message for the sale's real state after a refused [action].
+String alreadyChangedMessage(SaleAction action, Sale? sale) {
+  if (sale != null) {
+    switch (action) {
+      case SaleAction.voidSale:
+        if (sale.status == 'void') {
+          return 'This invoice was already voided.';
+        }
+        if (sale.deliveredAt != null) {
+          return 'This invoice has been delivered, so it can no longer be voided.';
+        }
+      case SaleAction.cancel:
+        if (sale.status == 'cancelled') {
+          return 'This draft was already cancelled.';
+        }
+        if (sale.status == 'confirmed') {
+          return 'This sale was confirmed meanwhile, so it can no longer be cancelled.';
+        }
+      case SaleAction.deliver:
+        if (sale.deliveredAt != null) {
+          return 'This invoice was already marked as delivered.';
+        }
+        if (sale.status == 'void') {
+          return 'This invoice was voided, so it cannot be delivered.';
+        }
+    }
+  }
+  return 'This sale changed in the meantime. Showing its current state.';
 }
 
 class _ConfirmChoice {

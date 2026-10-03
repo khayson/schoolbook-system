@@ -225,14 +225,27 @@ class FakeSalesRepository extends SalesRepository {
     return PricedOrder(lines: lines, subtotal: total, total: total);
   }
 
-  @override
-  Future<Sale> cancel(int id, {String? reason}) async => sale = testSale(status: 'cancelled');
+  /// When set, the action throws it and the stored sale becomes [afterError]
+  /// (as if an earlier attempt had already changed it).
+  ApiException? actionError;
+  Sale? afterError;
+
+  Future<Sale> _maybeFail(Sale Function() ok) async {
+    if (actionError != null) {
+      sale = afterError ?? sale;
+      throw actionError!;
+    }
+    return sale = ok();
+  }
 
   @override
-  Future<Sale> voidSale(int id, String reason) async => sale = testSale(status: 'void', invoiceNo: sale.invoiceNo);
+  Future<Sale> cancel(int id, {String? reason}) => _maybeFail(() => testSale(status: 'cancelled'));
 
   @override
-  Future<Sale> deliver(int id) async => sale;
+  Future<Sale> voidSale(int id, String reason) => _maybeFail(() => testSale(status: 'void', invoiceNo: sale.invoiceNo));
+
+  @override
+  Future<Sale> deliver(int id) => _maybeFail(() => sale);
 
   @override
   Future<List<int>> invoicePdf(int id) async => [37, 80, 68, 70];
