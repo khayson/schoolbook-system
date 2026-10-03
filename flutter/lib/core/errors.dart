@@ -64,6 +64,16 @@ class ApiException implements Exception {
   final Map<String, dynamic> details;
   final bool isNetworkError;
 
+  /// True when the server may or may not have done the work: no response at all, a
+  /// 5xx, or the first attempt still running (`request_in_progress`). Only then is the
+  /// idempotency key kept for a retry. Every other error is definitive: nothing was
+  /// written and the key can be forgotten.
+  bool get isOutcomeUnknown =>
+      isNetworkError ||
+      statusCode == null ||
+      statusCode! >= 500 ||
+      code == 'request_in_progress';
+
   /// First message for [field], e.g. `reference` or `allocations.0.amount`.
   String? fieldError(String field) => fieldErrors[field]?.first;
 

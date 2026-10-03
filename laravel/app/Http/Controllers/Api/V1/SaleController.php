@@ -44,6 +44,10 @@ class SaleController extends Controller
             $query->where('status', $request->string('status')->toString());
         }
 
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', $request->string('payment_status')->toString());
+        }
+
         return SaleResource::collection(
             $query->paginate($this->perPage($request)),
         );

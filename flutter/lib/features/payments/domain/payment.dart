@@ -102,12 +102,13 @@ abstract final class PaymentMethods {
         _ => method,
       };
 
-  static String referenceLabel(String method) => switch (method) {
-        'momo' => 'MoMo transaction ID',
-        'bank_transfer' => 'Bank reference',
-        'cheque' => 'Cheque number',
-        _ => 'Reference (optional)',
-      };
+  static String referenceLabel(String method) =>
+      method == 'cash' ? 'Reference (optional)' : 'Reference';
+
+  /// A cheque number is only unique per bank, so cheques need the bank too. Spaces are
+  /// ignored when matching duplicates: "GCB 000123" equals "GCB000123".
+  static const referenceHelp =
+      'MoMo transaction ID, bank reference, or bank + cheque number (for example GCB 000123)';
 }
 
 /// Result of `POST /customers/{id}/apply-credit`.

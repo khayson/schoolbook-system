@@ -31,6 +31,8 @@ class PaymentForm
 
     public const MODE_CREDIT = 'credit';
 
+    public const REFERENCE_HELP = 'MoMo transaction ID, bank reference, or bank + cheque number (for example GCB 000123). Required except for cash.';
+
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
@@ -66,9 +68,12 @@ class PaymentForm
                 ->required()
                 ->live(),
             TextInput::make('reference')
+                ->label('Reference')
                 ->maxLength(100)
                 ->required(fn (Get $get): bool => $get('method') !== PaymentMethod::Cash->value)
-                ->helperText('Required for Mobile Money, bank transfer and cheque: the transaction or cheque number.'),
+                // A cheque number is only unique per bank, and references are matched with
+                // spaces removed: "GCB 000123" and "GCB000123" are the same cheque.
+                ->helperText(self::REFERENCE_HELP),
             DateTimePicker::make('paid_at')
                 ->label('Paid at')
                 ->default(fn () => now())

@@ -6,7 +6,11 @@ import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 
 class ProductScanScreen extends StatefulWidget {
-  const ProductScanScreen({super.key});
+  const ProductScanScreen({super.key, this.pickMode = false});
+
+  /// When true (new sale), the scanned product is returned to the caller with
+  /// `context.pop(product)` instead of opening its detail page.
+  final bool pickMode;
 
   @override
   State<ProductScanScreen> createState() => _ProductScanScreenState();
@@ -39,7 +43,11 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
       if (!mounted) {
         return;
       }
-      context.go('/products/${product.id}');
+      if (widget.pickMode) {
+        context.pop(product);
+      } else {
+        context.go('/products/${product.id}');
+      }
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;

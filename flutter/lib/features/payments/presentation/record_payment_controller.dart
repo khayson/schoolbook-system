@@ -11,6 +11,8 @@ import 'package:schoolbook/features/payments/domain/payment.dart';
 /// after the server confirms success. A retry after a network error, or after the app
 /// was killed mid-request, sends the same key and payload, so the server replays the
 /// first result instead of recording the money twice. Changing any field gives a new key.
+/// A definitive error (4xx such as validation or `duplicate_reference`) means nothing was
+/// written, so the key is forgotten and no "unfinished payment" banner is shown.
 class RecordPaymentController extends ChangeNotifier {
   RecordPaymentController({
     required this._payments,
@@ -98,6 +100,9 @@ class RecordPaymentController extends ChangeNotifier {
       return payment;
     } on ApiException catch (e) {
       error = e;
+      if (!e.isOutcomeUnknown) {
+        await _pendingStore.complete(intent);
+      }
       unfinished = await _pendingStore.pending(intent);
       return null;
     } finally {

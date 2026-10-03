@@ -7,6 +7,9 @@ import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/payments/domain/payment.dart';
+import 'package:schoolbook/features/products/domain/product.dart';
+import 'package:schoolbook/features/sales/data/sales_repository.dart';
+import 'package:schoolbook/features/sales/domain/sale.dart';
 
 ApiClient unusedApiClient() => ApiClient(tokenStore: AuthTokenStore());
 
@@ -109,3 +112,142 @@ class FakePdfSharer implements PdfSharer {
     shared.add(fileName);
   }
 }
+
+Sale testSale({
+  int id = 5,
+  String status = 'draft',
+  int total = 3000,
+  String updatedAt = '2026-10-02T09:00:00.000000Z',
+  String? invoiceNo,
+  int creditBalance = 0,
+  List<SaleLine>? items,
+}) =>
+    Sale(
+      id: id,
+      invoiceNo: invoiceNo,
+      customerId: 1,
+      customer: testCustomer(credit: creditBalance),
+      status: status,
+      paymentStatus: 'unpaid',
+      saleDate: DateTime(2026, 10, 2),
+      subtotal: total,
+      discountTotal: 0,
+      total: total,
+      amountPaid: 0,
+      balanceDue: status == 'confirmed' ? total : 0,
+      updatedAt: updatedAt,
+      items: items ??
+          const [
+            SaleLine(productId: 11, productTitle: 'English Reader P4', quantity: 3, basePrice: 1000, unitPrice: 1000, lineTotal: 3000),
+          ],
+    );
+
+/// Scriptable sales API: [confirmResults] / [createResults] are consumed in order.
+class FakeSalesRepository extends SalesRepository {
+  FakeSalesRepository({
+    List<Object>? confirmResults,
+    List<Object>? createResults,
+    Sale? sale,
+    this.previewDelay = Duration.zero,
+  })  : confirmResults = confirmResults ?? [],
+        createResults = createResults ?? [],
+        sale = sale ?? testSale(),
+        super(apiClient: unusedApiClient());
+
+  final List<Object> confirmResults;
+  final List<Object> createResults;
+  Sale sale;
+  Duration previewDelay;
+
+  final List<({String key, Map<String, dynamic> options})> confirmCalls = [];
+  final List<({String key, Map<String, dynamic> payload})> createCalls = [];
+  final List<Map<String, dynamic>> updateCalls = [];
+  final List<List<Map<String, dynamic>>> previewCalls = [];
+
+  /// What `PUT {}` returns (the re-priced draft).
+  Sale? repriced;
+
+  /// Per-call preview results; default prices every line at 1000.
+  PricedOrder Function(List<Map<String, dynamic>> items)? previewResult;
+
+  @override
+  Future<Sale> getSale(int id) async => sale;
+
+  @override
+  Future<Sale> confirm(int id, {required String idempotencyKey, required Map<String, dynamic> options}) async {
+    confirmCalls.add((key: idempotencyKey, options: options));
+    final next = confirmResults.isEmpty ? testSale(status: 'confirmed', invoiceNo: 'INV-2026-000001') : confirmResults.removeAt(0);
+    if (next is ApiException) {
+      throw next;
+    }
+    sale = next as Sale;
+    return sale;
+  }
+
+  @override
+  Future<Sale> updateDraft(int id, Map<String, dynamic> payload) async {
+    updateCalls.add(payload);
+    sale = repriced ?? sale;
+    return sale;
+  }
+
+  @override
+  Future<Sale> createDraft({required String idempotencyKey, required Map<String, dynamic> payload}) async {
+    createCalls.add((key: idempotencyKey, payload: payload));
+    final next = createResults.isEmpty ? testSale() : createResults.removeAt(0);
+    if (next is ApiException) {
+      throw next;
+    }
+    return next as Sale;
+  }
+
+  @override
+  Future<PricedOrder> preview({int? customerId, required List<Map<String, dynamic>> items}) async {
+    previewCalls.add(items);
+    if (previewDelay > Duration.zero) {
+      await Future<void>.delayed(previewDelay);
+    }
+    if (previewResult != null) {
+      return previewResult!(items);
+    }
+    final lines = [
+      for (final i in items)
+        SaleLine(
+          productId: i['product_id'] as int,
+          productTitle: 'Book ${i['product_id']}',
+          quantity: i['quantity'] as int,
+          basePrice: 1000,
+          unitPrice: 1000,
+          lineTotal: 1000 * (i['quantity'] as int),
+        ),
+    ];
+    final total = lines.fold<int>(0, (sum, l) => sum + l.lineTotal);
+    return PricedOrder(lines: lines, subtotal: total, total: total);
+  }
+
+  @override
+  Future<Sale> cancel(int id, {String? reason}) async => sale = testSale(status: 'cancelled');
+
+  @override
+  Future<Sale> voidSale(int id, String reason) async => sale = testSale(status: 'void', invoiceNo: sale.invoiceNo);
+
+  @override
+  Future<Sale> deliver(int id) async => sale;
+
+  @override
+  Future<List<int>> invoicePdf(int id) async => [37, 80, 68, 70];
+}
+
+Product testProduct({int id = 11, String title = 'English Reader P4', int stock = 50}) => Product.fromJson({
+      'id': id,
+      'sku': 'SKU-$id',
+      'title': title,
+      'level_id': 1,
+      'subject_id': 1,
+      'language_id': 1,
+      'cost_price': 600,
+      'selling_price': 1000,
+      'reorder_level': 0,
+      'stock_on_hand': stock,
+      'is_active': true,
+    });

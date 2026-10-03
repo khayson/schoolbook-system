@@ -97,6 +97,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ));
       await _load();
     } on ApiException catch (e) {
+      if (!e.isOutcomeUnknown) {
+        await store.complete(intent);
+      }
       final d = describeApiError(e);
       messenger.showSnackBar(SnackBar(content: Text('${d.title}: ${d.body}')));
     } finally {

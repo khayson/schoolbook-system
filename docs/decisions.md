@@ -173,3 +173,18 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - **Structure:** follows the project's existing `features/*/{data,domain,presentation}` layout rather than the generic Flutter skill layout; API calls live in repositories and small `ChangeNotifier` controllers, not widgets; validators in `core/validators.dart`; the receipt sharer is an interface so tests fake it.
 - `flutter analyze` with the current lints flagged `prefer_initializing_formals` on older files too (Dart 3.13 supports private named initializing formals: `required this._repo` is passed as `repo:`); fixed everywhere so analyze is clean.
 
+## 2026-10-03 — Phase 2D.3: Flutter sales, review fixes, acceptance
+
+**Review fixes:**
+- Reference wording (Filament helper text and Flutter label/helper): "MoMo transaction ID, bank reference, or bank + cheque number (for example GCB 000123)". A cheque number is only unique per bank; matching already ignores spaces.
+- Pending idempotency keys are kept only when the outcome is unknown (`ApiException.isOutcomeUnknown`: no response, 5xx, `request_in_progress`). Any other error is definitive, so the key is forgotten and no "unfinished" banner appears. Applies to record payment, apply credit, create draft and confirm.
+- `paid_at` tolerates device clocks up to 10 minutes fast (`RecordPayment::CLOCK_SKEW_MINUTES`, also in `StorePaymentRequest`); such a value is stored as the server's current time, so no payment is ever dated in the future.
+
+**Idempotency for drafts and confirm:**
+- `POST /sales` now goes through the `idempotent` middleware (a retried "save draft" cannot create two drafts). Existing API tests send a key.
+- Flutter persists one key per intent: `create_draft_sale` (payload = request body) and `confirm_sale.{id}` (payload = body + sale id + draft total + draft `updated_at`). Re-pricing a draft (`PUT {}`) changes `updated_at`, and ticking "override credit limit" changes the body, so each gets a new key; a plain retry reuses it.
+
+**Flutter sales:** new sale (customer picker with balances; book search with level/subject/language chips; scanning via the scanner's new pick mode; +/- and typed quantities; totals only from `/pricing/preview`, debounced, latest request wins; Save draft / Save & confirm), sales list (status and payment-status chips; `GET /sales` gained a `payment_status` filter), sale detail (items, payments applied, confirm sheet with due date and apply-credit toggle, price-changed diff dialog with accept, insufficient-stock list, credit warning with "Confirm anyway", cancel, void with reason, mark delivered, share invoice, record payment). A client-side "would exceed the credit limit" hint was written and then removed: it computed money on the phone; the server's confirm warning covers it.
+
+**Acceptance:** `docs/acceptance-phase2.md`. The Filament run passed on SQLite and on MySQL. The emulator run was prepared (`AcceptanceSeeder`, `integration_test/phase2_acceptance_test.dart`, `API_BASE_URL` dart-define) but not completed: the only emulator had the owner's own `flutter run` session attached, and the test would have replaced the app under it. `phase-2-complete` is therefore not tagged yet.
+

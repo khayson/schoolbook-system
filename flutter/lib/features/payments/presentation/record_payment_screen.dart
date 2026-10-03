@@ -224,6 +224,8 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
               controller: _reference,
               decoration: InputDecoration(
                 labelText: PaymentMethods.referenceLabel(_method),
+                helperText: PaymentMethods.referenceHelp,
+                helperMaxLines: 2,
                 border: const OutlineInputBorder(),
               ),
               validator: (v) => Validators.paymentReference(v, method: _method),

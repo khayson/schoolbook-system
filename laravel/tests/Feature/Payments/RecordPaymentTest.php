@@ -218,3 +218,21 @@ test('a failed payment does not burn a receipt number', function () {
 
     expect(recordPayment($this->owner, $this->customer, 500)->receipt_no)->toBe('RCT-2026-000001');
 });
+
+test('a phone clock up to 10 minutes fast is tolerated and stored as server time', function () {
+    $payment = recordPayment($this->owner, $this->customer, 100, ['paid_at' => '2026-10-02 10:09:30']);
+
+    expect($payment->paid_at->format('Y-m-d H:i:s'))->toBe('2026-10-02 10:00:00');
+
+    expect(fn () => recordPayment($this->owner, $this->customer, 100, ['paid_at' => '2026-10-02 10:10:30']))
+        ->toThrow(InvalidInputException::class);
+});
+
+test('the API applies the same 10-minute tolerance', function () {
+    $token = $this->owner->createToken('t')->plainTextToken;
+    $post = fn (string $paidAt, string $key) => $this->withToken($token)->withHeader('Idempotency-Key', $key)
+        ->postJson('/api/v1/payments', ['customer_id' => $this->customer->id, 'amount' => 100, 'method' => 'cash', 'paid_at' => $paidAt]);
+
+    $post('2026-10-02T10:09:00+00:00', 'skew-ok')->assertCreated();
+    $post('2026-10-02T10:11:00+00:00', 'skew-bad')->assertUnprocessable()->assertJsonValidationErrors('paid_at');
+});

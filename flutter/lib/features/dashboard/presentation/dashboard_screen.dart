@@ -41,6 +41,18 @@ class DashboardScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _ActionTile(
+            icon: Icons.add_shopping_cart,
+            title: 'New sale',
+            subtitle: 'Draft an order and confirm the invoice',
+            onTap: () => context.push('/sales/new'),
+          ),
+          _ActionTile(
+            icon: Icons.receipt_long_outlined,
+            title: 'Sales',
+            subtitle: 'Drafts, invoices, balances',
+            onTap: () => context.push('/sales'),
+          ),
+          _ActionTile(
             icon: Icons.school_outlined,
             title: 'Customers',
             subtitle: 'Schools, balances, record payments',

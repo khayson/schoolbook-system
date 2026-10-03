@@ -102,17 +102,63 @@ void main() {
     expect(after.unfinished, isNull);
   });
 
-  test('a business error keeps the key (resubmitting the same payload is still safe)', () async {
-    final duplicate = ApiException(message: 'dup', code: 'duplicate_reference', statusCode: 409);
-    final repo = FakePaymentsRepository(recordResults: [duplicate]);
-    final store = PendingSubmissionStore(store: InMemoryKeyValueStore());
-    final controller = RecordPaymentController(payments: repo, pendingStore: store, customerId: 1);
+  group('which errors keep the key', () {
+    Future<(RecordPaymentController, PendingSubmissionStore)> failWith(ApiException e) async {
+      final store = PendingSubmissionStore(store: InMemoryKeyValueStore());
+      final controller = RecordPaymentController(
+        payments: FakePaymentsRepository(recordResults: [e]),
+        pendingStore: store,
+        customerId: 1,
+      );
+      await controller.submit(payload());
+      return (controller, store);
+    }
 
-    await controller.submit(payload());
+    for (final (label, error) in [
+      ('validation 422', ApiException(message: 'm', code: 'validation_failed', statusCode: 422)),
+      ('duplicate_reference 409', ApiException(message: 'm', code: 'duplicate_reference', statusCode: 409)),
+      ('sale_not_payable 422', ApiException(message: 'm', code: 'sale_not_payable', statusCode: 422)),
+      ('forbidden 403', ApiException(message: 'm', code: 'forbidden', statusCode: 403)),
+    ]) {
+      test('$label is definitive: key forgotten, no unfinished banner', () async {
+        final (controller, store) = await failWith(error);
 
-    expect(controller.error!.code, 'duplicate_reference');
-    expect(controller.recorded, isNull);
-    expect(await store.pending(controller.intent), isNotNull);
+        expect(controller.error, same(error));
+        expect(controller.unfinished, isNull);
+        expect(await store.pending(controller.intent), isNull);
+      });
+    }
+
+    for (final (label, error) in [
+      ('no connection', ApiException.network()),
+      ('server error 500', ApiException(message: 'm', statusCode: 500)),
+      ('bad gateway 502', ApiException(message: 'm', statusCode: 502)),
+      ('request_in_progress 409', ApiException(message: 'm', code: 'request_in_progress', statusCode: 409)),
+    ]) {
+      test('$label is unknown: key kept for a safe retry', () async {
+        final (controller, store) = await failWith(error);
+
+        expect(controller.unfinished, isNotNull);
+        expect(await store.pending(controller.intent), isNotNull);
+      });
+    }
+
+    test('after a definitive error, the same payload gets a fresh key', () async {
+      final repo = FakePaymentsRepository(recordResults: [
+        ApiException(message: 'm', code: 'validation_failed', statusCode: 422),
+        testPayment(),
+      ]);
+      final controller = RecordPaymentController(
+        payments: repo,
+        pendingStore: PendingSubmissionStore(store: InMemoryKeyValueStore()),
+        customerId: 1,
+      );
+
+      await controller.submit(payload());
+      await controller.submit(payload());
+
+      expect(repo.recordCalls[1].key, isNot(repo.recordCalls[0].key));
+    });
   });
 
   test('discarding the unfinished payment forgets its key', () async {

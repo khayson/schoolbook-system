@@ -12,6 +12,7 @@ use App\Models\Sale;
 use App\Models\User;
 use App\Services\PricingService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Spatie\Activitylog\Models\Activity;
 
 function ownerToken(): array
@@ -67,7 +68,7 @@ test('draft sale via api stores duplicate product lines as one item', function (
     $customer = Customer::factory()->create();
     $product = Product::factory()->create(['selling_price' => 1500]);
 
-    $this->withToken($token)->postJson('/api/v1/sales', [
+    $this->withToken($token)->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/sales', [
         'customer_id' => $customer->id,
         'items' => [
             ['product_id' => $product->id, 'quantity' => 2],
@@ -107,7 +108,7 @@ test('creating a draft with an unusable product returns 422', function (Closure 
     $customer = Customer::factory()->create();
     $product = $makeProduct();
 
-    $this->withToken($token)->postJson('/api/v1/sales', [
+    $this->withToken($token)->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/sales', [
         'customer_id' => $customer->id,
         'items' => [['product_id' => $product->id, 'quantity' => 1]],
     ])
@@ -134,7 +135,7 @@ test('creating a draft for an unusable customer returns 422', function (Closure 
     $customer = $makeCustomer();
     $product = Product::factory()->create();
 
-    $this->withToken($token)->postJson('/api/v1/sales', [
+    $this->withToken($token)->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/sales', [
         'customer_id' => $customer->id,
         'items' => [['product_id' => $product->id, 'quantity' => 1]],
     ])
@@ -170,7 +171,7 @@ test('override price without a reason returns 422', function (string $method, st
         $uri = "/api/v1/sales/{$sale->id}";
     }
 
-    $this->withToken($token)->json($method, $uri, [
+    $this->withToken($token)->withHeader('Idempotency-Key', (string) Str::uuid())->json($method, $uri, [
         'customer_id' => $customer->id,
         'items' => [['product_id' => $product->id, 'quantity' => 1, 'override_unit_price' => 500]],
     ])
@@ -226,7 +227,7 @@ test('staff api ignores a client-supplied source and stores staff', function () 
     $customer = Customer::factory()->create();
     $product = Product::factory()->create();
 
-    $response = $this->withToken($token)->postJson('/api/v1/sales', [
+    $response = $this->withToken($token)->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/sales', [
         'customer_id' => $customer->id,
         'source' => 'portal',
         'items' => [['product_id' => $product->id, 'quantity' => 1]],
@@ -268,6 +269,7 @@ test('non-owner gets 403 on sales and pricing endpoints', function (string $meth
     ];
 
     $this->withToken($token)
+        ->withHeader('Idempotency-Key', (string) Str::uuid())
         ->json($method, str_replace('{sale}', (string) $sale->id, $uri), $payload)
         ->assertForbidden()
         ->assertJsonPath('code', 'forbidden');

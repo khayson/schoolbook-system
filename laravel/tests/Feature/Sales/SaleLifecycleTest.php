@@ -298,3 +298,18 @@ test('no action ever changes the items of a confirmed sale', function () {
     $after = SaleItem::query()->where('sale_id', $sale->id)->orderBy('id')->get()->toArray();
     expect($after)->toBe($snapshot);
 });
+
+test('sales list filters by status and payment status', function () {
+    $product = stockedProduct(stock: 100, price: 1000);
+    $customer = Customer::factory()->create(['credit_limit' => null]);
+    $draft = makeDraftSale($this->owner, [[$product, 1]], $customer);
+    $unpaid = confirmedSale($this->owner, [[$product, 1]], $customer);
+    $paid = confirmedSale($this->owner, [[$product, 2]], $customer);
+    recordPayment($this->owner, $customer, 2000, ['allocations' => [['sale_id' => $paid->id, 'amount' => 2000]]]);
+
+    $ids = fn (string $query) => collect($this->withToken($this->token)->getJson("/api/v1/sales?{$query}")->assertOk()->json('data'))->pluck('id')->all();
+
+    expect($ids('status=draft'))->toBe([$draft->id])
+        ->and($ids('status=confirmed&payment_status=paid'))->toBe([$paid->id])
+        ->and($ids('status=confirmed&payment_status=unpaid'))->toBe([$unpaid->id]);
+});

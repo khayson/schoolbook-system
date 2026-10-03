@@ -37,6 +37,12 @@ class RecordPayment
 {
     use LocksLedgerRows;
 
+    /**
+     * Phone clocks run fast: a paid_at up to this many minutes ahead of the server is
+     * accepted and stored as the server's "now". Further ahead is a 422.
+     */
+    public const CLOCK_SKEW_MINUTES = 10;
+
     public function __construct(
         private readonly AllocationLedger $ledger,
         private readonly NumberSequenceService $numberSequence,
@@ -159,9 +165,13 @@ class RecordPayment
             throw new InvalidInputException('reference', 'A reference is required for MoMo, bank transfer and cheque payments.');
         }
 
-        $paidAt = isset($data['paid_at']) ? Carbon::parse($data['paid_at']) : Carbon::now();
-        if ($paidAt->isFuture()) {
+        $now = Carbon::now();
+        $paidAt = isset($data['paid_at']) ? Carbon::parse($data['paid_at']) : $now->copy();
+        if ($paidAt->greaterThan($now->copy()->addMinutes(self::CLOCK_SKEW_MINUTES))) {
             throw new InvalidInputException('paid_at', 'The payment date cannot be in the future.');
+        }
+        if ($paidAt->greaterThan($now)) {
+            $paidAt = $now->copy(); // device clock slightly ahead: never store a future payment
         }
 
         return [$amount, $method, $reference === '' ? null : $reference, $paidAt];

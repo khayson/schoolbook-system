@@ -14,6 +14,7 @@ import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/presentation/products_list_provider.dart';
+import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/stock/data/stock_repository.dart';
 
 class SchoolbookApp extends StatefulWidget {
@@ -84,6 +85,10 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
         Provider<PaymentsRepository>(
           create: (context) =>
               PaymentsRepository(apiClient: context.read<ApiClient>()),
+        ),
+        Provider<SalesRepository>(
+          create: (context) =>
+              SalesRepository(apiClient: context.read<ApiClient>()),
         ),
         Provider<PendingSubmissionStore>(
           create: (_) => PendingSubmissionStore(),

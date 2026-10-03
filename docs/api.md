@@ -8,7 +8,7 @@ Auth header: `Authorization: Bearer <token>`.
 
 - Lists: `{ data, meta, links }` with `?page=`, `?per_page=` (default 25, max 100), `?search=`, `?sort=`
 - Errors: `{ message, code, errors, details? }` with HTTP 401 / 403 / 404 / 409 / 422 (see [Errors](#errors))
-- Mutating money endpoints require `Idempotency-Key`
+- Mutating money endpoints require `Idempotency-Key`: `POST /stock/receipts`, `POST /sales` (create draft), `POST /sales/{id}/confirm`, `POST /payments`, `POST /customers/{id}/apply-credit`. Clients keep one key per user intent until a 2xx (or a definitive 4xx), and reuse it on retries.
 
 ## Errors
 
@@ -279,6 +279,10 @@ Response `201` with a `StockMovement` resource. If resulting stock would be nega
 
 ## Sales
 
+`GET /sales` filters: `customer_id`, `status`, `payment_status` (`unpaid`/`partial`/`paid`).
+
+`POST /sales` (create a draft) requires `Idempotency-Key`; a retry with the same key and body returns the same draft (`Idempotency-Replayed: true`) instead of creating a second one.
+
 All sales routes require Bearer token + owner. Money is pesewas. A sale moves `draft -> confirmed -> void` or `draft -> cancelled`; delivery is a timestamp, not a status. Any action on a sale in the wrong status returns `409 sale_not_editable` with `details.{sale_id, status, action}`.
 
 ### `POST /sales/{id}/confirm`
@@ -345,7 +349,7 @@ Requires `Idempotency-Key` (replay returns the original `201`; same key with a d
 }
 ```
 
-- `amount` integer > 0 and ≤ 100,000,000,000 (GHS 1 billion; same cap on allocation amounts). `method`: `cash`, `momo`, `bank_transfer`, `cheque`. `reference` is required for every method except `cash` (it traces the real transaction). `paid_at` defaults to now and cannot be in the future.
+- `amount` integer > 0 and ≤ 100,000,000,000 (GHS 1 billion; same cap on allocation amounts). `method`: `cash`, `momo`, `bank_transfer`, `cheque`. `reference` is required for every method except `cash` (it traces the real transaction): MoMo transaction ID, bank reference, or **bank + cheque number** (e.g. `GCB 000123`; a cheque number alone is only unique per bank). `paid_at` defaults to now. It may not be in the future, with a **10-minute tolerance** for device clocks that run fast: a value up to 10 minutes ahead is accepted and stored as the server's current time; further ahead is `422`.
 - **Allocation:** if `allocations` is given, exactly those invoices are paid (each must be this customer's confirmed sale; amount ≤ its `balance_due`; total ≤ `amount`; sale ids distinct). Otherwise, if `auto_allocate` (default `true`), invoices are paid **oldest due first** (`due_date`, then `sale_date`, then id). `auto_allocate: false` with no `allocations` puts the whole amount on credit.
 - The remainder becomes `unallocated_amount` and is added to the customer's `credit_balance`.
 - Receipt number `RCT-YYYY-NNNNNN`, year of the **recording** date (not `paid_at`).

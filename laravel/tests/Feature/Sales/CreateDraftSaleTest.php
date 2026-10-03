@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 test('create draft sale prices lines and stores snapshots', function () {
     $user = User::factory()->owner()->create();
@@ -68,7 +69,7 @@ test('owner can create and update draft sales via api', function () {
     $customer = Customer::factory()->create();
     $product = Product::factory()->create(['selling_price' => 4000]);
 
-    $create = $this->withToken($token)->postJson('/api/v1/sales', [
+    $create = $this->withToken($token)->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/sales', [
         'customer_id' => $customer->id,
         'sale_date' => '2026-05-01',
         'items' => [
@@ -103,4 +104,31 @@ test('non-draft sales cannot be updated', function () {
     expect(fn () => app(UpdateDraftSale::class)->execute($user, $sale, [
         'notes' => 'nope',
     ]))->toThrow(SaleNotEditableException::class);
+});
+
+test('creating a draft via the API is idempotent', function () {
+    $user = User::factory()->owner()->create();
+    $token = $user->createToken('test')->plainTextToken;
+    $customer = Customer::factory()->create();
+    $product = Product::factory()->create(['selling_price' => 1000]);
+    $body = ['customer_id' => $customer->id, 'items' => [['product_id' => $product->id, 'quantity' => 2]]];
+
+    $first = $this->withToken($token)->withHeader('Idempotency-Key', 'draft-1')->postJson('/api/v1/sales', $body)->assertCreated();
+    $replay = $this->withToken($token)->withHeader('Idempotency-Key', 'draft-1')->postJson('/api/v1/sales', $body)
+        ->assertCreated()
+        ->assertHeader('Idempotency-Replayed', 'true');
+
+    expect($replay->json('data.id'))->toBe($first->json('data.id'))
+        ->and(Sale::query()->count())->toBe(1);
+
+    $this->withToken($token)->withHeader('Idempotency-Key', 'draft-1')
+        ->postJson('/api/v1/sales', [...$body, 'notes' => 'changed'])
+        ->assertUnprocessable()
+        ->assertJsonPath('code', 'idempotency_key_mismatch');
+
+    $this->flushHeaders()->withToken($token)->postJson('/api/v1/sales', $body)
+        ->assertUnprocessable()
+        ->assertJsonPath('code', 'idempotency_key_required');
+
+    expect(Sale::query()->count())->toBe(1);
 });

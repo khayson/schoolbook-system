@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Actions\Payments\RecordPayment;
 use App\Enums\PaymentMethod;
 use App\Models\Payment;
 use App\Services\Money;
@@ -26,7 +27,8 @@ class StorePaymentRequest extends FormRequest
             'amount' => ['required', 'integer', 'min:1', 'max:'.Money::MAX_PESEWAS],
             'method' => ['required', Rule::enum(PaymentMethod::class)],
             'reference' => ['nullable', 'string', 'max:100', Rule::requiredIf(fn () => $this->input('method') !== PaymentMethod::Cash->value)],
-            'paid_at' => ['sometimes', 'date', 'before_or_equal:now'],
+            // Up to RecordPayment::CLOCK_SKEW_MINUTES ahead is tolerated (fast phone clocks).
+            'paid_at' => ['sometimes', 'date', 'before_or_equal:'.now()->addMinutes(RecordPayment::CLOCK_SKEW_MINUTES)->toIso8601String()],
             'notes' => ['nullable', 'string', 'max:1000'],
             'auto_allocate' => ['sometimes', 'boolean'],
             'allocations' => ['sometimes', 'nullable', 'array'],

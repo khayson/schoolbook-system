@@ -55,7 +55,9 @@ Route::prefix('v1')->group(function () {
         Route::post('pricing/preview', [PricingController::class, 'preview']);
 
         Route::get('sales', [SaleController::class, 'index']);
-        Route::post('sales', [SaleController::class, 'store']);
+        // Idempotent: a retried "save draft" must not create a second draft.
+        Route::post('sales', [SaleController::class, 'store'])
+            ->middleware('idempotent');
         Route::get('sales/{sale}', [SaleController::class, 'show']);
         Route::put('sales/{sale}', [SaleController::class, 'update']);
         Route::post('sales/{sale}/confirm', [SaleController::class, 'confirm'])

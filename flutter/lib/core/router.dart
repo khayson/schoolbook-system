@@ -13,6 +13,9 @@ import 'package:schoolbook/features/products/presentation/product_detail_screen.
 import 'package:schoolbook/features/products/presentation/product_form_screen.dart';
 import 'package:schoolbook/features/products/presentation/product_scan_screen.dart';
 import 'package:schoolbook/features/products/presentation/products_list_screen.dart';
+import 'package:schoolbook/features/sales/presentation/new_sale_screen.dart';
+import 'package:schoolbook/features/sales/presentation/sale_detail_screen.dart';
+import 'package:schoolbook/features/sales/presentation/sales_list_screen.dart';
 import 'package:schoolbook/features/stock/presentation/receive_stock_screen.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 
@@ -59,7 +62,9 @@ GoRouter createAppRouter(AuthProvider authProvider) {
           ),
           GoRoute(
             path: 'scan',
-            builder: (context, state) => const ProductScanScreen(),
+            builder: (context, state) => ProductScanScreen(
+              pickMode: state.uri.queryParameters['pick'] == '1',
+            ),
           ),
           GoRoute(
             path: ':id',
@@ -110,6 +115,23 @@ GoRouter createAppRouter(AuthProvider authProvider) {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/sales',
+        builder: (context, state) => const SalesListScreen(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const NewSaleScreen(),
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (context, state) => SaleDetailScreen(
+              saleId: int.parse(state.pathParameters['id']!),
+              openConfirm: state.uri.queryParameters['confirm'] == '1',
+            ),
           ),
         ],
       ),
