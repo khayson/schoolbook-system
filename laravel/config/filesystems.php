@@ -30,6 +30,28 @@ return [
 
     'disks' => [
 
+        // Nightly database backups (spatie/laravel-backup). Not web-accessible.
+        'backups' => [
+            'driver' => 'local',
+            'root' => env('BACKUP_LOCAL_ROOT', storage_path('app/backups')),
+            'throw' => true,
+        ],
+
+        // Off-server copy. Defaults to S3-compatible storage (AWS, Backblaze B2, Wasabi,
+        // DigitalOcean Spaces); requires `composer require league/flysystem-aws-s3-v3`.
+        // Enable with BACKUP_DISKS=backups,offsite. See docs/operations.md.
+        'offsite' => [
+            'driver' => env('BACKUP_OFFSITE_DRIVER', 's3'),
+            'key' => env('BACKUP_OFFSITE_KEY'),
+            'secret' => env('BACKUP_OFFSITE_SECRET'),
+            'region' => env('BACKUP_OFFSITE_REGION', 'us-east-1'),
+            'bucket' => env('BACKUP_OFFSITE_BUCKET'),
+            'endpoint' => env('BACKUP_OFFSITE_ENDPOINT'),
+            'use_path_style_endpoint' => (bool) env('BACKUP_OFFSITE_PATH_STYLE', false),
+            'root' => env('BACKUP_OFFSITE_ROOT', ''),
+            'throw' => true,
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),

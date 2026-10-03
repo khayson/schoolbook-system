@@ -78,3 +78,4 @@ Set `DB_TEST_DATABASE=schoolbook_test` in `laravel/.env` (already in `.env.examp
 | `docs/build-spec.md` | Product & engineering source of truth |
 | `docs/api.md` | REST API reference (filled as endpoints are built) |
 | `docs/decisions.md` | ADR-style log of deviations from the spec |
+| `docs/operations.md` | Backups, restore drill, production checklist |
