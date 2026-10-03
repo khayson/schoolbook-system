@@ -1,14 +1,20 @@
 <?php
 
 use App\Actions\Payments\RecordPayment;
+use App\Actions\Reference\ReviewReferenceImport;
+use App\Actions\Reference\StageReferenceImport;
 use App\Actions\Sales\CreateDraftSale;
 use App\Models\Customer;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\ReferenceEdition;
+use App\Models\ReferenceImportRow;
 use App\Models\Sale;
 use App\Models\User;
 use App\Services\MoneyInvariants;
+use App\Services\Reference\ReferenceListParser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReferenceListFixture;
 use Tests\TestCase;
 
 /*
@@ -120,4 +126,59 @@ function recordPayment(User $user, Customer $customer, int $amount, array $extra
         'method' => 'cash',
         ...$extra,
     ]);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Approved (reference) list helpers
+|--------------------------------------------------------------------------
+*/
+
+function stageList(User $user, ?ReferenceListFixture $fixture = null, string $sha = 'sha-1', string $label = 'Test list'): ReferenceEdition
+{
+    $list = (new ReferenceListParser)->parse(($fixture ?? ReferenceListFixture::standard())->chunks());
+
+    return app(StageReferenceImport::class)->stageParsed($user, $list, $label, str_pad($sha, 64, '0'));
+}
+
+function stagedRow(ReferenceEdition $edition, string $title, ?string $serial = null): ReferenceImportRow
+{
+    return $edition->importRows()->where('title', $title)
+        ->when($serial !== null, fn ($q) => $q->where('source_serial', $serial))
+        ->orderBy('position')->firstOrFail();
+}
+
+function issueCodes(ReferenceImportRow $row): array
+{
+    return array_column($row->issues ?? [], 'code');
+}
+
+/** Accept every row the owner could accept; exclude rows with errors. */
+function reviewEverything(ReferenceEdition $edition): void
+{
+    $review = app(ReviewReferenceImport::class);
+    foreach ($edition->importRows()->get() as $row) {
+        $row->hasErrors() ? $review->exclude($row) : $review->accept($row);
+    }
+}
+
+/** The fixture as a later edition: one title dropped, one added, one printed differently. */
+function secondEditionFixture(): ReferenceListFixture
+{
+    return (new ReferenceListFixture)
+        ->page()
+        ->heading('3.0 LIST OF APPROVED TEXTBOOKS FROM KINDERGARTEN TO JHS', 134.8)
+        ->heading('NUMERACY/MATHEMATICS (LEARNER BOOKS,TEACHER GUIDES)')
+        ->textbookHeader()
+        ->textbook('1', 'Sunrise Mathematics for Basic Schools', 'Basic 1', 'Sunrise Press Ltd')
+        ->textbook('2', 'Sunrise Mathematics for Basic Schools', 'Basic 2', 'Sunrise Press Company Ltd')
+        ->textbook('3', ['Lakeside Series Mathematics for Junior High', 'Schools'], 'JHS 1', ['Lakeside Publications and', 'Stationery Ltd'])
+        ->heading('SCIENCE (LEARNER BOOKS,TEACHER GUIDES)')
+        ->textbookHeader()
+        ->textbook('1', 'Discover Science', 'Basic 4', 'Baobab Publishing')
+        ->textbook('2', 'Ocean Science', 'Basic 5', 'Baobab Publishing')
+        ->heading('4.0 – LIST OF APPROVED SUPPLEMENTARY MATERIALS', 166.3)
+        ->heading('4.2 READERS (STORY BOOKS)')
+        ->supplementHeader()
+        ->supplement('1', 'The Clever Tortoise', 'Akwaaba Stories');
 }

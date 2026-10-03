@@ -7,6 +7,8 @@ use App\Models\GoodsReceipt;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
 use App\Models\Product;
+use App\Models\ReferenceBook;
+use App\Models\ReferenceEdition;
 use App\Models\Sale;
 use App\Models\User;
 use App\Support\BackupGuard;
@@ -43,6 +45,8 @@ class AppServiceProvider extends ServiceProvider
             'sale' => Sale::class,
             'payment' => Payment::class,
             'payment_allocation' => PaymentAllocation::class,
+            'reference_book' => ReferenceBook::class,
+            'reference_edition' => ReferenceEdition::class,
             'stock_count' => 'App\Models\StockCount',
             'sale_return' => 'App\Models\SaleReturn',
             'purchase_order' => 'App\Models\PurchaseOrder',

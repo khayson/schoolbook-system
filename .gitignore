@@ -61,3 +61,6 @@ flutter/windows/flutter/ephemeral/
 coverage/
 *.lcov
 .turbo/
+
+# NaCCA reference lists and imports: copyrighted, never committed (docs/reference-catalog.md)
+laravel/storage/app/reference/

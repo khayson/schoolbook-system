@@ -4,6 +4,8 @@ namespace App\Policies;
 
 use App\Models\Product;
 use App\Models\Publisher;
+use App\Models\PublisherAlias;
+use App\Models\ReferenceBook;
 use App\Models\User;
 use App\Policies\Concerns\RefusesDeletingInUse;
 
@@ -36,6 +38,8 @@ class PublisherPolicy
      */
     protected function isInUse(mixed $model): bool
     {
-        return Product::withTrashed()->where('publisher_id', $model->id)->exists();
+        return Product::withTrashed()->where('publisher_id', $model->id)->exists()
+            || ReferenceBook::query()->where('publisher_id', $model->id)->exists()
+            || PublisherAlias::query()->where('publisher_id', $model->id)->exists();
     }
 }

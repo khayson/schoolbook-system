@@ -21,6 +21,8 @@ use Spatie\Activitylog\Support\LogOptions;
     'subject_id',
     'language_id',
     'publisher_id',
+    'reference_book_id',
+    'variant_label',
     'edition',
     'cost_price',
     'selling_price',
@@ -76,6 +78,12 @@ class Product extends Model
     public function publisher(): BelongsTo
     {
         return $this->belongsTo(Publisher::class);
+    }
+
+    /** The approved-list title this product is (null: not on the list). */
+    public function referenceBook(): BelongsTo
+    {
+        return $this->belongsTo(ReferenceBook::class);
     }
 
     public function stockMovements(): HasMany

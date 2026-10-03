@@ -79,3 +79,4 @@ Set `DB_TEST_DATABASE=schoolbook_test` in `laravel/.env` (already in `.env.examp
 | `docs/api.md` | REST API reference (filled as endpoints are built) |
 | `docs/decisions.md` | ADR-style log of deviations from the spec |
 | `docs/operations.md` | Backups, restore drill, production checklist |
+| `docs/reference-catalog.md` | NaCCA approved list: import, review, mapping rules |
