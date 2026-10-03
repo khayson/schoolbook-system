@@ -199,18 +199,19 @@ return [
          * After creating the zip, verify it can be opened and contains files.
          * Recommended for critical backups but adds a small overhead.
          */
-        'verify_backup' => false,
+        'verify_backup' => true,
 
         /*
          * The number of attempts, in case the backup command encounters an exception
          */
-        'tries' => 1,
+        // One busy moment (lock wait, brief disk or network hiccup) should not cost the night's backup.
+        'tries' => 3,
 
         /*
          * The number of seconds to wait before attempting a new backup if the previous try failed
          * Set to `0` for none
          */
-        'retry_delay' => 0,
+        'retry_delay' => 60,
     ],
 
     /*
@@ -303,20 +304,10 @@ return [
             'disks' => array_values(array_filter(array_map('trim', explode(',', env('BACKUP_DISKS', 'backups'))))),
             'health_checks' => [
                 MaximumAgeInDays::class => 1,
-                MaximumStorageInMegabytes::class => 5000,
+                // Well inside Cloudflare R2's 10 GB free allowance (docs/operations.md).
+                MaximumStorageInMegabytes::class => 2000,
             ],
         ],
-
-        /*
-        [
-            'name' => 'name of the second app',
-            'disks' => ['local', 's3'],
-            'health_checks' => [
-                \Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays::class => 1,
-                \Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes::class => 5000,
-            ],
-        ],
-        */
     ],
 
     'cleanup' => [
@@ -368,7 +359,8 @@ return [
              * this amount of megabytes has been reached.
              * Set null for unlimited size.
              */
-            'delete_oldest_backups_when_using_more_megabytes_than' => 5000,
+            // Keeps the off-site bucket inside R2's free allowance even if something misbehaves.
+            'delete_oldest_backups_when_using_more_megabytes_than' => 2000,
         ],
 
         /*

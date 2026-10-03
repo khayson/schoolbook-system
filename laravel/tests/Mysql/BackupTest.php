@@ -3,6 +3,7 @@
 use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Sleep;
 
 /*
  * Runs the real backup:run (mysqldump) with the production backup config, its "mysql"
@@ -24,6 +25,7 @@ beforeEach(function () {
 test('backup:run --only-db dumps the test database into a zip on the backups disk', function () {
     Customer::factory()->create(['name' => 'Backup Probe School']);
 
+    // verify_backup is on: the run re-opens the zip and fails if it is unreadable or empty.
     $this->artisan('backup:run', ['--only-db' => true, '--disable-notifications' => true])
         ->assertSuccessful();
 
@@ -50,11 +52,25 @@ test('backup:run --only-db dumps the test database into a zip on the backups dis
         ->and($sql)->toContain('Backup Probe School');
 });
 
-test('a failing backup is logged as critical', function () {
+test('backup:monitor is healthy after a successful backup', function () {
+    $this->artisan('backup:monitor')->assertFailed();
+
+    $this->artisan('backup:run', ['--only-db' => true, '--disable-notifications' => true])
+        ->assertSuccessful();
+
+    $this->artisan('backup:monitor')
+        ->expectsOutputToContain('The schoolbook backups on the backups disk are considered healthy.')
+        ->assertSuccessful();
+});
+
+test('a failing backup is retried 3 times, 60 seconds apart, then logged as critical once', function () {
     config(['database.connections.mysql.dump.dump_binary_path' => 'C:/definitely-not-here']);
+    Sleep::fake();
     Log::spy();
 
     $this->artisan('backup:run', ['--only-db' => true])->assertFailed();
+
+    Sleep::assertSequence([Sleep::for(60)->seconds(), Sleep::for(60)->seconds()]);
 
     // Failed in the dump step (the binary), not on some other misconfiguration.
     Log::shouldHaveReceived('critical')

@@ -207,3 +207,12 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - **`mysqldump` path:** `DB_DUMP_BINARY_PATH` on each MySQL connection's `dump` config, with `--single-transaction` (InnoDB, no table locks during opening hours). In `.env` on Windows use forward slashes: backslashes inside double quotes are escapes to phpdotenv.
 - **Test gotcha:** the package resolves its `Config` object when Artisan boots (in the MySQL group, during `migrate:fresh`), so `config(['backup…'])` in a test is silently ignored and it dumped the default connection (`:memory:` under phpunit). The test now uses the real backup config unchanged and points the `mysql` connection at `schoolbook_test`. The failure test asserts that the logged error comes from the dump step, so it cannot pass for an unrelated reason.
 - **Restore drill** run and logged in `docs/operations.md`: seeded data, backup, wipe, restore, identical `CHECKSUM TABLE` on 10 tables, `customers:reconcile` clean. It used the throwaway test database because the app's database user cannot create databases. The production drill uses an admin-created scratch database.
+
+## 2026-10-03 — Phase 3.0 follow-up (review)
+
+- `monitor_backups`: the package's "name of the second app" sample (disks `local`, `s3`) was inside a `/* … */` block comment, so the effective config already had one entry (checked with `config('backup.monitor_backups')`). Removed anyway so nobody uncomments it. A test pins exactly one monitored backup; `backup:monitor` fails with no backup (Feature) and passes after a real backup (MySQL group).
+- `verify_backup` on; `tries` 3 with `retry_delay` 60. The package sleeps through `Sleep::for`, so the test fakes it and asserts two 60-second waits, then a single critical log.
+- Heartbeat: `pingOnSuccessIf` on `backup:run`, URL from `BACKUP_HEARTBEAT_URL` (`services.heartbeat.backup_url`). Tested with a mocked Guzzle client: a ping on success, none on failure, none without a URL.
+- `App\Support\BackupGuard` in `AppServiceProvider::boot`: in production, `offsite` in `BACKUP_DISKS` with an empty `BACKUP_ARCHIVE_PASSWORD` throws. This also stops `config:cache` and the scheduler on that server, which is intended: no unencrypted off-site uploads.
+- Off-site provider: **Cloudflare R2** (owner's choice). Storage caps for cleanup and the monitor were cut from 5000 to 2000 MB to stay inside the free allowance. The S3 package is not installed and no bucket is configured yet; that is the next ops step, before real data.
+

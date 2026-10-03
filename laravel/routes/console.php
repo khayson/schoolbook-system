@@ -21,10 +21,13 @@ Schedule::command(ReconcileCustomersCommand::class)
 
 // Nightly database-only backup, then retention cleanup and a health check. Failures inside
 // the package raise events logged as critical (App\Listeners\LogBackupProblems); the
-// onFailure hooks also catch a command that dies before it can raise one.
+// onFailure hooks also catch a command that dies before it can raise one. The heartbeat
+// ping catches what no log can: the scheduler not running at all.
+$heartbeat = config('services.heartbeat.backup_url');
 Schedule::command('backup:run --only-db')
     ->dailyAt('01:30')
-    ->onFailure(fn () => Log::critical('Scheduled backup:run exited with failure'));
+    ->onFailure(fn () => Log::critical('Scheduled backup:run exited with failure'))
+    ->pingOnSuccessIf(filled($heartbeat), (string) $heartbeat);
 Schedule::command('backup:clean')
     ->dailyAt('01:50')
     ->onFailure(fn () => Log::critical('Scheduled backup:clean exited with failure'));
