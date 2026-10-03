@@ -120,9 +120,8 @@ void main() {
     final invoice3 = await _newSaleAndConfirm(tester, school, [(english, 4)], expectedTotal: 'GHS 100.00', turnOffApplyCredit: true);
     expect(invoice3.balanceDue, 10000);
     _go(tester, '/customers/${school.id}');
-    await _waitFor(tester, find.byKey(const Key('customer_apply_credit')));
-    await tester.ensureVisible(find.byKey(const Key('customer_apply_credit')));
-    await tester.tap(find.byKey(const Key('customer_apply_credit')));
+    await _waitFor(tester, find.byKey(const Key('customer_record_payment')));
+    await _scrollToAndTap(tester, find.byKey(const Key('customer_apply_credit')));
     await _settle(tester);
     await tester.tap(find.byKey(const Key('apply_credit_confirm')));
     await _waitFor(tester, find.text('Applied GHS 50.00. Credit left GHS 0.00.'));
@@ -135,9 +134,8 @@ void main() {
 
     // 8. Void the invoice: balances and stock reverse --------------------------------------
     _go(tester, '/sales/${invoice3.id}');
-    await _waitFor(tester, find.byKey(const Key('sale_void')));
-    await tester.ensureVisible(find.byKey(const Key('sale_void')));
-    await tester.tap(find.byKey(const Key('sale_void')));
+    await _waitFor(tester, find.text(invoice3.invoiceNo!)); // app bar title once the sale has loaded
+    await _scrollToAndTap(tester, find.byKey(const Key('sale_void')));
     await _settle(tester);
     await tester.enterText(find.byKey(const Key('reason_field')), 'Acceptance: ordered in error');
     await tester.tap(find.byKey(const Key('reason_submit')));
@@ -190,7 +188,7 @@ Future<Sale> _newSaleAndConfirm(
   }
   await _waitFor(tester, find.text(expectedTotal));
 
-  await tester.ensureVisible(find.byKey(const Key('new_sale_save_confirm')));
+  // Pinned bottom bar: the main action is on screen without scrolling.
   await tester.tap(find.byKey(const Key('new_sale_save_confirm')));
   await _waitFor(tester, find.byKey(const Key('confirm_submit')));
   if (turnOffApplyCredit && find.byKey(const Key('confirm_apply_credit')).evaluate().isNotEmpty) {
@@ -219,9 +217,23 @@ Future<void> _recordPayment(WidgetTester tester, Customer school, {required Stri
     await _settle(tester);
     await tester.enterText(find.byKey(const Key('pay_reference')), momoReference);
   }
-  await tester.ensureVisible(find.byKey(const Key('pay_submit')));
-  await tester.tap(find.byKey(const Key('pay_submit')));
+  await _scrollToAndTap(tester, find.byKey(const Key('pay_submit')));
   await _waitFor(tester, find.byKey(const Key('pay_recorded_dialog')));
+}
+
+/// Detail screens build lazily: close the keyboard (on a real phone it shrinks the
+/// list and can drop off-screen items again), scroll the screen's vertical list until
+/// [finder] exists, then tap it straight away.
+Future<void> _scrollToAndTap(WidgetTester tester, Finder finder) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await _settle(tester);
+  await tester.scrollUntilVisible(
+    finder,
+    300,
+    scrollable: find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down).first,
+  );
+  await tester.pump();
+  await tester.tap(finder);
 }
 
 void _go(WidgetTester tester, String location) {

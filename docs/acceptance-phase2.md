@@ -58,16 +58,49 @@ cd laravel; php artisan customers:reconcile
 
 ## Results
 
-Run on 2026-10-03 (Phase 2D.3).
+### A. Phone (emulator): PASS, 2026-10-03
 
-| Part | Where | Result |
-|---|---|---|
-| B. Admin (Filament) | SQLite (default suite) | **PASS**: 1 test, 71 assertions; every step's figures as in the table; `customers:reconcile` "All money invariants hold." |
-| B. Admin (Filament) | **MySQL** `schoolbook_test` (`DB_CONNECTION=mysql`) | **PASS**: same test, 71 assertions, 8.9 s |
-| A. Phone (emulator) | Pixel 9a emulator `emulator-5554`, API on `:8001` | **NOT RUN to completion** (see below) |
+Pixel_9a emulator (`emulator-5554`, cold-booted), app debug build, API `php artisan serve --port=8001` on MySQL `schoolbook_test`, reset with `migrate:fresh --seed` then `AcceptanceSeeder` (stock 200/100/100, no customers, no sales).
 
-**Why A did not complete:** the only emulator already had the owner's own `flutter run` debug session attached (running since 2026-10-01). An integration test reinstalls the app on the device, which would have killed that session, so it was not forced. Two attempts produced no output: the first waited behind a hung `flutter devices` call holding Flutter's startup lock; the second sat idle with no Gradle/adb activity and was stopped after several minutes. The API server on `:8001` and the seeded `schoolbook_test` data worked (owner login via the API returned a token).
+```
+ACCEPTANCE: 1 logged in as owner@schoolbook.test
+ACCEPTANCE: 2 created CUS-0001 Acceptance Academy 056438
+ACCEPTANCE: 3-4 bulk order confirmed as INV-2026-000001 GHS 1,800.00; stock dropped 40 + 20
+ACCEPTANCE: 4b second invoice INV-2026-000002 GHS 450.00
+ACCEPTANCE: 5 instalment 1 GHS 2,000.00: INV-2026-000001 paid, INV-2026-000002 part paid (GHS 250.00 left)
+ACCEPTANCE: 6 instalment 2 GHS 300.00 MoMo: INV-2026-000002 paid, GHS 50.00 credit
+ACCEPTANCE: 7 credit GHS 50.00 applied to INV-2026-000003; GHS 50.00 left to pay
+ACCEPTANCE: 8 voided INV-2026-000003: credit back to GHS 50.00, owes GHS 0.00, 4 books back in stock
+ACCEPTANCE RESULT: PASS
+02:05 +1: All tests passed!
+```
 
-**What already covers the phone flow without a device:** widget and controller tests drive the same screens and dialogs with a fake API: new sale (server-priced totals, debounced, stale responses ignored; draft idempotency across a lost connection), sale detail (confirm; price changed with the old -> new diff, accept = re-save then confirm with a new key; insufficient stock listing every book; credit warning with override; apply-credit toggle; void with reason; share invoice), record payment (exact GHS parsing, reference rules, keep-as-credit, retry with the same key, restart restore), customers form.
+Every step also asserts the figures through the API in pesewas. Final database state after the run:
 
-**To finish A** (about 10 minutes once the emulator is free): stop the existing `flutter run`, then follow "How to run, A" above. The test prints `ACCEPTANCE RESULT: PASS` and the step log; then run `customers:reconcile` against `schoolbook_test`. Record the output here and tag `phase-2-complete`.
+```
+php artisan customers:reconcile   (DB_DATABASE=schoolbook_test)
+All money invariants hold.
+
+customer CUS-0001: owes 0, credit 5000
+stock: ACC-ENG-P4 160, ACC-MTH-P4 80, ACC-SCI-P4 70
+INV-2026-000001 confirmed paid    total 180000 paid 180000 due 0
+INV-2026-000002 confirmed paid    total  45000 paid  45000 due 0
+INV-2026-000003 void      unpaid  total  10000 paid      0 due 0
+RCT-2026-000001 cash 200000, unallocated 0
+RCT-2026-000002 momo  30000, unallocated 5000
+```
+
+All match the expected column above; no expected figure was changed.
+
+**Earlier attempts (all test-environment or test-script problems, not app behaviour):**
+
+1. Two runs never started: the emulator (up since 2026-10-01) had frozen; `adb devices` listed it but every `adb shell` hung, so Flutter's device discovery waited forever. Fixed by a cold boot with the owner's permission.
+2. Failed at step 3: on a phone-sized screen "Save & confirm" was below the fold and not built yet. Treated as a UX bug too: the new-sale screen now has a **pinned bottom bar** (server-priced total, Save draft, Save & confirm) above the scrolling list, with widget tests on a phone-sized surface.
+3. Failed at step 5: after typing the amount, the on-screen keyboard shrank the list and the lazily built "Record payment" button was dropped again before the tap. The test now closes the keyboard, scrolls with `scrollUntilVisible`, and taps immediately (detail screens: Record payment, Apply credit, Void). Retry 1 of the 2 allowed then passed.
+
+### B. Admin (Filament): PASS
+
+| Where | Result |
+|---|---|
+| SQLite (default suite) | 1 test, 71 assertions, `customers:reconcile` "All money invariants hold." |
+| MySQL `schoolbook_test` (`DB_CONNECTION=mysql`) | same test, 71 assertions |

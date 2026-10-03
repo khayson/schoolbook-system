@@ -92,9 +92,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   @override
   Widget build(BuildContext context) {
     final c = _controller;
-    final theme = Theme.of(context);
     final customer = c.customer;
-    final preview = c.preview;
 
     return Scaffold(
       appBar: AppBar(title: const Text('New sale')),
@@ -153,52 +151,105 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               onRemove: () => c.remove(line.product.id),
             );
           }),
-          if (c.lines.isNotEmpty) ...[
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Total', style: theme.textTheme.titleMedium),
-                if (c.previewLoading) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                Text(
-                  preview == null ? '…' : Money.formatPesewas(preview.total),
-                  key: const Key('new_sale_total'),
-                  style: theme.textTheme.titleLarge,
-                ),
-              ],
-            ),
-            if (c.previewError != null)
-              Text(describeApiError(c.previewError!).body, style: TextStyle(color: theme.colorScheme.error)),
-          ],
           const SizedBox(height: 12),
           TextField(
             controller: _notes,
             decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder()),
             maxLines: 2,
           ),
-          if (c.saveError != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${describeApiError(c.saveError!).title}: ${describeApiError(c.saveError!).body}',
-              key: const Key('new_sale_error'),
-              style: TextStyle(color: theme.colorScheme.error),
-            ),
-          ],
-          const SizedBox(height: 16),
-          FilledButton(
-            key: const Key('new_sale_save_confirm'),
-            onPressed: c.canSave ? () => _save(thenConfirm: true) : null,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-            child: Text(c.saving ? 'Saving…' : 'Save & confirm'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            key: const Key('new_sale_save'),
-            onPressed: c.canSave ? () => _save(thenConfirm: false) : null,
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: const Text('Save draft'),
-          ),
         ],
+      ),
+      // Pinned: however long the order, the total and the main actions stay on screen.
+      bottomNavigationBar: _SaveBar(
+        controller: c,
+        onSave: () => _save(thenConfirm: false),
+        onSaveAndConfirm: () => _save(thenConfirm: true),
+      ),
+    );
+  }
+}
+
+/// Bottom bar: server-priced total (or the pricing/save error) and both save actions.
+class _SaveBar extends StatelessWidget {
+  const _SaveBar({required this.controller, required this.onSave, required this.onSaveAndConfirm});
+
+  final NewSaleController controller;
+  final VoidCallback onSave;
+  final VoidCallback onSaveAndConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final theme = Theme.of(context);
+    final preview = c.preview;
+    final books = c.lines.fold<int>(0, (sum, l) => sum + l.quantity);
+
+    return Material(
+      key: const Key('new_sale_bar'),
+      elevation: 8,
+      color: theme.colorScheme.surfaceContainer,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      c.lines.isEmpty ? 'No books yet' : 'Total for $books book${books == 1 ? '' : 's'}',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  if (c.previewLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ),
+                  Text(
+                    c.lines.isEmpty || preview == null ? '…' : Money.formatPesewas(preview.total),
+                    key: const Key('new_sale_total'),
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ],
+              ),
+              if (c.previewError != null)
+                Text(describeApiError(c.previewError!).body, style: TextStyle(color: theme.colorScheme.error)),
+              if (c.saveError != null)
+                Text(
+                  '${describeApiError(c.saveError!).title}: ${describeApiError(c.saveError!).body}',
+                  key: const Key('new_sale_error'),
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const Key('new_sale_save'),
+                      onPressed: c.canSave ? onSave : null,
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      child: const Text('Save draft'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      key: const Key('new_sale_save_confirm'),
+                      onPressed: c.canSave ? onSaveAndConfirm : null,
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      child: Text(c.saving ? 'Saving…' : 'Save & confirm'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

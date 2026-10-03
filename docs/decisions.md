@@ -188,3 +188,12 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 
 **Acceptance:** `docs/acceptance-phase2.md`. The Filament run passed on SQLite and on MySQL. The emulator run was prepared (`AcceptanceSeeder`, `integration_test/phase2_acceptance_test.dart`, `API_BASE_URL` dart-define) but not completed: the only emulator had the owner's own `flutter run` session attached, and the test would have replaced the app under it. `phase-2-complete` is therefore not tagged yet.
 
+## 2026-10-03 — Phase 2 close-out
+
+- `AcceptanceSeeder` throws outside local/testing (it is only run on purpose, so it refuses loudly rather than skipping).
+- Flutter sale detail: a 409 state conflict from cancel/void/deliver (these are not key-protected) refetches the sale and shows what happened ("This invoice was already voided.") instead of an error.
+- **New-sale screen bottom bar:** the phone acceptance run showed "Save & confirm" below the fold once an order is longer than the screen. The total (server-priced), Save draft and Save & confirm are now pinned in a bottom bar; the list scrolls above it.
+- Integration test: detail-screen buttons are reached by closing the keyboard, `scrollUntilVisible`, then tapping at once (a real keyboard shrinks the list and lazily built items can be dropped).
+- The emulator used for development had frozen (adb listed it, every shell command hung), which explained the earlier silent runs. Cold-booted with the owner's permission.
+- Phone acceptance passed on retry 1 of 2 with every specified figure unchanged; `customers:reconcile` clean. Phase 2 tagged `phase-2-complete`.
+

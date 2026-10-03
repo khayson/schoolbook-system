@@ -3,10 +3,13 @@ import 'package:schoolbook/core/auth_token_store.dart';
 import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/pagination.dart';
 import 'package:schoolbook/core/pdf_sharer.dart';
+import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
+import 'package:schoolbook/features/catalog/domain/lookup_models.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/payments/domain/payment.dart';
+import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/sales/domain/sale.dart';
@@ -264,3 +267,37 @@ Product testProduct({int id = 11, String title = 'English Reader P4', int stock 
       'stock_on_hand': stock,
       'is_active': true,
     });
+
+class FakeProductsRepository extends ProductsRepository {
+  FakeProductsRepository(this.products) : super(apiClient: unusedApiClient());
+
+  final List<Product> products;
+
+  @override
+  Future<PaginatedResponse<Product>> listProducts({int page = 1, String? search, int? levelId, int? subjectId, int? languageId}) async {
+    final q = (search ?? '').toLowerCase();
+    final found = products.where((p) => q.isEmpty || p.title.toLowerCase().contains(q) || p.sku.toLowerCase().contains(q)).toList();
+    return PaginatedResponse(data: found, meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: 25, total: found.length));
+  }
+}
+
+class FakeLookupsRepository extends LookupsRepository {
+  FakeLookupsRepository() : super(apiClient: unusedApiClient());
+
+  @override
+  Future<List<LevelLookup>> fetchLevels() async => const [];
+
+  @override
+  Future<List<NamedLookup>> fetchSubjects() async => const [];
+
+  @override
+  Future<List<LanguageLookup>> fetchLanguages() async => const [];
+}
+
+class PickableCustomersRepository extends FakeCustomersRepository {
+  PickableCustomersRepository({super.customer});
+
+  @override
+  Future<PaginatedResponse<Customer>> listCustomers({int page = 1, String? search}) async =>
+      PaginatedResponse(data: [customer], meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: 25, total: 1));
+}
