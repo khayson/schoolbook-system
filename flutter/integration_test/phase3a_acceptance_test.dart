@@ -1,13 +1,13 @@
 // Phase 3.A acceptance, step 5 (docs/acceptance-phase3a.md): the approved list on the
-// phone, driven through the real app on the Pixel_9a against the owner-reviewed list.
+// phone, driven through the real app on the Pixel_9a against the owner-reviewed list, on
+// the owner's own dev server (port 8000, the app's default; no second server).
 //
-//   php artisan serve --host=127.0.0.1 --port=8001        (dev database, owner-published list)
-//   flutter test integration_test/phase3a_acceptance_test.dart -d emulator-5554 \
-//     --dart-define=API_BASE_URL=http://10.0.2.2:8001/api/v1
+//   .\scripts\phone-offline-window.ps1 -Watch run.txt        (second window)
+//   flutter test integration_test/phase3a_acceptance_test.dart -d emulator-5554 | Tee-Object run.txt
 //
-// Offline: the test requests GET /acceptance-go-offline (a 404 the host script watches for
-// in the server log); the host then stops the API server and starts it again 30 s later.
-import 'package:dio/dio.dart';
+// Offline: the test prints "ACCEPTANCE-GO-OFFLINE"; the host script sees it in the test
+// output and turns the emulator's airplane mode on for 30 s, then off. The server keeps
+// running: only the phone loses its network.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -16,7 +16,6 @@ import 'package:provider/provider.dart';
 import 'package:schoolbook/app.dart';
 import 'package:schoolbook/core/api_client.dart';
 import 'package:schoolbook/core/auth_token_store.dart';
-import 'package:schoolbook/core/config/api_config.dart';
 import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
@@ -73,17 +72,12 @@ void main() {
     expect(catalog.etag, etag);
     step('2b re-sync: ETag unchanged ($etag), list kept');
 
-    // 2. Offline -----------------------------------------------------------------------
-    final dio = Dio(BaseOptions(baseUrl: ApiConfig.defaultBaseUrl.replaceAll('/api/v1', '')));
-    try {
-      await dio.get<dynamic>('/acceptance-go-offline');
-    } on DioException {
-      // 404 by design: the host script is watching for it.
-    }
+    // 2. Offline: the host script puts the phone in airplane mode for 30 s ------------------
+    debugPrint('ACCEPTANCE-GO-OFFLINE');
     await _until(tester, () async {
       await catalog.sync();
       return catalog.offline;
-    }, 'server unreachable', timeout: const Duration(seconds: 90));
+    }, 'phone offline (airplane mode)', timeout: const Duration(seconds: 90));
     await _settle(tester);
     expect(find.textContaining('Offline: using the copy on this phone'), findsOneWidget);
 
@@ -147,11 +141,6 @@ void main() {
     expect(plan, hasLength(10));
 
     final created = <Product>[];
-    // Same code, same .env, same MySQL database "schoolbook" behind both ports: the owner's
-    // dev server (8000) must see what the acceptance server (8001) wrote.
-    final devServer = ProductsRepository(
-      apiClient: ApiClient(tokenStore: AuthTokenStore(), baseUrl: ApiConfig.defaultBaseUrl.replaceAll(':8001/', ':8000/')),
-    );
     for (final (i, p) in plan.indexed) {
       _go(tester, '/products/approved/${p.book.id}/new');
       await _waitFor(tester, find.byKey(const Key('qc_save')));
@@ -194,12 +183,6 @@ void main() {
       expect(product.title, p.variant == null ? p.book.title : '${p.book.title} (${p.variant})');
       if (p.code != null) expect(product.barcode, code);
       if (p.level != null) expect(product.level?.name, p.level);
-      if (i == 0) {
-        final viaDevServer = await devServer.getProduct(product.id);
-        expect([viaDevServer.id, viaDevServer.sku, viaDevServer.title, viaDevServer.costPrice],
-            [product.id, product.sku, product.title, product.costPrice]);
-        step('4.0 ${product.sku} written through port 8001 is read back through the dev server on port 8000: same database');
-      }
       step('4.${i + 1} added ${product.sku} "${product.title}" stock ${product.stockOnHand}'
           '${p.code != null ? ' barcode ${product.barcode}' : ''}${p.level != null ? ' class ${product.level?.name}' : ''}');
     }

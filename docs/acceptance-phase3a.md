@@ -169,6 +169,25 @@ ACCEPTANCE: 6b the same code on another product: 409 duplicate_code
 
 Server checks after the rerun: 27 of 27 products linked, stock equal to movements for all 27, 0 balance differences, receipts GRN-2026-000005/6 (opening stock) and GRN-2026-000007 (receive step, 7 at 3,000), `customers:reconcile` clean.
 
+**Final run on the owner's dev server only** (run 30777467, 2 min 12 s, PASS). At the owner's request no second server was started: the app used its default `http://10.0.2.2:8000/api/v1`, the owner's own `composer run dev` server, which kept running throughout (nothing listened on 8001). "Offline" is now the emulator's **airplane mode**: `flutter/scripts/phone-offline-window.ps1` watches the test output for `ACCEPTANCE-GO-OFFLINE`, turns airplane mode on for 30 s, then off. The server is never touched. This is the procedure from now on; the earlier runs above used a second server on 8001 and are kept for the record.
+
+```
+host:  20:05:11 watching test output · 20:06:34 airplane mode ON (phone offline) · 20:07:04 airplane mode OFF (phone online)
+ACCEPTANCE: 1 logged in; approved list on the phone: 1566 titles, edition "NaCCA December 2024 (completion)", ETag "f6444d7f6a00a2cb3b03c14f504b2ad207102cee"
+ACCEPTANCE: 2 online search "maths p4": 31 titles, all Primary 4
+ACCEPTANCE: 2b re-sync: ETag unchanged, list kept
+ACCEPTANCE: 3 offline: screen says "Offline"; cold start loads 1566 titles from the phone; "maths p4" gives the same 31 titles; "science jhs 2" gives 7
+ACCEPTANCE: 3b online again, ETag "f6444d7f6a00a2cb3b03c14f504b2ad207102cee"
+ACCEPTANCE: 3c phone copy used offline = server list: same ETag, same 1566 title ids in the same order
+ACCEPTANCE: 4.1-4.10 added BK-000028 to BK-000037 (two variants of one title, opening stock 5, barcode 2900307774674, class Primary 2 for a Lower Primary title, five more)
+ACCEPTANCE: 5 received 7 x BK-000038 through the list
+ACCEPTANCE: 6 unknown code 2800307774677 attached to BK-000037; scanning it again opens that product
+ACCEPTANCE: 6b the same code on another product: 409 duplicate_code
++1: All tests passed!
+```
+
+Server checks after this run: 38 of 38 products linked; stock equal to movements and 0 balance differences for all 38; receipts GRN-2026-000008/9 (opening stock) and GRN-2026-000010 (receive step, 7 at 3,000); `customers:reconcile` clean; airplane mode off again.
+
 The test products stay in the dev database (owner agreed). They are ordinary products and can be deleted in the admin.
 
 Result: **PASS**.
