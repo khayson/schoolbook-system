@@ -150,6 +150,25 @@ Every product was checked through the API as it was created: linked to its title
 | Goods receipts | 4: three "Opening stock" (BK-000004 x5, BK-000008 x5, BK-000010 x3), and GRN-2026-000004 for the receive step (BK-000016 x7 at 3,000) |
 | `customers:reconcile` | "All money invariants hold.", exit 0 |
 
+**Rerun at the owner's request** (run 30021719, 2 min 28 s, PASS), with two added checks answering "different port, same data?":
+
+- **Same database behind both ports.** The acceptance server (8001) and the owner's dev server (8000) are the same Laravel code reading the same `laravel/.env` (MySQL `127.0.0.1:3306`, database `schoolbook`); the port only chooses which server process answers. On the emulator `10.0.2.2` is the host computer. The test wrote BK-000017 through port 8001 and read it back through the owner's server on port 8000: same id, SKU, title and cost.
+- **The offline copy equals the server's list.** Only the approved list (reference titles) is stored on the phone; products and stock are never created or stored offline (every product was created after the server was back). After reconnecting, the test downloaded the list fresh from the server, without the ETag: same ETag `"f6444d7f6a00a2cb3b03c14f504b2ad207102cee"` and the same 1,566 title ids, in the same order, as the copy used offline.
+
+```
+host:  19:52:21 api started · 19:54:11 offline signal seen: api stopped · 19:54:41 api started again
+ACCEPTANCE: 3 offline: screen says "Offline"; cold start loads 1566 titles from the phone; "maths p4" gives the same 31 titles; "science jhs 2" gives 7
+ACCEPTANCE: 3c phone copy used offline = server list: same ETag "f6444d7f6a00a2cb3b03c14f504b2ad207102cee", same 1566 title ids in the same order
+ACCEPTANCE: 4.0 BK-000017 written through port 8001 is read back through the dev server on port 8000: same database
+ACCEPTANCE: 4.1-4.10 added BK-000017 to BK-000026 (variants, opening stock, barcode, class for a Lower Primary title)
+ACCEPTANCE: 5 received 7 x BK-000027 through the list
+ACCEPTANCE: 6 unknown code 2800300217195 attached to BK-000026; scanning it again opens that product
+ACCEPTANCE: 6b the same code on another product: 409 duplicate_code
++1: All tests passed!
+```
+
+Server checks after the rerun: 27 of 27 products linked, stock equal to movements for all 27, 0 balance differences, receipts GRN-2026-000005/6 (opening stock) and GRN-2026-000007 (receive step, 7 at 3,000), `customers:reconcile` clean.
+
 The test products stay in the dev database (owner agreed). They are ordinary products and can be deleted in the admin.
 
 Result: **PASS**.

@@ -111,6 +111,14 @@ void main() {
     }, 'server back', timeout: const Duration(seconds: 120));
     step('3b server back: online again, ETag ${catalog.etag}');
 
+    // The copy used offline is the server's list: download it fresh (no ETag) and compare.
+    final fresh = await ReferenceRepository(apiClient: ApiClient(tokenStore: AuthTokenStore())).fetchSnapshot();
+    final serverIds = [for (final b in fresh.data!['books'] as List<dynamic>) (b as Map<String, dynamic>)['id'] as int];
+    final phoneIds = [for (final b in cold.books) b.id];
+    expect(fresh.etag, cold.etag);
+    expect(phoneIds, serverIds);
+    step('3c phone copy used offline = server list: same ETag ${fresh.etag}, same ${serverIds.length} title ids in the same order');
+
     // 3. Ten products from the list ------------------------------------------------------
     final products = ProductsRepository(apiClient: ApiClient(tokenStore: AuthTokenStore()));
     bool unstocked(ReferenceBook b) => catalog.stockFor(b.id) == null;
@@ -139,6 +147,11 @@ void main() {
     expect(plan, hasLength(10));
 
     final created = <Product>[];
+    // Same code, same .env, same MySQL database "schoolbook" behind both ports: the owner's
+    // dev server (8000) must see what the acceptance server (8001) wrote.
+    final devServer = ProductsRepository(
+      apiClient: ApiClient(tokenStore: AuthTokenStore(), baseUrl: ApiConfig.defaultBaseUrl.replaceAll(':8001/', ':8000/')),
+    );
     for (final (i, p) in plan.indexed) {
       _go(tester, '/products/approved/${p.book.id}/new');
       await _waitFor(tester, find.byKey(const Key('qc_save')));
@@ -181,6 +194,12 @@ void main() {
       expect(product.title, p.variant == null ? p.book.title : '${p.book.title} (${p.variant})');
       if (p.code != null) expect(product.barcode, code);
       if (p.level != null) expect(product.level?.name, p.level);
+      if (i == 0) {
+        final viaDevServer = await devServer.getProduct(product.id);
+        expect([viaDevServer.id, viaDevServer.sku, viaDevServer.title, viaDevServer.costPrice],
+            [product.id, product.sku, product.title, product.costPrice]);
+        step('4.0 ${product.sku} written through port 8001 is read back through the dev server on port 8000: same database');
+      }
       step('4.${i + 1} added ${product.sku} "${product.title}" stock ${product.stockOnHand}'
           '${p.code != null ? ' barcode ${product.barcode}' : ''}${p.level != null ? ' class ${product.level?.name}' : ''}');
     }
