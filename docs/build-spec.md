@@ -152,8 +152,8 @@ Conventions: `id` bigint PK, `created_at`/`updated_at` on all tables, `deleted_a
 - **suppliers** (SD): name, contact_person, phone, email, notes.
 - **goods_receipts**: `receipt_no` (GRN-YYYY-000001), `supplier_id` nullable, `supplier_reference` nullable, `received_at`, notes, `created_by`. 
 - **goods_receipt_items**: `goods_receipt_id`, `product_id`, quantity, `unit_cost`. Receiving updates `products.cost_price` to the latest unit cost (setting-driven later: latest vs weighted average; start with latest). Duplicate input lines merge only when `product_id` and `unit_cost` are identical; different costs stay as separate item rows (and separate movements) so cost history is preserved.
-- **stock_counts**: `reference`, `status` enum(`open`,`applied`,`cancelled`), `counted_by`, `applied_at`.
-- **stock_count_items**: `stock_count_id`, `product_id`, `system_qty`, `counted_qty`, `variance`. Applying creates `count_adjustment` movements.
+- **stock_counts** (amended Phase 3): `reference` (sequence `cnt`), `status` enum(`open`,`applied`,`cancelled`), `counted_by`, `applied_at`, `applied_by`, filter snapshot (level/subject/language/publisher or all active products).
+- **stock_count_items** (amended Phase 3): `stock_count_id`, `product_id`, `system_qty`, `counted_qty` nullable, `variance`, `baseline_movement_id`, `counted_at`; unique(`stock_count_id`,`product_id`). Entering a counted quantity records `system_qty` = the product's balance at that moment and `baseline_movement_id` = its latest movement; `variance` = counted − system (re-entering recomputes). Applying (owner, idempotent, products locked in id order) turns each non-zero variance of a counted item into one `count_adjustment` movement of that variance, so sales after counting are preserved and uncounted items are untouched; if an adjustment would make stock negative while `allow_negative_stock` is off, nothing is applied (`count_conflict`).
 
 ### 6.4 Customers
 - **customers** (SD): `code` (CUS-0001), name, `type` enum(`school`,`reseller`,`individual`), `region` (Ghana region), district, address, contact_person, phone, email, `credit_limit` nullable, `credit_balance` default 0 (unallocated advance money, cached), `outstanding_balance` default 0 (sum of `balance_due` over confirmed sales, cached; added 2C.1 with a backfill), notes, is_active. Cached balances are not mass-assignable.
@@ -375,6 +375,19 @@ Widget tests for the sale-entry and payment screens; unit tests for `Money` and 
 8. **Customer statement**: section 9.4.
 
 Exports (CSV/Excel/PDF) arrive in Phase 5; pages and JSON endpoints in Phase 3.
+
+**Definitions (amended Phase 3; worked example with hand-calculated figures in `docs/acceptance-phase3.md`).** Money in pesewas; dates are Africa/Accra calendar dates; periods inclusive.
+
+- **Revenue** = confirmed sales' `subtotal − discount_total`, by `sale_date`. Voided, cancelled and draft sales never count. `subtotal` is the sum of line totals, which already include line-level price overrides.
+- **Line revenue** = sum of `line_total` of the lines in scope. Used for anything split by product, level, subject or language; an order-level discount belongs to the whole order and is reported as its own line, never spread over products. With a level, subject or language filter the sales summary shows line revenue and leaves order discounts and collections empty (they cannot be split by catalog).
+- **Collections** = valid payments' `amount`, by `paid_at` (cash received, not allocations).
+- **Gross profit** per line = `line_total − unit_cost × quantity` (snapshot cost); **net profit** = gross profit − order-level discounts.
+- **Catalog grouping** uses each product's current level, subject and language.
+- **Stock valuation** counts `max(0, stock_on_hand)` at current cost and current selling price; negative-stock products are counted separately. Deleted products are excluded; inactive products with stock are included.
+- **Low stock**: active products with `stock_on_hand ≤ reorder_level` (shortfall = reorder level − stock). **Dead stock**: active products with `stock_on_hand > 0` and no `sale_out` movement on or after `as_of − days` (default 90).
+- **Receivables aging**: confirmed sales with `balance_due > 0`, by days past `due_date` on the as-of date: not yet due (≤ 0), 1–30, 31–60, 61–90, 90+. Today's balances; the as-of date only moves the buckets. Grand total = sum of customers' `outstanding_balance`.
+- **Dashboard** (for a date, default today): sales and collections today and month to date; total owed, overdue (balances due before the date), customer credit and low-stock count; top 5 sellers this month by quantity.
+- **Weeks** start on Monday and are labelled by their Monday; periods without activity are listed with zeros.
 
 ---
 

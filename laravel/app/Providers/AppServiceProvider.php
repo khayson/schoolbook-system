@@ -16,6 +16,7 @@ use App\Support\BackupGuard;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -33,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Reports show the whole business's money: owner only.
+        Gate::define('view-reports', fn (User $user): bool => $user->isOwner());
+
         // migrate:fresh / db:wipe only against a throwaway database (or on purpose).
         Event::listen(CommandStarting::class, [DestructiveDatabaseGuard::class, 'handle']);
 

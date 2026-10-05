@@ -320,6 +320,65 @@ The whole live list in one response, for offline search on the phone:
 
 `data: null` before the first publish. Compare `snapshot_etag` with the stored copy's ETag to know whether to download the snapshot.
 
+## Reports
+
+Owner only (403 otherwise). Money in pesewas; dates `YYYY-MM-DD` in Africa/Accra; periods inclusive (`from`..`to`, at most 731 days; daily grouping at most 367). Definitions: `docs/build-spec.md` section 14; worked example with hand-calculated figures: `docs/acceptance-phase3.md`. Every response is `{"data": {...}}`.
+
+### `GET /reports/dashboard?date=`
+
+`date` defaults to today.
+
+```json
+{ "date": "2026-06-30",
+  "sales_today": { "count": 0, "revenue": 0 }, "sales_month": { "count": 5, "revenue": 96000 },
+  "collections_today": 0, "collections_month": 81000,
+  "owed": 49000, "overdue": 32000, "credit": 2000, "low_stock_count": 3,
+  "top_sellers": [ { "product_id": 1, "title": "Maths P4", "quantity": 12, "revenue": 60000 } ] }
+```
+
+`sales_month`/`collections_month` are month to date. `owed`, `credit` and `low_stock_count` are current; `overdue` is the balance of invoices due before `date`.
+
+### `GET /reports/sales-summary?from=&to=&group_by=day|week|month`
+
+Optional filters: `customer_id`, `level_id`, `subject_id`, `language_id`. One row per period, including empty ones; weeks are labelled by their Monday, months `YYYY-MM`.
+
+```json
+{ "from": "2026-06-01", "to": "2026-06-30", "group_by": "week", "filters": {},
+  "rows": [ { "period": "2026-06-08", "sales_count": 2, "gross": 87000, "order_discounts": 4000, "revenue": 83000, "collections": 76000 } ],
+  "totals": { "sales_count": 5, "gross": 100000, "order_discounts": 4000, "revenue": 96000, "collections": 81000 } }
+```
+
+`gross` = line totals; `revenue` = gross − order discounts. With a level, subject or language filter only matching lines count, and `order_discounts` and `collections` are `null`.
+
+### `GET /reports/profit?from=&to=&group_by=product|level|subject|language|period&period=day|week|month`
+
+```json
+{ "rows": [ { "key": 1, "label": "Maths P4", "sku": "RPT-A", "quantity": 12, "revenue": 60000, "cost": 36000, "gross_profit": 24000 } ],
+  "totals": { "quantity": 22, "revenue": 100000, "cost": 60500, "gross_profit": 39500, "order_level_discounts": 4000, "net_profit": 35500 } }
+```
+
+Rows by gross profit (largest first); with `group_by=period` one row per period (`period` defaults to `month`). Order-level discounts are one separate total, never split over rows.
+
+### `GET /reports/best-sellers?from=&to=&by=product|level|subject|language&sort=quantity|revenue&limit=`
+
+Rows `{key, label, sku?, quantity, revenue}` ordered by `sort` (default quantity), then the other measure. `limit` 1–100, default 10. Revenue is line revenue.
+
+### `GET /reports/stock-valuation`
+
+Rows per product `{product_id, sku, title, stock_on_hand, counted_quantity, cost_price, selling_price, value_at_cost, value_at_price}` by SKU; totals `{counted_quantity, value_at_cost, value_at_price, negative_stock_count, negative_stock_units}`. Negative stock is valued at 0.
+
+### `GET /reports/low-stock`
+
+`{rows: [{product_id, sku, title, stock_on_hand, reorder_level, shortfall}], count}`, largest shortfall first.
+
+### `GET /reports/dead-stock?as_of=&days=90`
+
+`{as_of, days, cutoff, rows: [{product_id, sku, title, stock_on_hand, last_sold_at, days_since_sale, value_at_cost}], totals: {count, value_at_cost}}`. Never-sold products first (`last_sold_at` null), then the oldest last sale.
+
+### `GET /reports/receivables-aging?as_of=`
+
+`{as_of, rows: [{customer_id, name, not_yet_due, days_1_30, days_31_60, days_61_90, days_90_plus, total}], totals: {...}}`, by customer name. `totals.total` equals the sum of customers' `outstanding_balance`.
+
 ## Stock
 
 All stock routes require Bearer token + owner. Receipt and adjustment quantities use signed integers for adjustments; receipt line quantities are positive. Money fields (`unit_cost`) are pesewas.

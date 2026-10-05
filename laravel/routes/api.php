@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\PublisherController;
 use App\Http\Controllers\Api\V1\ReferenceBookController;
 use App\Http\Controllers\Api\V1\ReferenceEditionController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\SubjectController;
@@ -52,6 +53,18 @@ Route::prefix('v1')->group(function () {
         Route::get('reference-books/snapshot', [ReferenceBookController::class, 'snapshot']);
         Route::get('reference-books', [ReferenceBookController::class, 'index']);
         Route::get('reference-editions/active', [ReferenceEditionController::class, 'active']);
+
+        // Reports (owner): figures in pesewas, dates Africa/Accra, periods inclusive.
+        Route::prefix('reports')->group(function () {
+            Route::get('dashboard', [ReportController::class, 'dashboard']);
+            Route::get('sales-summary', [ReportController::class, 'salesSummary']);
+            Route::get('profit', [ReportController::class, 'profit']);
+            Route::get('best-sellers', [ReportController::class, 'bestSellers']);
+            Route::get('stock-valuation', [ReportController::class, 'stockValuation']);
+            Route::get('low-stock', [ReportController::class, 'lowStock']);
+            Route::get('dead-stock', [ReportController::class, 'deadStock']);
+            Route::get('receivables-aging', [ReportController::class, 'receivablesAging']);
+        });
 
         Route::post('stock/receipts', [GoodsReceiptController::class, 'store'])
             ->middleware('idempotent');

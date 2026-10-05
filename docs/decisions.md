@@ -259,3 +259,14 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 - Fix: `reference:import --again` stages the live file again on purpose (the same-file refusal otherwise stays, and its message now names the option). Live titles come back unchanged, left-out rows as new. The publish confirmation now warns, in capitals, when rows marked Fix or Check are still undecided.
 - Not chosen: reopening a published edition for more decisions. It would mix decisions across two publishes of one edition and complicate the diff; a second, ordinary draft keeps every publish a full, reviewable diff.
 
+## 2026-10-05 — Phase 3.1: reports core
+
+- **Hand figures first:** `docs/acceptance-phase3.md` (dataset and every expected figure, with the arithmetic) was written before the report code; `ReportsFixtureTest` checks the dataset against it, `ReportFiguresTest` (SQLite) and `tests/Mysql/ReportFiguresTest` assert its literals. Mutation checks: counting void sales, valuing negative stock, ignoring the dead-stock cut-off and moving an aging boundary by a day each fail the tests (the boundary one only after boundary as-of dates were added: the first dataset had no invoice on a boundary).
+- **Order-level discount in the fixture:** today's `PricingService` never produces one (Phase 4). The fixture binds `Tests\Support\Phase4StandInPricing` (5% off an order of 15 books or more), so the real `CreateDraftSale`/`ConfirmSale` store a real `discount_total`; nothing bypasses the actions.
+- **Catalog filters and order discounts:** split by product, level, subject or language, figures are line revenue; order discounts are a separate line (profit) or null (sales summary with a catalog filter), never prorated.
+- **SQL portability:** periods are queried half-open (`>= from`, `< to + 1 day`) so DATE columns and datetimes compare the same on MySQL and SQLite and indexes stay usable; days are grouped in SQL (`DATE()`), weeks and months rolled up from days in PHP; aging buckets are `CASE` on `due_date` against computed boundary dates.
+- **Aging uses today's balances;** the as-of date only moves invoices between buckets. Historical balances would need the allocation ledger replayed to that date; not asked for.
+- **Dead stock** counts a voided sale's `sale_out` as a sale (the movement happened); the definition is "no sale_out", taken literally.
+- **Indexes:** `sales (status, sale_date)` already existed; the migration adds `sale_items (product_id)`, `stock_movements (type, occurred_at)`, `payments (paid_at)`. Not applied to the owner's dev database (new rule: tests and fixtures never touch it); `php artisan migrate` applies it.
+- **Spec:** section 14 gained the definitions; section 6.3 the stock-count fields and rules for 3.3.
+
