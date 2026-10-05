@@ -1,6 +1,6 @@
 # Phase 3.A acceptance: approved list (NaCCA)
 
-**Status: in progress, not yet PASS.** Steps 1 to 4 are done and recorded below. Step 5 (phone run) is next. `phase-3a-complete` is tagged only when every step passes.
+**Status: PASS** (2026-10-05). All five steps pass; tagged `phase-3a-complete`.
 
 Copyright note: this file is committed, and the NaCCA list must not be reproduced, so rows are identified by page, section and serial number rather than by title.
 
@@ -107,16 +107,53 @@ Checked on the database: edition #2 active, #1 superseded; **1,566 approved titl
 
 Result: **PASS**.
 
-## 5. Phone acceptance (Pixel_9a, dev server): PENDING (after step 4)
+## 5. Phone acceptance (Pixel_9a, dev database): PASS
 
-Planned script, against the owner-reviewed list:
+Setup: Pixel_9a emulator (`emulator-5554`, cold boot), app debug build, `flutter test integration_test/phase3a_acceptance_test.dart -d emulator-5554 --dart-define=API_BASE_URL=http://10.0.2.2:8001/api/v1`. API: a second `php artisan serve --port=8001` on the **dev database** with the owner-published list (the owner's own dev server on port 8000 was not touched). A host script watched that server's log: when the test requested `GET /acceptance-go-offline` it stopped the server for 30 seconds and started it again, so "offline" is a real unreachable server, not a fake.
 
-1. Log in; the approved list downloads (status line shows the edition and title count). Turn networking off, search "maths p4" and a publisher name: results come from the phone's copy, with an "Offline" note. Networking back on.
-2. Add 10 products from the list (*Products > Add from approved list*): at least one band-only title (class chosen), one with a variant, one with opening stock, one with a scanned or typed code. Each shows "In stock N" afterwards.
-3. Receive stock through the list: search a title not carried yet, add it from the "On the approved list" section, receive it with the rest of a receipt.
-4. Scan-attach: an unknown code, attached to one of the products; scanning it again opens that product.
-5. Server checks: products linked (`reference_book_id`), one goods receipt for step 3, `customers:reconcile` clean, every product's `stock_on_hand` equal to the sum of its movements.
+**Attempts** (at most two retries for test-script faults; no expected figure changed):
+
+1. Failed after step 3: the test opened the quick-create as a nested route and waited for the product page, but the app (correctly) returns to the approved list it came from. Test changed to find the new product through the API. One product was created (BK-000001).
+2. Failed at product 5: the test opened the class menu before the class list had loaded. Test changed to wait for the option. Products BK-000002 to BK-000005 and receipt GRN-2026-000001 were created.
+3. **PASS** (retry 2), run 22880610, 2 min 12 s:
+
+```
+ACCEPTANCE: 1 logged in; approved list on the phone: 1566 titles, edition "NaCCA December 2024 (completion)", ETag "f6444d7f6a00a2cb3b03c14f504b2ad207102cee"
+ACCEPTANCE: 2 online search "maths p4": 31 titles, all Primary 4
+ACCEPTANCE: 2b re-sync: ETag unchanged ("f6444d7f6a00a2cb3b03c14f504b2ad207102cee"), list kept
+ACCEPTANCE: 3 offline: screen says "Offline"; cold start loads 1566 titles from the phone; "maths p4" gives the same 31 titles; "science jhs 2" gives 7
+ACCEPTANCE: 3b server back: online again, ETag "f6444d7f6a00a2cb3b03c14f504b2ad207102cee"
+ACCEPTANCE: 4.1 added BK-000006 (title #3, variant Learner's Book) stock 0
+ACCEPTANCE: 4.2 added BK-000007 (title #3, variant Teacher's Guide) stock 0
+ACCEPTANCE: 4.3 added BK-000008 (title #58) stock 5
+ACCEPTANCE: 4.4 added BK-000009 (title #194) stock 0 barcode 2900228806102
+ACCEPTANCE: 4.5 added BK-000010 (title #820, listed for Lower Primary) stock 3 class Primary 2
+ACCEPTANCE: 4.6-4.10 added BK-000011 to BK-000015 (titles #339, #371, #392, #473, #507) stock 0
+ACCEPTANCE: 5 received 7 x BK-000016 (title #4) through the list (created from the approved list in the receipt)
+ACCEPTANCE: 6 unknown code 2800228806105 attached to BK-000015; scanning it again opens that product
+ACCEPTANCE: 6b the same code on another product: 409 duplicate_code ("Code 2800228806105 already belongs to ... (BK-000015).")
+ACCEPTANCE: DONE run 22880610: products 6,7,8,9,10,11,12,13,14,15,16
++1: All tests passed!
+```
+
+(The test log prints the titles; they are replaced here by approved-title ids because this file is committed.)
+
+Every product was checked through the API as it was created: linked to its title, cost 2,750 and price 104,000 pesewas as typed ("27.50", "1,040.00"), title as the list (with the variant in brackets), stock equal to the opening stock, the barcode stored, the class chosen.
+
+**Server checks** after the run:
+
+| Check | Result |
+|---|---|
+| Products linked to an approved title | 16 of 16 (11 from the passing run, 5 left from attempts 1 and 2) |
+| `stock_on_hand` = sum of the product's stock movements | 16 of 16 |
+| Last `balance_after` = `stock_on_hand` | 16 of 16 (0 differences) |
+| Goods receipts | 4: three "Opening stock" (BK-000004 x5, BK-000008 x5, BK-000010 x3), and GRN-2026-000004 for the receive step (BK-000016 x7 at 3,000) |
+| `customers:reconcile` | "All money invariants hold.", exit 0 |
+
+The test products stay in the dev database (owner agreed). They are ordinary products and can be deleted in the admin.
+
+Result: **PASS**.
 
 ## Result
 
-Not yet tagged. Steps 1 to 4 PASS; step 5 pending.
+**PASS.** Steps 1 to 5 pass; tagged `phase-3a-complete`.
