@@ -1,6 +1,6 @@
 # Phase 3.A acceptance: approved list (NaCCA)
 
-**Status: in progress, not yet PASS.** Steps 1 to 3 are done and recorded below. Steps 4 and 5 wait for the owner's first review of the flagged rows on the dev database. `phase-3a-complete` is tagged only when every step passes.
+**Status: in progress, not yet PASS.** Steps 1 to 4 are done and recorded below. Step 5 (phone run) is next. `phase-3a-complete` is tagged only when every step passes.
 
 Copyright note: this file is committed, and the NaCCA list must not be reproduced, so rows are identified by page, section and serial number rather than by title.
 
@@ -81,7 +81,7 @@ Result: parsing **25/25**; mapping **24/25**.
 
 Finding and fix: a supplementary or e-learning title in a Ghanaian language that no keyword recognises defaulted to English and was marked high confidence, so the review page's "low confidence" filter would not surface it. Fixed in `ReferenceMapper` (3.A.3): a language that is only *defaulted* to English on a non-textbook row is now low confidence (textbook sections are English unless they say otherwise). Test: `a non-textbook title with no language keyword defaults to English with low confidence`. The draft already staged (edition #1) was left untouched so the owner's review is not disturbed. Row 25 can be corrected there with **Fix** (language Dagbani); later imports get the new rule.
 
-## 4. Owner's first review and publish (dev database)
+## 4. Owner's first review and publish (dev database): PASS
 
 Backup before publishing (owner, 2026-10-05): `php artisan backup:run --only-db`, 103.66 KB, verified.
 
@@ -96,7 +96,16 @@ Checked on the database afterwards: edition #1 active; 1,487 approved titles, 25
 
 The 79 undecided rows are all the warning rows: 34 publisher spellings, 9 Physical Education, 32 supplements with no subject, 3 generic "Twi" titles, 1 odd author/publisher separator. They were left out because the bulk accept skips rows with issues and the publish confirmation's mention was easy to miss. Finding: a published edition is read-only, so they could no longer be decided. Fixed by `reference:import --again` plus a capitalised warning in the publish confirmation (see `docs/decisions.md`).
 
-**Completion review:** PENDING (owner). Re-import with `--again`, accept all unchanged, decide the 79, publish. To record: the summary.
+**Completion review (owner, 2026-10-05 17:38):** `reference:import ... --edition="NaCCA December 2024 (completion)" --again` staged edition #2: 1,490 unchanged (the live titles plus the 4 duplicate copies), 79 new (the rows left out), 1 changed (the Dagbani row, back to English because the fix lives on the title). The owner accepted all unchanged, excluded the 4 duplicates, merged the publisher spellings, accepted the Physical Education, no-subject and separator rows and the 3 "Twi" titles (without a language: the phone asks for it when one is added as a product), and left the Dagbani "changed" row undecided so the live title keeps Dagbani.
+
+```
+Approved list published
+79 added, 0 updated, 1486 unchanged, 0 withdrawn, 15 publishers added. 1 undecided and 4 excluded rows were left out.
+```
+
+Checked on the database: edition #2 active, #1 superseded; **1,566 approved titles** (= 1,570 read − 4 duplicates), 0 withdrawn; 266 publishers, 272 spellings kept as aliases; subject "Physical Education and Health" created with its 9 titles; the Dagbani title still Dagbani; `customers:reconcile`: "All money invariants hold."
+
+Result: **PASS**.
 
 ## 5. Phone acceptance (Pixel_9a, dev server): PENDING (after step 4)
 
@@ -110,4 +119,4 @@ Planned script, against the owner-reviewed list:
 
 ## Result
 
-Not yet tagged. Steps 1 to 3 PASS; steps 4 and 5 pending.
+Not yet tagged. Steps 1 to 4 PASS; step 5 pending.
