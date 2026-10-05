@@ -11,7 +11,7 @@ class ListReferenceEditions extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Import a new NaCCA list on the server with: php artisan reference:import <file.pdf> --edition="NaCCA <month year>". '
-            .'It appears here as a draft to review; nothing goes live until you publish it.';
+        return 'Each new NaCCA list is read on the server (the reference:import command, see docs/reference-catalog.md) '
+            .'and appears here waiting for review. Nothing goes live until you publish it.';
     }
 }

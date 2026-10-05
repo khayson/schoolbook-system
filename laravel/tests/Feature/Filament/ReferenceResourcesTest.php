@@ -160,3 +160,18 @@ test('only the owner reaches the approved-list pages', function () {
     $this->get(ReferenceEditionResource::getUrl('review', ['record' => $edition]))->assertForbidden();
     $this->get(ReferenceBookResource::getUrl('index'))->assertForbidden();
 });
+
+test('changes and the page help read as plain text, with no escaped markup', function () {
+    $first = stageList($this->owner);
+    reviewEverything($first);
+    app(PublishReferenceEdition::class)->execute($this->owner, $first);
+    $second = stageList($this->owner, secondEditionFixture(), 'sha-2');
+
+    reviewPage($second)
+        ->assertSee('Changed: publisher label "Sunrise Press Limited" → "Sunrise Press Company Ltd"')
+        ->assertDontSee('["Sunrise', escape: false);
+
+    Livewire::test(ListReferenceEditions::class)
+        ->assertSee('Nothing goes live until you publish it.')
+        ->assertDontSee('&lt;', escape: false);
+});

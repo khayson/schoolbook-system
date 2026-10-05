@@ -119,7 +119,7 @@ class ReviewReferenceEdition extends Page implements HasTable
                     ->wrap()
                     ->searchable()
                     ->description(fn (ReferenceImportRow $record): ?string => $record->changes === null ? null
-                        : 'Changed: '.collect($record->changes)->map(fn (array $c, string $field) => $field.' '.json_encode($c[0]).' → '.json_encode($c[1]))->implode('; ')),
+                        : 'Changed: '.collect($record->changes)->map(fn (array $c, string $field) => str_replace('_', ' ', $field).' "'.($c[0] ?? '—').'" → "'.($c[1] ?? '—').'"')->implode('; ')),
                 TextColumn::make('level')
                     ->state(fn (ReferenceImportRow $record): ?string => $record->level?->name ?? $record->level_label),
                 TextColumn::make('subject')
