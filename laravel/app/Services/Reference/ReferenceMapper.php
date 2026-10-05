@@ -384,6 +384,7 @@ class ReferenceMapper
             'missing_publisher' => ['error', 'No author or publisher could be read.'],
             'unknown_level' => ['error', 'The level is not KG 1-2, Basic 1-6 or JHS 1-3.'],
             'duplicate' => ['error', 'Same title, level and publisher as another row in this list.'],
+            'key_collision' => ['error', 'This change would duplicate another title on the list ("'.($data['title'] ?? '').'", #'.($data['book_id'] ?? '?').').'],
             'unknown_subject' => ['warning', 'Section heading not mapped to a subject.'],
             'subject_missing' => ['warning', 'Subject "'.($data['name'] ?? '').'" does not exist yet; it is created on publish.'],
             'subject_unknown' => ['warning', 'No subject could be inferred from the title.'],

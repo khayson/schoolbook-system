@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Payments\RecordPayment;
+use App\Actions\Reference\PublishReferenceEdition;
 use App\Actions\Reference\ReviewReferenceImport;
 use App\Actions\Reference\StageReferenceImport;
 use App\Actions\Sales\CreateDraftSale;
@@ -181,4 +182,14 @@ function secondEditionFixture(): ReferenceListFixture
         ->heading('4.2 READERS (STORY BOOKS)')
         ->supplementHeader()
         ->supplement('1', 'The Clever Tortoise', 'Akwaaba Stories');
+}
+
+/** Stages the standard fixture, accepts everything acceptable, publishes. */
+function publishFixtureList(User $owner): ReferenceEdition
+{
+    $edition = stageList($owner);
+    reviewEverything($edition);
+    app(PublishReferenceEdition::class)->execute($owner, $edition);
+
+    return $edition->fresh();
 }

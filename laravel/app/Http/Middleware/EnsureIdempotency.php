@@ -11,9 +11,18 @@ use Throwable;
 
 class EnsureIdempotency
 {
-    public function handle(Request $request, Closure $next): Response
+    /**
+     * "idempotent" requires the header; "idempotent:optional" protects requests that send
+     * one and lets older clients without it through unchanged (POST /products: the
+     * Phase 1 app form sends no key; the 3.A.3 quick-create does).
+     */
+    public function handle(Request $request, Closure $next, ?string $mode = null): Response
     {
         $key = $request->header('Idempotency-Key');
+
+        if ($mode === 'optional' && (! is_string($key) || trim($key) === '')) {
+            return $next($request);
+        }
 
         if (! is_string($key) || trim($key) === '') {
             return response()->json([

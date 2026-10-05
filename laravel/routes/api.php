@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\PublisherController;
+use App\Http\Controllers\Api\V1\ReferenceBookController;
+use App\Http\Controllers\Api\V1\ReferenceEditionController;
 use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\SubjectController;
@@ -40,7 +42,16 @@ Route::prefix('v1')->group(function () {
 
         Route::get('products/by-code/{code}', [ProductController::class, 'byCode']);
         Route::get('products/{product}/movements', [ProductController::class, 'movements']);
-        Route::apiResource('products', ProductController::class);
+        Route::post('products/attach-code', [ProductController::class, 'attachCode']);
+        // Optional key: the 3.A.3 quick-create sends one; the Phase 1 form does not.
+        Route::post('products', [ProductController::class, 'store'])
+            ->middleware('idempotent:optional');
+        Route::apiResource('products', ProductController::class)->except(['store']);
+
+        // Approved (NaCCA) list, read-only
+        Route::get('reference-books/snapshot', [ReferenceBookController::class, 'snapshot']);
+        Route::get('reference-books', [ReferenceBookController::class, 'index']);
+        Route::get('reference-editions/active', [ReferenceEditionController::class, 'active']);
 
         Route::post('stock/receipts', [GoodsReceiptController::class, 'store'])
             ->middleware('idempotent');

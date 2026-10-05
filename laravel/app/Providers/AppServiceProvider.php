@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Console\DestructiveDatabaseGuard;
 use App\Models\Customer;
 use App\Models\GoodsReceipt;
 use App\Models\Payment;
@@ -12,7 +13,9 @@ use App\Models\ReferenceEdition;
 use App\Models\Sale;
 use App\Models\User;
 use App\Support\BackupGuard;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -30,6 +33,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // migrate:fresh / db:wipe only against a throwaway database (or on purpose).
+        Event::listen(CommandStarting::class, [DestructiveDatabaseGuard::class, 'handle']);
+
         BackupGuard::check(
             $this->app->environment(),
             (array) config('backup.backup.destination.disks', []),

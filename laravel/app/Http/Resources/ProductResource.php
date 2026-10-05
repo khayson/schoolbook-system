@@ -21,6 +21,8 @@ class ProductResource extends JsonResource
             'subject_id' => $this->subject_id,
             'language_id' => $this->language_id,
             'publisher_id' => $this->publisher_id,
+            'reference_book_id' => $this->reference_book_id,
+            'variant_label' => $this->variant_label,
             'edition' => $this->edition,
             'cost_price' => $this->cost_price,
             'selling_price' => $this->selling_price,

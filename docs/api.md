@@ -45,6 +45,8 @@ Every error response uses one envelope:
 | `no_credit_available` | 409 | Applying credit for a customer with none | `{ customer_id, credit_balance }` |
 | `duplicate_reference` | 409 | A non-cash payment's reference (MoMo transaction id, bank reference, cheque number) is already on a valid payment of the same method. Matching ignores case and spaces. Void the existing payment to release it | `{ method, reference, existing_payment_id, existing_receipt_no, existing_customer_id, existing_amount, existing_paid_at }` |
 | `payment_already_void` | 409 | Voiding a void payment, or asking for its receipt | `{ payment_id, receipt_no, action: void\|receipt }` |
+| `duplicate_code` | 409 | `POST /products/attach-code`: the code is already another product's SKU, ISBN or barcode (soft-deleted products included: they still hold it) | `{ code, field: sku\|isbn\|barcode, product_id, sku, title, deleted }` |
+| `code_slot_taken` | 409 | `POST /products/attach-code`: the product already has a different code in that slot (an ISBN in `isbn`, any other code in `barcode`). Never overwritten | `{ code, field, current }` |
 | `credit_limit_exceeded` | 409 | Outstanding balance + this sale − credit applied (`apply_credit`) > customer credit limit. A warning: resend with the flag in `override_flag` set to `true` | `{ credit_limit, outstanding, sale_total, credit_applied, projected_balance, override_flag: "override_credit_limit" }` |
 
 Example (`insufficient_stock`):
@@ -166,6 +168,8 @@ Item shape:
   "subject_id": 1,
   "language_id": 1,
   "publisher_id": null,
+  "reference_book_id": null,
+  "variant_label": null,
   "edition": null,
   "cost_price": 4500,
   "selling_price": 6000,
@@ -201,6 +205,20 @@ Item shape:
 
 `stock_on_hand` must not be sent (422 if present). Response `201` with the product resource.
 
+Optional fields (3.A.2):
+
+- `sku`: generated when omitted (`BK-000001`, `BK-000002`, ... from the `sku` sequence; numbers already used by a typed SKU are skipped).
+- `reference_book_id`: the approved-list title this product is (see [Approved list](#approved-list)). Any of `title`, `level_id`, `subject_id`, `language_id`, `publisher_id` not sent is taken from that title; **explicit values win**. A title listed only for a level band (supplementary materials, "Lower Primary") has no single level, and some have no subject or language: then those fields are required and the 422 says so (for example `level_id`: "This approved title is listed for a range of classes, not one level. Choose the level.").
+- `variant_label` (max 100): "Learner's Book", "Teacher's Guide"... When the title is prefilled, the variant is added in brackets: `Discover Science (Teacher's Guide)`.
+- `opening_stock` (0 to 100,000): received at once through the stock ledger at `cost_price` (one goods receipt, `receipt_in` movement).
+- `Idempotency-Key` header: **optional** on this route. Sent, a retry with the same key and body returns the first response (no second product, no second receipt); a different body with the same key is `idempotency_key_mismatch`. Not sent, the request runs as before (the Phase 1 product form sends none).
+
+Minimal quick-create from the list:
+
+```json
+{ "reference_book_id": 412, "cost_price": 2750, "selling_price": 4000, "opening_stock": 12 }
+```
+
 ### `GET /products/{id}` · `PUT /products/{id}` · `DELETE /products/{id}`
 
 `GET` returns one product with nested lookups when loaded. `PUT` accepts the same fields as create (partial update). `DELETE` soft-deletes and returns the resource.
@@ -208,6 +226,21 @@ Item shape:
 ### `GET /products/by-code/{code}`
 
 Resolves a product by exact `sku`, `isbn`, or `barcode`. `404` if none match.
+
+### `POST /products/attach-code`
+
+"Scan to learn": attaches a scanned code nobody knows yet to a product.
+
+```json
+{ "code": "978-9988-0-1234-2", "product_id": 7 }
+```
+
+- `code`: 4-64 characters, letters, digits, spaces, hyphens. Numeric codes drop spaces and hyphens (`9789988012342`); other codes are kept as typed.
+- A valid ISBN-13 (978/979 with a correct check digit) is stored in `isbn`; any other code in `barcode`. When the product is linked to an approved title that has no ISBN yet, the title gets it too.
+- The same code again on the same product: `200`, nothing changes.
+- `409 duplicate_code` when another product has the code; `409 code_slot_taken` when this product already has a different code in that slot. `422` for a malformed code or an unknown or deleted product.
+
+Response `200` with the product resource. `PUT /products/{id}` also accepts `reference_book_id` and `variant_label`.
 
 ### `GET /products/{id}/movements`
 
@@ -229,6 +262,63 @@ Paginated stock movement history for the product. Items:
   "created_at": "2026-03-15T10:00:00+00:00"
 }
 ```
+
+## Approved list
+
+NaCCA's approved list, read-only (it changes only when the owner publishes a reviewed import; see `docs/reference-catalog.md`). Owner only.
+
+### `GET /reference-books`
+
+Approved titles (withdrawn ones only with `status=withdrawn`). Paginated: `per_page` up to 100 (422 above).
+
+| Parameter | |
+|---|---|
+| `search` | Free text over title, publisher and author. A level in the text ("basic 4", "primary 4", "p4", "b4", "kg 2", "jhs 1") becomes a level filter, which also matches band-only titles whose band covers it. "maths"/"math" match "mathematics". MySQL: FULLTEXT, results by relevance; words under 3 letters by LIKE. |
+| `level_id`, `subject_id`, `language_id`, `publisher_id`, `category` | Exact filters. `category`: `textbook`, `subject_supplement`, `reader`, `guidance`, `elearning`. |
+| `stocked` | `1`: titles with at least one product in the shop; `0`: titles with none. |
+| `status` | `approved` (default) or `withdrawn`. |
+
+Item:
+
+```json
+{
+  "id": 412, "category": "textbook", "title": "Discover Science",
+  "level_id": 9, "level": "Primary 4", "level_label": "Basic 4", "band": null,
+  "subject_id": 3, "subject": "Science", "language_id": 1, "language": "English",
+  "publisher_id": 20, "publisher": "Baobab Publishing", "author": null, "isbn": null,
+  "status": "approved", "confidence": "high",
+  "products_count": 2, "stock_on_hand": 15
+}
+```
+
+`products_count` / `stock_on_hand`: the shop's products linked to the title (deleted ones excluded) and their total stock. `level` is the level name, or the printed band ("Lower Primary") for band-only titles, or `null` (readers, guidance, e-learning). `confidence: low` means subject, level or language was guessed from title keywords.
+
+### `GET /reference-books/snapshot`
+
+The whole live list in one response, for offline search on the phone:
+
+```json
+{ "data": {
+  "edition": { "id": 3, "label": "NaCCA December 2024", "published_at": "2024-12-01" },
+  "count": 1566,
+  "books": [ { "id": 1, "category": "textbook", "title": "...", "search_title": "...", "level_id": 5, "level": "Primary 1",
+               "band": null, "subject_id": 2, "subject": "English Language", "language_id": 1, "language": "English",
+               "publisher_id": 7, "publisher": "...", "author": null, "isbn": null } ]
+} }
+```
+
+- Gzipped (`Content-Encoding: gzip`) when the request sends `Accept-Encoding: gzip`.
+- `ETag` is a hash of the exact body; send it back as `If-None-Match` and an unchanged list answers `304` with no body. It changes when titles, the edition, or a level/subject/language/publisher name used in the list changes; sales and stock do not change it (stock comes from the products API).
+- `edition` is `null` and `books` empty before the first publish.
+
+### `GET /reference-editions/active`
+
+```json
+{ "data": { "id": 3, "label": "NaCCA December 2024", "source_url": "https://...", "published_at": "2024-12-01",
+            "activated_at": "2026-10-05T09:12:00+00:00", "books_count": 1566, "snapshot_etag": "\"5f1c...\"" } }
+```
+
+`data: null` before the first publish. Compare `snapshot_etag` with the stored copy's ETag to know whether to download the snapshot.
 
 ## Stock
 

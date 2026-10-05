@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ReferenceBooks;
 use App\Filament\Resources\ReferenceBooks\Pages\ListReferenceBooks;
 use App\Models\ReferenceBook;
 use BackedEnum;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -78,7 +79,8 @@ class ReferenceBookResource extends Resource
                 SelectFilter::make('subject_id')->label('Subject')->relationship('subject', 'name')->preload(),
                 SelectFilter::make('publisher_id')->label('Publisher')->relationship('publisher', 'name')->searchable(),
             ])
-            ->recordActions([ViewAction::make()]);
+            ->recordActions([ViewAction::make(), ReferenceBookActions::addToProducts()])
+            ->toolbarActions([BulkActionGroup::make([ReferenceBookActions::csvTemplate()])]);
     }
 
     public static function getEloquentQuery(): Builder

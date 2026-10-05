@@ -173,6 +173,12 @@ class ReviewReferenceImport
         if ($row->subject_id === null && $row->issuesWithCode('subject_missing') !== []) {
             $issues = [...$issues, ...$row->issuesWithCode('subject_missing')];
         }
+        if ($row->reference_book_id !== null) {
+            $other = ReferenceBook::query()->where('natural_key', $row->natural_key)->whereKeyNot($row->reference_book_id)->first(['id', 'title']);
+            if ($other !== null) {
+                $issues[] = ReferenceMapper::issue('key_collision', ['book_id' => $other->id, 'title' => $other->title]);
+            }
+        }
         $duplicate = ReferenceImportRow::query()
             ->where('reference_edition_id', $row->reference_edition_id)
             ->where('id', '!=', $row->id)

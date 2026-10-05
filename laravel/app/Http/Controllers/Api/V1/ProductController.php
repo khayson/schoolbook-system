@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Catalog\AttachProductCode;
+use App\Actions\Catalog\CreateProduct;
 use App\Http\Controllers\Concerns\PaginatesApiLists;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\AttachProductCodeRequest;
 use App\Http\Requests\Api\V1\StoreProductRequest;
 use App\Http\Requests\Api\V1\UpdateProductRequest;
 use App\Http\Resources\ProductResource;
@@ -71,20 +74,24 @@ class ProductController extends Controller
         );
     }
 
-    public function store(StoreProductRequest $request): JsonResponse
+    public function store(StoreProductRequest $request, CreateProduct $create): JsonResponse
     {
-        $data = $request->validated();
-        $data['is_active'] = $data['is_active'] ?? true;
-        $data['reorder_level'] = $data['reorder_level'] ?? 0;
-
-        // stock_on_hand defaults to 0 in the schema; never mass-assigned.
-        $product = Product::query()->create($data);
-        $product->refresh();
-        $product->load(['level', 'subject', 'language', 'publisher']);
+        $product = $create->execute($request->user(), $request->validated());
 
         return (new ProductResource($product))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * A scanned code nobody knows yet becomes this product's ISBN or barcode.
+     */
+    public function attachCode(AttachProductCodeRequest $request, AttachProductCode $attach): ProductResource
+    {
+        $data = $request->validated();
+        $product = $attach->execute(Product::query()->findOrFail($data['product_id']), $data['code']);
+
+        return new ProductResource($product);
     }
 
     public function show(Product $product): ProductResource

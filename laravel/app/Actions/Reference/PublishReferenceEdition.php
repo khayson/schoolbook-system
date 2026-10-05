@@ -11,6 +11,7 @@ use App\Models\ReferenceImportRow;
 use App\Models\Subject;
 use App\Models\User;
 use App\Services\Reference\ReferenceMapper;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -26,6 +27,23 @@ class PublishReferenceEdition
      * @return array{created: int, updated: int, unchanged: int, withdrawn: int, pending: int, excluded: int, publishers_created: int, merged: int}
      */
     public function execute(User $user, ReferenceEdition $edition): array
+    {
+        try {
+            return $this->publish($user, $edition);
+        } catch (KeyCollisions $collisions) {
+            // Everything above was rolled back; record why on the rows, then report.
+            $this->markCollisions($collisions->rows);
+
+            throw ReferenceImportException::keyCollision(count($collisions->rows));
+        } catch (UniqueConstraintViolationException) {
+            throw ReferenceImportException::keyCollision(0);
+        }
+    }
+
+    /**
+     * @return array{created: int, updated: int, unchanged: int, withdrawn: int, pending: int, excluded: int, publishers_created: int, merged: int}
+     */
+    private function publish(User $user, ReferenceEdition $edition): array
     {
         return DB::transaction(function () use ($user, $edition): array {
             $edition = ReferenceEdition::query()->lockForUpdate()->findOrFail($edition->id);
@@ -44,6 +62,8 @@ class PublishReferenceEdition
             $live = $accepted->where('action', '!=', 'removed');
             $this->createMissingSubjects($live);
             $publishersCreated = $this->resolvePublishers($live);
+
+            $this->guardCollisions($live);
 
             $summary = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'withdrawn' => 0, 'merged' => 0];
             $usedKeys = [];
@@ -119,6 +139,43 @@ class PublishReferenceEdition
                 ->log('reference list published');
 
             return $summary;
+        });
+    }
+
+    /**
+     * A changed or fixed row whose key (now with publisher ids) equals a *different* live
+     * title would break the unique key: "this change would duplicate another title".
+     *
+     * @param  Collection<int, ReferenceImportRow>  $rows
+     */
+    private function guardCollisions(Collection $rows): void
+    {
+        $found = [];
+        foreach ($rows->whereNotNull('reference_book_id') as $row) {
+            $key = ReferenceMapper::naturalKey(
+                $row->category, ReferenceMapper::searchTitle($row->title), $row->level_id, $row->band, $row->level_label, $row->publisher_id, $row->publisher_label,
+            );
+            $other = ReferenceBook::query()->where('natural_key', $key)->whereKeyNot($row->reference_book_id)->first(['id', 'title']);
+            if ($other !== null) {
+                $found[$row->id] = ['book_id' => $other->id, 'title' => $other->title];
+            }
+        }
+        if ($found !== []) {
+            throw new KeyCollisions($found);
+        }
+    }
+
+    /**
+     * @param  array<int, array{book_id: int, title: string}>  $rows  import row id => other title
+     */
+    private function markCollisions(array $rows): void
+    {
+        DB::transaction(function () use ($rows): void {
+            foreach (ReferenceImportRow::query()->whereKey(array_keys($rows))->get() as $row) {
+                $issues = array_values(array_filter($row->issues ?? [], fn (array $i) => $i['code'] !== 'key_collision'));
+                $issues[] = ReferenceMapper::issue('key_collision', $rows[$row->id]);
+                $row->forceFill(['issues' => $issues, 'resolved' => false])->save();
+            }
         });
     }
 

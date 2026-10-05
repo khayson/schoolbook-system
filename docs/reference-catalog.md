@@ -57,6 +57,34 @@ The plain text of the PDF loses the column boundaries on about a quarter of the 
 - **Publishers:** spellings that match no publisher become one new publisher per spelling group, named after the group's most common spelling. Every spelling seen, including a printed one merged away during review (`reference_import_rows.printed_publisher`), is stored in `publisher_aliases`, so the next edition resolves it without asking.
 - **ISBNs:** the December 2024 list has none (older editions had them). `reference_books.isbn` is filled over time by scanning barcodes (Phase 3.A.2/3.A.3).
 
+## Using the list in the shop (3.A.2)
+
+**Add one title** (admin, *Approved list > Approved titles > Add to my products*, or *Coverage > Not in my products*): a form prefilled with the title's level, subject, language and publisher. The owner adds a variant if they stock more than one version ("Learner's Book", "Teacher's Guide"), cost, price and opening stock. A title listed only for a band (for example "Lower Primary") must be given a class. The product is linked to the title; the SKU is generated when left blank (`BK-000123`); opening stock is received through the stock ledger at the cost price.
+
+**Add many** (*Approved titles*, select rows, *Create products (CSV template)*): downloads a CSV with `reference_book_id, title, variant_label, level, subject, language, publisher, sku, cost, price, opening_stock`, already filled with each title's details. Fill in cost, price and opening stock (copy a line per variant; delete lines you do not want), then upload it in *Products > Import CSV*. Blank catalog columns are taken from the approved title; one bad row and nothing is created.
+
+**API:** `POST /products` with `reference_book_id` (same prefill rules; explicit values win), `GET /reference-books` (search and filters), `GET /reference-books/snapshot` (the whole list for offline search, gzip + ETag), `GET /reference-editions/active`, `POST /products/attach-code`. See `docs/api.md`.
+
+**Prefill rules:** title, level, subject, language and publisher come from the title when not given. The title gets the variant in brackets. Missing level (band-only titles), subject or language must be chosen. Linking a product to a withdrawn title is allowed (the badge shows "Withdrawn").
+
+**Scan to learn codes** (`POST /products/attach-code`): an unknown scanned code is attached to a product once; later scans find the product. A valid ISBN-13 goes to the product's ISBN (and to its approved title if that has none); other codes to the barcode. A code another product already has, even a deleted one, is refused (`duplicate_code`), and an occupied slot is never overwritten (`code_slot_taken`).
+
+**Products table:** a badge shows *Approved* (linked to an approved title), *Withdrawn* (the title left the list) or *Not on list*, with a filter.
+
+**Coverage** (*Approved list > Coverage*):
+
+- **In my products:** an approved title with at least one product linked to it (not deleted), whatever its stock.
+- **Not in my products:** approved and no product: what schools may ask for. Grouped by level; band-only titles under their band; readers, guidance and e-learning under their category.
+- **My products not on the list:** active products with no approved title, or whose title was withdrawn.
+
+## Search
+
+`ReferenceBookSearch`: a level written in the query ("basic 4", "primary 4", "p4", "b4", "kg 2", "jhs 1") filters by that level and includes band-only titles whose band covers it; "maths"/"math" match "mathematics". MySQL/MariaDB use a FULLTEXT index on the normalized title, publisher and author (boolean mode, prefix match, relevance order). InnoDB ignores words under 3 letters and its stop-words ("the", "for", ...), so those words are matched with LIKE or dropped. SQLite (tests) uses LIKE throughout. `reference_books.isbn` is indexed (not unique: uniqueness belongs to products).
+
+## Publishing safeguards
+
+If an accepted row would take the identity (natural key) of a *different* live title, the whole publish is rolled back, the row gets the error "This change would duplicate another title on the list" (`key_collision`) and is set back to undecided, and the owner sees "N accepted row(s) would duplicate another title ... Nothing was published." Fix or exclude the row and publish again. A unique-index violation is caught the same way as a backstop. In normal use the review screens prevent this (every fix re-matches the row's key); the check protects against stale state.
+
 ## Tables
 
 | Table | Purpose |

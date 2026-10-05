@@ -30,6 +30,8 @@ class UpdateProductRequest extends FormRequest
             'subject_id' => ['sometimes', 'required', 'integer', Rule::exists('subjects', 'id')],
             'language_id' => ['sometimes', 'required', 'integer', Rule::exists('languages', 'id')],
             'publisher_id' => ['sometimes', 'nullable', 'integer', Rule::exists('publishers', 'id')],
+            'reference_book_id' => ['sometimes', 'nullable', 'integer', Rule::exists('reference_books', 'id')],
+            'variant_label' => ['sometimes', 'nullable', 'string', 'max:100'],
             'edition' => ['sometimes', 'nullable', 'string', 'max:255'],
             'cost_price' => ['sometimes', 'required', 'integer', 'min:0'],
             'selling_price' => ['sometimes', 'required', 'integer', 'min:0'],

@@ -44,6 +44,18 @@ class ReferenceImportException extends ApiDomainException
         return new self('A removed title cannot be edited: accept (withdraw it) or exclude (keep it).', 'reference_row_not_editable', 422);
     }
 
+    public static function keyCollision(int $rows): self
+    {
+        return new self(
+            $rows > 0
+                ? "{$rows} accepted row(s) would duplicate another title on the list. They are marked \"Fix\": correct or exclude them, then publish again. Nothing was published."
+                : 'An accepted row would duplicate another title on the list. Nothing was published.',
+            'reference_key_collision',
+            409,
+            ['rows' => $rows],
+        );
+    }
+
     public static function nothingToPublish(): self
     {
         return new self('No rows have been accepted yet.', 'reference_nothing_to_publish', 422);

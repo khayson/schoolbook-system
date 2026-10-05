@@ -14,6 +14,8 @@ Source of truth: `docs/build-spec.md`. Read it before any work.
 - Validation in Form Requests, authorization in Policies, output through API Resources.
 - Write tests with every task (Pest for Laravel, flutter_test for Flutter).
 - If the spec is ambiguous or you must deviate, stop and ask, or log it in `docs/decisions.md`.
+- Destructive database commands (`migrate:fresh`, `migrate:refresh`, `migrate:reset`, `db:wipe`) are refused by `App\Console\DestructiveDatabaseGuard` unless the target database name ends in `_test` (pass `--database=mysql_testing`) or the app environment is `testing`. `ALLOW_DESTRUCTIVE_DB=1` overrides it: only the owner sets it, on purpose, for one command; an agent never sets it.
+- Never commit the NaCCA approved-list PDF or anything imported from it (`laravel/storage/app/reference/` is git-ignored); test fixtures are synthetic.
 
 ## Environment
 Windows + PowerShell. PHP 8.4. Flutter 3.47.x stable. MySQL/MariaDB.

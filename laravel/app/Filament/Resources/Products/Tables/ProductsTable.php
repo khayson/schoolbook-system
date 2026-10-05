@@ -21,6 +21,7 @@ class ProductsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('referenceBook:id,title,status'))
             ->defaultSort('title')
             ->columns([
                 TextColumn::make('sku')
@@ -46,6 +47,20 @@ class ProductsTable
                 TextColumn::make('publisher.name')
                     ->label('Publisher')
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('approved_list')
+                    ->label('Approved list')
+                    ->badge()
+                    ->state(fn (Product $record): string => match ($record->referenceBook?->status) {
+                        'approved' => 'Approved',
+                        'withdrawn' => 'Withdrawn',
+                        default => 'Not on list',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'Approved' => 'success',
+                        'Withdrawn' => 'warning',
+                        default => 'gray',
+                    })
+                    ->tooltip(fn (Product $record): ?string => $record->referenceBook?->title),
                 TextColumn::make('cost_price')
                     ->label('Cost')
                     ->formatStateUsing(fn (?int $state): string => Money::formatGhs($state))
@@ -78,6 +93,14 @@ class ProductsTable
                 SelectFilter::make('publisher_id')
                     ->label('Publisher')
                     ->relationship('publisher', 'name'),
+                SelectFilter::make('approved_list')
+                    ->label('Approved list')
+                    ->options(['approved' => 'Approved', 'withdrawn' => 'Withdrawn', 'none' => 'Not on list'])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'approved', 'withdrawn' => $query->whereHas('referenceBook', fn (Builder $b) => $b->where('status', $data['value'])),
+                        'none' => $query->whereNull('reference_book_id'),
+                        default => $query,
+                    }),
                 Filter::make('low_stock')
                     ->label('Low stock')
                     ->toggle()

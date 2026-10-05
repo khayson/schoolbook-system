@@ -6,17 +6,27 @@ use App\Actions\Inventory\ReceiveStock;
 use App\Models\Language;
 use App\Models\Level;
 use App\Models\Product;
+use App\Models\Publisher;
+use App\Models\ReferenceBook;
 use App\Models\Subject;
 use App\Models\User;
 use App\Services\Money;
+use App\Services\ProductSkuGenerator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 
+/**
+ * Products from a CSV file (Products > Import CSV). Columns: title, level, subject,
+ * language, cost, price; optional opening_stock, sku, publisher, variant_label and
+ * reference_book_id. With reference_book_id (the "Create products" template exported
+ * from Approved titles) blank title/level/subject/language/publisher come from the
+ * approved title. All or nothing: one bad row and nothing is created.
+ */
 class ImportProductsFromCsv
 {
     public function __construct(
         private readonly ReceiveStock $receiveStock,
+        private readonly ProductSkuGenerator $skus,
     ) {}
 
     /**
@@ -35,28 +45,28 @@ class ImportProductsFromCsv
             $receiveItems = [];
 
             foreach ($rows as $lineNumber => $row) {
-                $level = $this->resolveLevel($row['level'], $lineNumber);
-                $subject = $this->resolveSubject($row['subject'], $lineNumber);
-                $language = $this->resolveLanguage($row['language'], $lineNumber);
+                $data = $this->rowData($row, $lineNumber);
 
                 $sku = trim($row['sku'] ?? '');
                 if ($sku === '') {
-                    $sku = $this->generateSku();
+                    $sku = $this->skus->next();
                 }
 
-                if (Product::query()->where('sku', $sku)->exists()) {
+                if (Product::withTrashed()->where('sku', $sku)->exists()) {
                     throw new InvalidArgumentException("Row {$lineNumber}: SKU [{$sku}] already exists.");
                 }
 
+                foreach (['cost', 'price'] as $money) {
+                    if (trim((string) ($row[$money] ?? '')) === '') {
+                        throw new InvalidArgumentException("Row {$lineNumber}: {$money} is required.");
+                    }
+                }
                 $costPrice = Money::ghsToPesewas($row['cost']);
                 $sellingPrice = Money::ghsToPesewas($row['price']);
 
                 $product = Product::query()->create([
+                    ...$data,
                     'sku' => $sku,
-                    'title' => trim($row['title']),
-                    'level_id' => $level->id,
-                    'subject_id' => $subject->id,
-                    'language_id' => $language->id,
                     'cost_price' => $costPrice,
                     'selling_price' => $sellingPrice,
                     'reorder_level' => 0,
@@ -110,7 +120,10 @@ class ImportProductsFromCsv
             str_getcsv($headerLine),
         );
 
-        $required = ['title', 'level', 'subject', 'language', 'cost', 'price'];
+        // With reference_book_id the catalog columns may be blank (prefilled from the title).
+        $required = in_array('reference_book_id', $headers, true)
+            ? ['cost', 'price']
+            : ['title', 'level', 'subject', 'language', 'cost', 'price'];
         foreach ($required as $column) {
             if (! in_array($column, $headers, true)) {
                 throw new InvalidArgumentException("CSV is missing required column: {$column}.");
@@ -137,7 +150,7 @@ class ImportProductsFromCsv
                 throw new InvalidArgumentException("Row {$lineNumber}: could not parse CSV line.");
             }
 
-            if (trim($row['title'] ?? '') === '') {
+            if (trim($row['title'] ?? '') === '' && trim($row['reference_book_id'] ?? '') === '') {
                 throw new InvalidArgumentException("Row {$lineNumber}: title is required.");
             }
 
@@ -145,6 +158,61 @@ class ImportProductsFromCsv
         }
 
         return $parsed;
+    }
+
+    /**
+     * Catalog attributes of one row: names resolved to ids, blanks filled from the
+     * approved title when the row has one.
+     *
+     * @param  array<string, string>  $row
+     * @return array<string, mixed>
+     */
+    private function rowData(array $row, int $lineNumber): array
+    {
+        $cell = fn (string $column): string => trim((string) ($row[$column] ?? ''));
+
+        $data = [
+            'title' => $cell('title') ?: null,
+            'level_id' => $cell('level') !== '' ? $this->resolveLevel($cell('level'), $lineNumber)->id : null,
+            'subject_id' => $cell('subject') !== '' ? $this->resolveSubject($cell('subject'), $lineNumber)->id : null,
+            'language_id' => $cell('language') !== '' ? $this->resolveLanguage($cell('language'), $lineNumber)->id : null,
+            'publisher_id' => $cell('publisher') !== '' ? $this->resolvePublisher($cell('publisher'), $lineNumber)->id : null,
+            'variant_label' => $cell('variant_label') ?: null,
+            'reference_book_id' => null,
+        ];
+
+        if ($cell('reference_book_id') !== '') {
+            $book = ctype_digit($cell('reference_book_id')) ? ReferenceBook::query()->find((int) $cell('reference_book_id')) : null;
+            if ($book === null) {
+                throw new InvalidArgumentException("Row {$lineNumber}: unknown approved title [{$cell('reference_book_id')}].");
+            }
+            $data['reference_book_id'] = $book->id;
+            $data = PrefillFromReferenceBook::apply($data);
+        }
+
+        foreach (['title' => 'title', 'level_id' => 'level', 'subject_id' => 'subject', 'language_id' => 'language'] as $field => $column) {
+            if ($data[$field] === null) {
+                throw new InvalidArgumentException(
+                    "Row {$lineNumber}: {$column} is required"
+                    .($data['reference_book_id'] !== null ? ' (the approved title does not give one).' : '.')
+                );
+            }
+        }
+
+        return $data;
+    }
+
+    private function resolvePublisher(string $name, int $lineNumber): Publisher
+    {
+        $publisher = Publisher::query()
+            ->whereRaw('LOWER(name) = ?', [strtolower(trim($name))])
+            ->first();
+
+        if ($publisher === null) {
+            throw new InvalidArgumentException("Row {$lineNumber}: unknown publisher [{$name}].");
+        }
+
+        return $publisher;
     }
 
     private function resolveLevel(string $name, int $lineNumber): Level
@@ -184,14 +252,5 @@ class ImportProductsFromCsv
         }
 
         return $language;
-    }
-
-    private function generateSku(): string
-    {
-        do {
-            $sku = 'IMP-'.strtoupper(Str::random(8));
-        } while (Product::query()->where('sku', $sku)->exists());
-
-        return $sku;
     }
 }

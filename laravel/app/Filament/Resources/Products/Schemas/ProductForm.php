@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
+use App\Models\ReferenceBook;
 use App\Services\Money;
+use App\Services\Reference\ReferenceBookSearch;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -16,13 +18,28 @@ class ProductForm
             ->components([
                 TextInput::make('sku')
                     ->label('SKU')
-                    ->required()
+                    ->required(fn (string $operation): bool => $operation === 'edit')
+                    ->helperText(fn (string $operation): ?string => $operation === 'create' ? 'Blank: generated (BK-000123).' : null)
                     ->maxLength(255),
                 TextInput::make('isbn')
                     ->label('ISBN')
                     ->maxLength(255),
                 TextInput::make('barcode')
                     ->maxLength(255),
+                Select::make('reference_book_id')
+                    ->label('Approved list title')
+                    ->searchable()
+                    ->getSearchResultsUsing(fn (string $search): array => app(ReferenceBookSearch::class)
+                        ->apply(ReferenceBook::query()->approved(), $search)
+                        ->limit(30)->get()
+                        ->mapWithKeys(fn (ReferenceBook $b) => [$b->id => self::bookLabel($b)])->all())
+                    ->getOptionLabelUsing(fn ($value): ?string => ($b = ReferenceBook::query()->find($value)) ? self::bookLabel($b) : null)
+                    ->helperText('Search like "sunrise maths basic 2". Leave empty for books not on the NaCCA list.')
+                    ->columnSpanFull(),
+                TextInput::make('variant_label')
+                    ->label('Variant')
+                    ->placeholder("Learner's Book, Teacher's Guide, Workbook…")
+                    ->maxLength(100),
                 TextInput::make('title')
                     ->required()
                     ->maxLength(255)
@@ -69,5 +86,13 @@ class ProductForm
                     ->default(true)
                     ->required(),
             ]);
+    }
+
+    private static function bookLabel(ReferenceBook $book): string
+    {
+        $book->loadMissing(['level', 'publisher']);
+
+        return $book->title.' · '.($book->level?->name ?? $book->level_label ?? ReferenceBook::categoryLabel($book->category))
+            .' · '.($book->publisher?->name ?? $book->publisher_label).($book->status === 'withdrawn' ? ' (withdrawn)' : '');
     }
 }

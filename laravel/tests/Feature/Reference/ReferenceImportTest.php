@@ -328,3 +328,40 @@ test('discarding a draft deletes its rows and leaves the live list alone', funct
     // A new draft can now be staged.
     expect(stageList($this->owner, secondEditionFixture(), 'sha-2')->status)->toBe('draft');
 });
+
+test('a publish that would duplicate another live title is refused, rolled back and marked on the row', function () {
+    $first = stageList($this->owner);
+    reviewEverything($first);
+    app(PublishReferenceEdition::class)->execute($this->owner, $first);
+    $discover = ReferenceBook::query()->where('title', 'Discover Science')->firstOrFail();
+    $lakeside = ReferenceBook::query()->where('title', 'Lakeside Series Mathematics for Junior High Schools')->firstOrFail();
+    $before = ReferenceBook::query()->orderBy('id')->get()->toArray();
+
+    $second = stageList($this->owner, secondEditionFixture(), 'sha-2');
+    reviewEverything($second);
+    // Stale state the review screens cannot produce (every fix re-matches its key): the row
+    // still points at Lakeside but now describes Discover Science.
+    $row = stagedRow($second, 'Lakeside Series Mathematics for Junior High Schools');
+    $row->forceFill([
+        'title' => 'Discover Science', 'level_id' => $discover->level_id, 'level_label' => $discover->level_label,
+        'publisher_id' => $discover->publisher_id, 'publisher_label' => $discover->publisher_label,
+        'reference_book_id' => $lakeside->id, 'action' => 'changed',
+    ])->save();
+
+    expect(fn () => app(PublishReferenceEdition::class)->execute($this->owner, $second))
+        ->toThrow(fn (ReferenceImportException $e) => expect([$e->errorCode(), $e->status(), $e->details()])
+            ->toBe(['reference_key_collision', 409, ['rows' => 1]]));
+
+    $row->refresh();
+    expect($row->resolved)->toBeFalse()
+        ->and(issueCodes($row))->toBe(['key_collision'])
+        ->and($row->issues[0]['data'])->toBe(['book_id' => $discover->id, 'title' => 'Discover Science'])
+        ->and($second->fresh()->status)->toBe('draft')
+        ->and(ReferenceBook::query()->orderBy('id')->get()->toArray())->toBe($before)
+        ->and(ReferenceEdition::active()->id)->toBe($first->id);
+
+    // Excluding the row lets the rest publish.
+    app(ReviewReferenceImport::class)->exclude($row);
+    app(PublishReferenceEdition::class)->execute($this->owner, $second);
+    expect($second->fresh()->status)->toBe('active');
+});

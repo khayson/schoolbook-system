@@ -71,6 +71,14 @@ cd flutter; flutter analyze
 
 Set `DB_TEST_DATABASE=schoolbook_test` in `laravel/.env` (already in `.env.example`).
 
+**Destructive commands are guarded.** `migrate:fresh`, `migrate:refresh`, `migrate:reset` and `db:wipe` refuse to run unless the target database name ends in `_test` or the environment is `testing` (Pest). Use the throwaway database explicitly:
+
+```powershell
+php artisan migrate:fresh --seed --database=mysql_testing
+```
+
+Against any other database the command stops with an explanation. To wipe the dev database on purpose, set the override for that one command: `$env:ALLOW_DESTRUCTIVE_DB='1'; php artisan migrate:fresh --seed; $env:ALLOW_DESTRUCTIVE_DB=$null`. Never put `ALLOW_DESTRUCTIVE_DB` in `.env`.
+
 ## Docs
 
 | File | Purpose |
