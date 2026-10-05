@@ -253,3 +253,9 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 - **Phone structure:** `features/reference/{data,domain,presentation}`; the catalog (`ReferenceCatalog`, ChangeNotifier) is created in `app.dart` and synced whenever a session starts. The offline copy is a plain JSON file in the app-support directory (public data; secure storage is for keys). The search runs on the phone; no money or stock is computed there (stock comes from the server, shown "as of" the last sync; the local count after a quick-create is a display hint until the next sync).
 - **Acceptance** (`docs/acceptance-phase3a.md`): steps 1 to 3 (real import, counts against NaCCA's statistics, 25-row hand check) done; the owner's review and the phone run wait for the owner. Rows are cited by page and serial, not title, because the file is committed.
 
+## 2026-10-05 — Approved list: finishing rows left out of a publish
+
+- The owner's first publish accepted the 1,487 clean rows and left the 79 warning rows undecided (the bulk accept skips rows with issues, and the confirmation's "79 undecided ... left out" was easy to miss). A published edition is read-only, so there was no way left to decide them: a gap in the 3.A.1 design.
+- Fix: `reference:import --again` stages the live file again on purpose (the same-file refusal otherwise stays, and its message now names the option). Live titles come back unchanged, left-out rows as new. The publish confirmation now warns, in capitals, when rows marked Fix or Check are still undecided.
+- Not chosen: reopening a published edition for more decisions. It would mix decisions across two publishes of one edition and complicate the diff; a second, ordinary draft keeps every publish a full, reviewable diff.
+

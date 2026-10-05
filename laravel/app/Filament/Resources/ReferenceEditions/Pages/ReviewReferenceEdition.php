@@ -307,6 +307,7 @@ class ReviewReferenceEdition extends Page implements HasTable
         $rows = $this->edition()->importRows()->where('resolved', true)->where('excluded', false);
         $by = (clone $rows)->selectRaw('action, count(*) as n')->groupBy('action')->pluck('n', 'action');
         $pending = $this->edition()->importRows()->where('resolved', false)->count();
+        $pendingWithIssues = $this->edition()->importRows()->where('resolved', false)->whereNotNull('issues')->count();
         $excluded = $this->edition()->importRows()->where('excluded', true)->count();
         $newPublishers = (clone $rows)->where('action', '!=', 'removed')->whereNull('publisher_id')->pluck('publisher_label')
             ->map(fn (string $label) => ReferenceMapper::normalizePublisher($label))->unique()->count();
@@ -314,7 +315,12 @@ class ReviewReferenceEdition extends Page implements HasTable
         return 'Accepted rows go live: '.($by['new'] ?? 0).' new titles, '.($by['changed'] ?? 0).' changed, '
             .($by['unchanged'] ?? 0).' confirmed unchanged, '.($by['removed'] ?? 0).' withdrawn. '
             ."About {$newPublishers} publishers will be added. "
-            ."{$pending} undecided and {$excluded} excluded rows are left out. The current live list will be marked superseded.";
+            ."{$pending} undecided and {$excluded} excluded rows are left out. The current live list will be marked superseded."
+            .($pendingWithIssues > 0
+                ? " WARNING: {$pendingWithIssues} rows marked Fix or Check have not been decided and will NOT go live. "
+                    .'Cancel and filter "To check" to decide them first, unless you mean to leave them out. '
+                    .'(Afterwards they can only be reviewed by importing the same file again with --again.)'
+                : '');
     }
 
     private function canReview(): bool

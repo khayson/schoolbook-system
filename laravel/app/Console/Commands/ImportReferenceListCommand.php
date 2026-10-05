@@ -19,7 +19,8 @@ class ImportReferenceListCommand extends Command
                             {--edition= : Label, e.g. "NaCCA December 2024"}
                             {--source-url= : Where the file was downloaded from}
                             {--published= : Date printed on the list (YYYY-MM-DD)}
-                            {--user= : Owner email recorded as importer (default: first owner)}';
+                            {--user= : Owner email recorded as importer (default: first owner)}
+                            {--again : Import the live file again, to review rows left out last time}';
 
     protected $description = 'Read a NaCCA approved list into a draft for review';
 
@@ -50,6 +51,7 @@ class ImportReferenceListCommand extends Command
             $edition = $stage->execute($user, (string) $this->argument('path'), $label, [
                 'source_url' => $this->option('source-url') ?: null,
                 'published_at' => $this->option('published') ?: null,
+                'again' => (bool) $this->option('again'),
             ]);
         } catch (ApiDomainException $e) {
             $this->error($e->getMessage());

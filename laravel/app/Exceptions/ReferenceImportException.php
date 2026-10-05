@@ -16,7 +16,12 @@ class ReferenceImportException extends ApiDomainException
 
     public static function alreadyImported(int $editionId): self
     {
-        return new self('This exact file is the live list already.', 'reference_already_imported', 409, ['edition_id' => $editionId]);
+        return new self(
+            'This exact file is the live list already. To decide rows the last review left out, import it again on purpose with --again.',
+            'reference_already_imported',
+            409,
+            ['edition_id' => $editionId],
+        );
     }
 
     public static function notDraft(): self

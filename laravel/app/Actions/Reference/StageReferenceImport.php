@@ -29,7 +29,7 @@ class StageReferenceImport
     ) {}
 
     /**
-     * @param  array{source_url?: ?string, published_at?: ?string}  $options
+     * @param  array{source_url?: ?string, published_at?: ?string, again?: bool}  $options
      */
     public function execute(User $user, string $path, string $label, array $options = []): ReferenceEdition
     {
@@ -37,17 +37,17 @@ class StageReferenceImport
             throw ReferenceImportException::fileNotFound($path);
         }
         $sha = hash_file('sha256', $path);
-        $this->guard($sha);
+        $this->guard($sha, (bool) ($options['again'] ?? false));
 
         return $this->stageParsed($user, $this->parser->parse($this->extractor->extract($path)), $label, $sha, $options);
     }
 
     /**
-     * @param  array{source_url?: ?string, published_at?: ?string}  $options
+     * @param  array{source_url?: ?string, published_at?: ?string, again?: bool}  $options
      */
     public function stageParsed(User $user, ParsedReferenceList $list, string $label, string $sha, array $options = []): ReferenceEdition
     {
-        $this->guard($sha);
+        $this->guard($sha, (bool) ($options['again'] ?? false));
         if ($list->rows === []) {
             throw ReferenceImportException::nothingParsed();
         }
@@ -67,7 +67,7 @@ class StageReferenceImport
         [$rows, $removed] = $this->diff($rows);
 
         return DB::transaction(function () use ($user, $list, $label, $sha, $options, $rows, $removed): ReferenceEdition {
-            $this->guard($sha);
+            $this->guard($sha, (bool) ($options['again'] ?? false));
 
             $all = [...$rows, ...$removed];
             $count = fn (string $action) => count(array_filter($all, fn (array $r) => $r['action'] === $action));
@@ -132,14 +132,19 @@ class StageReferenceImport
         });
     }
 
-    private function guard(string $sha): void
+    /**
+     * $again: the owner re-imports the live file on purpose, to decide the rows a
+     * previous review left out. They come back as "new"; everything already live is
+     * "unchanged".
+     */
+    private function guard(string $sha, bool $again = false): void
     {
         $draft = ReferenceEdition::query()->draft()->first();
         if ($draft !== null) {
             throw ReferenceImportException::draftExists($draft->id);
         }
         $active = ReferenceEdition::active();
-        if ($active !== null && $active->file_sha256 === $sha) {
+        if (! $again && $active !== null && $active->file_sha256 === $sha) {
             throw ReferenceImportException::alreadyImported($active->id);
         }
     }

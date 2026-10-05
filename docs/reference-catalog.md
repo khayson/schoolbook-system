@@ -20,7 +20,15 @@ The approved list is NaCCA's list of textbooks and supplementary materials appro
 3. **Publish:** a confirmation shows what will go live (new, changed, unchanged, withdrawn, publishers to add, rows left out). Only **accepted** rows are applied. Undecided and excluded rows are left out, and the previous live edition becomes *superseded*.
 4. **Discard** a draft to start again. Its staged rows are deleted; the edition record stays in the history as *discarded*.
 
-Only one draft can exist at a time, and the file that is already live cannot be imported again (same SHA-256).
+Only one draft can exist at a time, and the file that is already live cannot be imported again (same SHA-256) unless that is done on purpose with `--again`.
+
+**Rows left out of a publish** (undecided at publish time) cannot be reviewed on the published edition, which is read-only. To decide them later, import the live file again on purpose:
+
+```
+php artisan reference:import storage/app/reference/nacca-2024-12.pdf --edition="NaCCA December 2024 (completion)" --again
+```
+
+Everything already live comes back as *unchanged* (one click: *Accept in bulk > Accept all unchanged*); the rows left out come back as *new*, with their issues, and publisher suggestions now point at the publishers created by the first publish. The publish confirmation warns, in capitals, when rows marked Fix or Check are still undecided.
 
 ## Parsing (`ReferenceListParser`)
 

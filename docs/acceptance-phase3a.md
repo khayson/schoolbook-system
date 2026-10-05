@@ -81,19 +81,22 @@ Result: parsing **25/25**; mapping **24/25**.
 
 Finding and fix: a supplementary or e-learning title in a Ghanaian language that no keyword recognises defaulted to English and was marked high confidence, so the review page's "low confidence" filter would not surface it. Fixed in `ReferenceMapper` (3.A.3): a language that is only *defaulted* to English on a non-textbook row is now low confidence (textbook sections are English unless they say otherwise). Test: `a non-textbook title with no language keyword defaults to English with low confidence`. The draft already staged (edition #1) was left untouched so the owner's review is not disturbed. Row 25 can be corrected there with **Fix** (language Dagbani); later imports get the new rule.
 
-## 4. Owner's first review and publish (dev database): PENDING (owner)
+## 4. Owner's first review and publish (dev database)
 
-The owner reviews edition #1 in *Approved list > Imports > Review*, with the decisions agreed in review:
+Backup before publishing (owner, 2026-10-05): `php artisan backup:run --only-db`, 103.66 KB, verified.
 
-- 34 publisher spellings: **Use "…"** (merge; the spellings become aliases).
-- 4 titles printed twice: keep one, **Exclude** the other.
-- 9 Physical Education rows: **Accept** (creates the subject).
-- 32 supplements with no subject: **Accept** without a subject.
-- 3 generic "Twi" titles: do not guess; check the books or the bookseller, else use a plain "Twi" language entry for now.
-- Also: hand-check row 25 above (language).
-- Then **Accept in bulk** the remaining clean new rows and **Publish**.
+**First publish (owner, 2026-10-05 17:18):**
 
-To record: the publish summary (titles created, publishers added, rows left out) and `php artisan customers:reconcile`.
+```
+Approved list published
+1487 added, 0 updated, 0 unchanged, 0 withdrawn, 251 publishers added. 79 undecided and 4 excluded rows were left out.
+```
+
+Checked on the database afterwards: edition #1 active; 1,487 approved titles, 251 publishers and aliases; the Dagbani row (page 50, e-learning, serial 35) fixed to Dagbani; the 4 duplicates excluded (page 13 #138; page 50 #12, #36, #39); `customers:reconcile`: "All money invariants hold."
+
+The 79 undecided rows are all the warning rows: 34 publisher spellings, 9 Physical Education, 32 supplements with no subject, 3 generic "Twi" titles, 1 odd author/publisher separator. They were left out because the bulk accept skips rows with issues and the publish confirmation's mention was easy to miss. Finding: a published edition is read-only, so they could no longer be decided. Fixed by `reference:import --again` plus a capitalised warning in the publish confirmation (see `docs/decisions.md`).
+
+**Completion review:** PENDING (owner). Re-import with `--again`, accept all unchanged, decide the 79, publish. To record: the summary.
 
 ## 5. Phone acceptance (Pixel_9a, dev server): PENDING (after step 4)
 

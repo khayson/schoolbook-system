@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Reference\PublishReferenceEdition;
+use App\Actions\Reference\ReviewReferenceImport;
 use App\Filament\Resources\ReferenceBooks\Pages\ListReferenceBooks;
 use App\Filament\Resources\ReferenceBooks\ReferenceBookResource;
 use App\Filament\Resources\ReferenceEditions\Pages\ListReferenceEditions;
@@ -174,4 +175,19 @@ test('changes and the page help read as plain text, with no escaped markup', fun
     Livewire::test(ListReferenceEditions::class)
         ->assertSee('Nothing goes live until you publish it.')
         ->assertDontSee('&lt;', escape: false);
+});
+
+test('the publish confirmation warns when rows marked Fix or Check are still undecided', function () {
+    $edition = stageList($this->owner);
+    app(ReviewReferenceImport::class)->acceptAll($edition, 'new');
+
+    reviewPage($edition)
+        ->mountAction('publish')
+        ->assertMountedActionModalSee('WARNING: 4 rows marked Fix or Check have not been decided and will NOT go live.')
+        ->assertMountedActionModalSee('importing the same file again with --again');
+
+    reviewEverything($edition);
+    reviewPage($edition)
+        ->mountAction('publish')
+        ->assertMountedActionModalDontSee('WARNING');
 });

@@ -3,6 +3,7 @@
 use App\Actions\Reference\DiscardReferenceEdition;
 use App\Actions\Reference\PublishReferenceEdition;
 use App\Actions\Reference\ReviewReferenceImport;
+use App\Actions\Reference\StageReferenceImport;
 use App\Actions\Sales\ConfirmSale;
 use App\Exceptions\ReferenceImportException;
 use App\Models\Language;
@@ -14,6 +15,7 @@ use App\Models\ReferenceEdition;
 use App\Models\ReferenceImportRow;
 use App\Models\Subject;
 use App\Models\User;
+use App\Services\Reference\ReferenceListParser;
 use Database\Seeders\DatabaseSeeder;
 use Tests\Support\ReferenceListFixture;
 
@@ -383,4 +385,42 @@ test('a non-textbook title with no language keyword defaults to English with low
         'confidence' => 'low',
     ])
         ->and(stagedRow($edition, 'Plants Around Us')->confidence)->toBe('high');
+});
+
+test('rows left out of a publish are reviewed by importing the live file again on purpose', function () {
+    $first = stageList($this->owner);
+    $review = app(ReviewReferenceImport::class);
+    $review->acceptAll($first, 'new');                              // clean rows only
+    $review->exclude(stagedRow($first, 'Discover Science', '2'));    // duplicate
+    app(PublishReferenceEdition::class)->execute($this->owner, $first);
+    expect(ReferenceBook::query()->count())->toBe(8);               // the 3 warning rows were left out
+
+    expect(fn () => stageList($this->owner, sha: 'sha-1'))
+        ->toThrow(ReferenceImportException::class, 'import it again on purpose with --again');
+
+    $list = (new ReferenceListParser)->parse(ReferenceListFixture::standard()->chunks());
+    $again = app(StageReferenceImport::class)->stageParsed($this->owner, $list, 'Test list (completion)', str_pad('sha-1', 64, '0'), ['again' => true]);
+
+    $actions = $again->importRows()->orderBy('position')->pluck('action', 'title')->all();
+    expect($again->fresh()->only(['rows_new', 'rows_unchanged', 'rows_removed']))->toBe(['rows_new' => 3, 'rows_unchanged' => 9, 'rows_removed' => 0])
+        ->and($actions['Science Around Us'])->toBe('new')
+        ->and($actions['Twi Kasa Workbook 1'])->toBe('new')
+        ->and($actions['Asante Twi Reader for Primary 3'])->toBe('new')
+        ->and($actions['Sunrise Mathematics for Basic Schools'])->toBe('unchanged');
+
+    // The spelling suggestion now points at the publisher that exists since the first publish.
+    $asante = stagedRow($again, 'Asante Twi Reader for Primary 3');
+    $lakeside = Publisher::query()->where('name', 'like', 'Lakeside%')->sole();
+    expect($asante->issues[0]['data'])->toBe(['suggestion' => $lakeside->name, 'publisher_id' => $lakeside->id]);
+
+    $review->applyPublisherSuggestion($asante);
+    $review->accept(stagedRow($again, 'Science Around Us'));
+    $review->acceptAll($again, 'unchanged');
+    $review->acceptAll($again, 'new');
+    $summary = app(PublishReferenceEdition::class)->execute($this->owner, $again);
+
+    expect($summary)->toMatchArray(['created' => 2, 'unchanged' => 8, 'withdrawn' => 0])
+        ->and(ReferenceBook::query()->count())->toBe(10) // Twi Kasa still needs its language: left out
+        ->and(ReferenceBook::query()->where('title', 'Asante Twi Reader for Primary 3')->value('publisher_id'))->toBe($lakeside->id)
+        ->and($first->fresh()->status)->toBe('superseded');
 });
