@@ -365,3 +365,22 @@ test('a publish that would duplicate another live title is refused, rolled back 
     app(PublishReferenceEdition::class)->execute($this->owner, $second);
     expect($second->fresh()->status)->toBe('active');
 });
+
+test('a non-textbook title with no language keyword defaults to English with low confidence', function () {
+    // Found in the 3.A.3 hand check: a title in a Ghanaian language the keywords miss.
+    $edition = stageList($this->owner, (new ReferenceListFixture)->page()
+        ->heading('4.4 E-LEARNING MATERIALS/GAMES/MANIPULATIVES/MANUALS/OTHERS', 56.6)
+        ->supplementHeader()
+        ->supplement('1', 'NOONSI TIŊA BUKU', 'Yendi Learning Press')
+        ->heading('3.0 LIST OF APPROVED TEXTBOOKS', 134.8)
+        ->heading('SCIENCE (LEARNER BOOKS)')
+        ->textbookHeader()
+        ->textbook('1', 'Plants Around Us', 'Basic 2', 'Forest Press'));
+
+    expect(stagedRow($edition, 'NOONSI TIŊA BUKU')->only(['category', 'language_id', 'confidence']))->toBe([
+        'category' => 'elearning',
+        'language_id' => Language::query()->where('code', 'en')->value('id'),
+        'confidence' => 'low',
+    ])
+        ->and(stagedRow($edition, 'Plants Around Us')->confidence)->toBe('high');
+});

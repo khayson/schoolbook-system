@@ -37,6 +37,15 @@ test('FULLTEXT search on MySQL: prefixes, stop-words, short words and levels', f
     expect($fulltext)->toBe(['search_title', 'publisher_label', 'author']);
 });
 
+test('FULLTEXT operator characters typed by a user are neutralised, never an SQL error', function () {
+    // +maths -sunrise* (basic) "2" would be operators in boolean mode; normalisation strips them.
+    expect(searchTitles('+maths -sunrise* (basic) "2"'))->toBe(['Sunrise Mathematics for Basic Schools / Primary 2'])
+        ->and(searchTitles('@discover ~science <>'))->toBe(['Discover Science / Primary 4']);
+
+    // Nothing left after normalisation: the unfiltered list, not an error.
+    test()->getJson('/api/v1/reference-books?search='.urlencode('+-*"()@~<>'))->assertOk()->assertJsonPath('meta.total', 11);
+});
+
 test('the coverage summary runs on MySQL with the same figures', function () {
     stockedProduct(5, attributes: ['reference_book_id' => ReferenceBook::query()->where('title', 'Discover Science')->value('id')]);
 

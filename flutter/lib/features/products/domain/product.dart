@@ -16,6 +16,8 @@ class Product {
     this.isbn,
     this.barcode,
     this.publisherId,
+    this.referenceBookId,
+    this.variantLabel,
     this.edition,
     this.level,
     this.subject,
@@ -31,6 +33,10 @@ class Product {
   final int subjectId;
   final int languageId;
   final int? publisherId;
+
+  /// The approved-list (NaCCA) title this product is; null when not on the list.
+  final int? referenceBookId;
+  final String? variantLabel;
   final String? edition;
   final int costPrice;
   final int sellingPrice;
@@ -52,6 +58,8 @@ class Product {
       subjectId: json['subject_id'] as int,
       languageId: json['language_id'] as int,
       publisherId: json['publisher_id'] as int?,
+      referenceBookId: json['reference_book_id'] as int?,
+      variantLabel: json['variant_label'] as String?,
       edition: json['edition'] as String?,
       costPrice: json['cost_price'] as int? ?? 0,
       sellingPrice: json['selling_price'] as int? ?? 0,

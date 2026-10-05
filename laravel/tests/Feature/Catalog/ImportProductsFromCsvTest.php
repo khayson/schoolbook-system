@@ -2,6 +2,7 @@
 
 use App\Actions\Catalog\ImportProductsFromCsv;
 use App\Enums\StockMovementType;
+use App\Models\GoodsReceipt;
 use App\Models\Language;
 use App\Models\Level;
 use App\Models\Product;
@@ -92,4 +93,18 @@ test('import resolves lookup names case insensitively', function () {
     app(ImportProductsFromCsv::class)->execute($user, $csv);
 
     expect(Product::query()->where('sku', 'CSV-CASE-001')->exists())->toBeTrue();
+});
+
+test('opening stock of a whole import is one goods receipt, not one per product', function () {
+    $this->seed(DatabaseSeeder::class);
+    $user = User::factory()->owner()->create();
+
+    $rows = collect(range(1, 25))->map(fn (int $i) => "Bulk Book {$i},Primary 1,Mathematics,English,10.00,15.00,{$i}");
+    $result = app(ImportProductsFromCsv::class)->execute($user, "title,level,subject,language,cost,price,opening_stock\n".$rows->implode("\n"));
+
+    expect($result)->toBe(['created' => 25, 'received_lines' => 25])
+        ->and(GoodsReceipt::query()->count())->toBe(1)
+        ->and(GoodsReceipt::query()->sole()->items()->count())->toBe(25)
+        ->and(StockMovement::query()->where('type', StockMovementType::ReceiptIn)->count())->toBe(25)
+        ->and(Product::query()->sum('stock_on_hand'))->toBe(325);
 });

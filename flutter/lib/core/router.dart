@@ -12,6 +12,8 @@ import 'package:schoolbook/features/payments/presentation/record_payment_screen.
 import 'package:schoolbook/features/products/presentation/product_detail_screen.dart';
 import 'package:schoolbook/features/products/presentation/product_form_screen.dart';
 import 'package:schoolbook/features/products/presentation/product_scan_screen.dart';
+import 'package:schoolbook/features/reference/presentation/quick_create_product_screen.dart';
+import 'package:schoolbook/features/reference/presentation/reference_search_screen.dart';
 import 'package:schoolbook/features/products/presentation/products_list_screen.dart';
 import 'package:schoolbook/features/sales/presentation/new_sale_screen.dart';
 import 'package:schoolbook/features/sales/presentation/sale_detail_screen.dart';
@@ -64,7 +66,24 @@ GoRouter createAppRouter(AuthProvider authProvider) {
             path: 'scan',
             builder: (context, state) => ProductScanScreen(
               pickMode: state.uri.queryParameters['pick'] == '1',
+              captureMode: state.uri.queryParameters['capture'] == '1',
             ),
+          ),
+          GoRoute(
+            path: 'approved',
+            builder: (context, state) => ReferenceSearchScreen(
+              pickMode: state.uri.queryParameters['pick'] == '1',
+            ),
+            routes: [
+              GoRoute(
+                path: ':bookId/new',
+                builder: (context, state) => QuickCreateProductScreen(
+                  bookId: int.parse(state.pathParameters['bookId']!),
+                  code: state.uri.queryParameters['code'],
+                  forReceive: state.uri.queryParameters['receive'] == '1',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: ':id',

@@ -11,6 +11,8 @@ import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/payments/domain/payment.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
+import 'package:schoolbook/features/reference/data/reference_repository.dart';
+import 'package:schoolbook/features/reference/domain/reference_book.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/sales/domain/sale.dart';
 
@@ -300,4 +302,107 @@ class PickableCustomersRepository extends FakeCustomersRepository {
   @override
   Future<PaginatedResponse<Customer>> listCustomers({int page = 1, String? search}) async =>
       PaginatedResponse(data: [customer], meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: 25, total: 1));
+}
+
+// --- Approved list (reference catalog) -----------------------------------------------
+
+ReferenceBook testBook({
+  int id = 1,
+  String title = 'Sunrise Mathematics for Basic Schools',
+  String? level = 'Primary 4',
+  int? levelId = 9,
+  String? band,
+  String? subject = 'Mathematics',
+  int? subjectId = 1,
+  int? languageId = 1,
+  String? publisher = 'Sunrise Press Ltd',
+  String? author,
+  String? isbn,
+  String category = 'textbook',
+}) =>
+    ReferenceBook(
+      id: id,
+      category: category,
+      title: title,
+      searchTitle: title.toLowerCase(),
+      levelId: levelId,
+      level: level,
+      band: band,
+      subjectId: subjectId,
+      subject: subject,
+      languageId: languageId,
+      language: languageId == null ? null : 'English',
+      publisherId: 7,
+      publisher: publisher,
+      author: author,
+      isbn: isbn,
+    );
+
+/// Serves a snapshot the way the API does: 304 when the ETag matches.
+class FakeReferenceRepository extends ReferenceRepository {
+  FakeReferenceRepository({List<ReferenceBook>? books, this.etag = '"v1"'})
+      : books = books ?? [testBook()],
+        super(apiClient: unusedApiClient());
+
+  List<ReferenceBook> books;
+  String etag;
+  Map<int, TitleStock> stock = {};
+  ApiException? failWith;
+  final List<String?> sentEtags = [];
+  int downloads = 0;
+
+  @override
+  Future<SnapshotResult> fetchSnapshot({String? etag}) async {
+    sentEtags.add(etag);
+    if (failWith != null) throw failWith!;
+    if (etag == this.etag) return SnapshotResult.notModified(etag);
+    downloads++;
+    return SnapshotResult.downloaded(this.etag, {
+      'edition': {'id': 1, 'label': 'NaCCA Test Edition', 'published_at': null},
+      'count': books.length,
+      'books': [for (final b in books) b.toJson()],
+    });
+  }
+
+  @override
+  Future<Map<int, TitleStock>> fetchStockedTitles() async {
+    if (failWith != null) throw failWith!;
+    return stock;
+  }
+}
+
+/// Products API double for quick-create and scanning.
+class RecordingProductsRepository extends FakeProductsRepository {
+  RecordingProductsRepository([List<Product>? products]) : super(products ?? []);
+
+  final List<(Map<String, dynamic>, String?)> created = [];
+  final List<(String, int)> attached = [];
+  final Map<String, Product> codes = {};
+  ApiException? createError;
+  ApiException? attachError;
+
+  @override
+  Future<Product> createProduct(Map<String, dynamic> payload, {String? idempotencyKey}) async {
+    created.add((payload, idempotencyKey));
+    if (createError != null) throw createError!;
+    return testProduct(id: 500 + created.length, title: 'Created ${payload['reference_book_id']}', stock: payload['opening_stock'] as int? ?? 0);
+  }
+
+  @override
+  Future<Product> attachCode({required String code, required int productId}) async {
+    attached.add((code, productId));
+    if (attachError != null) throw attachError!;
+    final product = products.where((p) => p.id == productId).firstOrNull ?? testProduct(id: productId);
+    codes[code] = product;
+    return product;
+  }
+
+  @override
+  Future<Product> getByCode(String code) async {
+    final product = codes[code];
+    if (product == null) {
+      throw ApiException(message: 'Product not found.', statusCode: 404);
+    }
+    return product;
+  }
 }

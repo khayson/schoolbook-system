@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:schoolbook/core/api_client.dart';
 import 'package:schoolbook/core/pagination.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
@@ -55,10 +56,29 @@ class ProductsRepository {
     return Product.fromJson(_unwrapResource(response.data!));
   }
 
-  Future<Product> createProduct(Map<String, dynamic> payload) async {
+  /// [idempotencyKey]: sent by the quick-create (a retried save returns the first
+  /// product); the older product form sends none.
+  Future<Product> createProduct(
+    Map<String, dynamic> payload, {
+    String? idempotencyKey,
+  }) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/products',
       data: payload,
+      options: idempotencyKey == null
+          ? null
+          : Options(headers: {'Idempotency-Key': idempotencyKey}),
+    );
+    return Product.fromJson(_unwrapResource(response.data!));
+  }
+
+  /// "Scan to learn": attaches an unknown scanned [code] to a product. 409
+  /// `duplicate_code` when another product has it, `code_slot_taken` when the product
+  /// already has a different code there.
+  Future<Product> attachCode({required String code, required int productId}) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/products/attach-code',
+      data: {'code': code, 'product_id': productId},
     );
     return Product.fromJson(_unwrapResource(response.data!));
   }

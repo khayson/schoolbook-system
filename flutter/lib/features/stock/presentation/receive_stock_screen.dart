@@ -7,6 +7,9 @@ import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/money.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
+import 'package:schoolbook/features/reference/domain/reference_book.dart';
+import 'package:schoolbook/features/reference/presentation/reference_book_tile.dart';
+import 'package:schoolbook/features/reference/presentation/reference_catalog.dart';
 import 'package:schoolbook/features/stock/data/stock_repository.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 
@@ -35,6 +38,9 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
   final _notesController = TextEditingController();
   final List<ReceiveStockLine> _lines = [];
   List<Product> _searchResults = [];
+
+  /// Approved titles matching the search that the shop has no product for yet.
+  List<ReferenceBook> _listResults = [];
   bool _searching = false;
   bool _submitting = false;
   String? _error;
@@ -54,9 +60,12 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
     if (query.isEmpty) {
       return;
     }
+    final catalog = context.read<ReferenceCatalog>();
     setState(() {
       _searching = true;
       _error = null;
+      // Offline-capable: the approved list is on the phone.
+      _listResults = catalog.search(query, limit: 30).where((b) => catalog.stockFor(b.id) == null).take(10).toList();
     });
     try {
       final page = await context.read<ProductsRepository>().listProducts(
@@ -72,6 +81,16 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
         _error = e.message;
         _searching = false;
       });
+    }
+  }
+
+  /// A title the shop does not carry yet: create the product (no opening stock: this
+  /// receipt line is the stock), then add it as a line.
+  Future<void> _addFromList(ReferenceBook book) async {
+    final product = await context.push<Product>('/products/approved/${book.id}/new?receive=1');
+    if (product != null && mounted) {
+      setState(() => _listResults = _listResults.where((b) => b.id != book.id).toList());
+      _addLine(product);
     }
   }
 
@@ -92,6 +111,7 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
         ),
       );
       _searchResults = [];
+      _listResults = [];
       _searchController.clear();
     });
   }
@@ -164,7 +184,7 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
         children: [
           SearchBar(
             controller: _searchController,
-            hintText: 'Search products to add…',
+            hintText: 'Search my products and the approved list…',
             leading: const Icon(Icons.search),
             onSubmitted: (_) => _search(),
             trailing: [
@@ -178,6 +198,7 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
           if (_searchResults.isNotEmpty)
             ..._searchResults.map(
               (p) => ListTile(
+                key: Key('receive_product_${p.id}'),
                 title: Text(p.title),
                 subtitle: Text(p.sku),
                 trailing: IconButton(
@@ -186,6 +207,22 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
                 ),
               ),
             ),
+          if (_listResults.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 4),
+              child: Text(
+                'On the approved list, not in your products yet',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            ..._listResults.map(
+              (b) => ReferenceBookTile(
+                book: b,
+                stock: null,
+                onTap: () => _addFromList(b),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Text('Receipt lines', style: Theme.of(context).textTheme.titleMedium),
           if (_lines.isEmpty)

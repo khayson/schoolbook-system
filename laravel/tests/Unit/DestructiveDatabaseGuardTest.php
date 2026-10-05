@@ -96,3 +96,33 @@ test('the guard stops a real Artisan run before anything is dropped', function (
 
     expect($probe->query("SELECT count(*) FROM sqlite_master WHERE name = 'keep_me'")->fetchColumn())->toBe(1);
 });
+
+test('ALLOW_DESTRUCTIVE_DB in .env is refused outright, even when it would allow the command', function (string $line) {
+    $guard = new DestructiveDatabaseGuard;
+    $envFile = "APP_NAME=Schoolbook\n{$line}\nDB_DATABASE=schoolbook\n";
+
+    expect(fn () => $guard->check('migrate:fresh', 'probe_dev', 'local', '1', $envFile))
+        ->toThrow(RuntimeException::class, 'Refusing migrate:fresh: ALLOW_DESTRUCTIVE_DB is set in .env')
+        // Even the throwaway database: the .env line must go.
+        ->and(fn () => $guard->check('db:wipe', 'probe_test', 'local', null, $envFile))
+        ->toThrow(RuntimeException::class, 'Remove that line.');
+})->with([
+    'ALLOW_DESTRUCTIVE_DB=1',
+    'ALLOW_DESTRUCTIVE_DB=0',
+    '  ALLOW_DESTRUCTIVE_DB = "1"',
+    'export ALLOW_DESTRUCTIVE_DB=1',
+]);
+
+test('a commented-out or unrelated .env line does not trigger the refusal', function () {
+    $guard = new DestructiveDatabaseGuard;
+    $envFile = "# ALLOW_DESTRUCTIVE_DB=1 (never do this)\nNOT_ALLOW_DESTRUCTIVE_DB=1\n";
+
+    $guard->check('db:wipe', 'probe_test', 'local', null, $envFile);
+    $guard->check('db:wipe', 'probe_dev', 'local', '1', $envFile);
+    expect(fn () => $guard->check('db:wipe', 'probe_dev', 'local', null, $envFile))->toThrow(RuntimeException::class, 'drop every table');
+});
+
+test('the real .env of this project does not contain the override', function () {
+    $env = is_file(base_path('.env')) ? file_get_contents(base_path('.env')) : '';
+    expect(preg_match('/^\s*(export\s+)?ALLOW_DESTRUCTIVE_DB\s*=/m', $env))->toBe(0);
+});

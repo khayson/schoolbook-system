@@ -24,6 +24,18 @@ ErrorDescription describeApiError(ApiException e) {
   }
 
   switch (e.code) {
+    case 'duplicate_code':
+      return ErrorDescription(
+        'Code already used',
+        'This code is already on ${d['title'] ?? 'another product'} (${d['sku'] ?? '?'})'
+            '${d['deleted'] == true ? ', a deleted product' : ''}. Scan it to open that product instead.',
+      );
+    case 'code_slot_taken':
+      return ErrorDescription(
+        'Product already has a code',
+        'This product already has ${d['field'] == 'isbn' ? 'an ISBN' : 'a barcode'} (${d['current']}). '
+            'Change it on the product in the admin if this new code is the right one.',
+      );
     case 'duplicate_reference':
       return ErrorDescription(
         'Payment already recorded',

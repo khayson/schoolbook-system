@@ -23,6 +23,30 @@ abstract final class Validators {
     return null;
   }
 
+  /// Optional whole number of books (blank = 0), e.g. opening stock. Same cap as the server.
+  static String? optionalQuantity(String? value, {int max = 100000}) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    final n = int.tryParse(value.trim());
+    if (n == null || n < 0) {
+      return 'Enter a whole number of books';
+    }
+    return n > max ? 'At most $max at once' : null;
+  }
+
+  /// Optional scanned or typed product code (ISBN, barcode): letters, digits, spaces, hyphens.
+  static String? optionalCode(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    final v = value.trim();
+    if (v.length < 4 || v.length > 64 || !RegExp(r'^[A-Za-z0-9\- ]+$').hasMatch(v)) {
+      return 'A code is 4 to 64 letters, digits or hyphens';
+    }
+    return null;
+  }
+
   /// Optional GHS amount (blank = none), e.g. a credit limit.
   static String? optionalGhsAmount(String? value) {
     if (value == null || value.trim().isEmpty) {

@@ -77,7 +77,7 @@ Set `DB_TEST_DATABASE=schoolbook_test` in `laravel/.env` (already in `.env.examp
 php artisan migrate:fresh --seed --database=mysql_testing
 ```
 
-Against any other database the command stops with an explanation. To wipe the dev database on purpose, set the override for that one command: `$env:ALLOW_DESTRUCTIVE_DB='1'; php artisan migrate:fresh --seed; $env:ALLOW_DESTRUCTIVE_DB=$null`. Never put `ALLOW_DESTRUCTIVE_DB` in `.env`.
+Against any other database the command stops with an explanation. To wipe the dev database on purpose, set the override for that one command: `$env:ALLOW_DESTRUCTIVE_DB='1'; php artisan migrate:fresh --seed; $env:ALLOW_DESTRUCTIVE_DB=$null`. Never put `ALLOW_DESTRUCTIVE_DB` in `.env`: if it is there (any value) the guard refuses these commands until the line is removed.
 
 ## Docs
 

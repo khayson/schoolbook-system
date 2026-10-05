@@ -14,6 +14,9 @@ import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/presentation/products_list_provider.dart';
+import 'package:schoolbook/features/reference/data/reference_cache_store.dart';
+import 'package:schoolbook/features/reference/data/reference_repository.dart';
+import 'package:schoolbook/features/reference/presentation/reference_catalog.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/stock/data/stock_repository.dart';
 
@@ -29,6 +32,8 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
   late final ApiClient _apiClient;
   late final AuthProvider _authProvider;
   late final GoRouter _router;
+  late final ReferenceCatalog _referenceCatalog;
+  bool _wasAuthenticated = false;
 
   @override
   void initState() {
@@ -43,13 +48,30 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
     );
     _apiClient.onUnauthorized = _authProvider.handleUnauthorized;
     _router = createAppRouter(_authProvider);
+    _referenceCatalog = ReferenceCatalog(
+      repository: ReferenceRepository(apiClient: _apiClient),
+      cache: FileReferenceCacheStore(),
+    );
+    // Approved list: refreshed whenever a session starts (login or app start with a
+    // stored token); 304 when unchanged, so this is cheap.
+    _authProvider.addListener(_syncReferenceOnLogin);
     _authProvider.bootstrap();
+  }
+
+  void _syncReferenceOnLogin() {
+    final authed = _authProvider.isAuthenticated;
+    if (authed && !_wasAuthenticated) {
+      _referenceCatalog.sync();
+    }
+    _wasAuthenticated = authed;
   }
 
   @override
   void dispose() {
     _router.dispose();
+    _authProvider.removeListener(_syncReferenceOnLogin);
     _authProvider.dispose();
+    _referenceCatalog.dispose();
     super.dispose();
   }
 
@@ -90,6 +112,7 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
           create: (context) =>
               SalesRepository(apiClient: context.read<ApiClient>()),
         ),
+        ChangeNotifierProvider<ReferenceCatalog>.value(value: _referenceCatalog),
         Provider<PendingSubmissionStore>(
           create: (_) => PendingSubmissionStore(),
         ),

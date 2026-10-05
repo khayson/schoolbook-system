@@ -187,6 +187,11 @@ class ReferenceMapper
             $issues[] = self::issue('language_unknown');
         } elseif ($languageCode === null) {
             $languageCode = 'en';
+            // Textbook sections are English unless they say otherwise; supplementary
+            // titles in a Ghanaian language without a keyword (hand check, 3.A.3) are not.
+            if ($row->category !== 'textbook') {
+                $confidence = 'low';
+            }
         } elseif (! $frenchSection) {
             $confidence = 'low';
         }

@@ -43,6 +43,12 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
             icon: const Icon(Icons.qr_code_scanner),
           ),
           IconButton(
+            key: const Key('products_from_list'),
+            tooltip: 'Add from approved list',
+            onPressed: () => context.push('/products/approved'),
+            icon: const Icon(Icons.library_add_check_outlined),
+          ),
+          IconButton(
             tooltip: 'Add product',
             onPressed: () => context.push('/products/new'),
             icon: const Icon(Icons.add),

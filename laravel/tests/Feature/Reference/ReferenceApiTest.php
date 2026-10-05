@@ -48,6 +48,8 @@ test('the search query is parsed into level filters and words', function (string
     ['jhs 1 science for the schools', ['jhs-1'], ['science', 'schools']],
     ['Learner’s Book', [], ['learners', 'book']],
     ['Book 4', [], ['book', '4']],
+    ['+maths -sunrise* (basic) "2"', ['primary-2'], ['math', 'sunrise']],
+    ['+-*"()@~<>', [], []],
 ]);
 
 test('filters: level, subject, category, publisher, and stocked yes/no with stock totals', function () {
