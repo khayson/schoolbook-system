@@ -13,11 +13,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * A customer's statement for an inclusive date range (spec 9.4; docs/acceptance-phase3.md
  * 3.9). Positive = the customer owes. Events: invoice at confirmed_at (+total), invoice
- * void at voided_at (ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢total), payment at paid_at (ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢amount), payment void at voided_at
+ * void at voided_at (−total), payment at paid_at (−amount), payment void at voided_at
  * (+amount). Credit applications are not events. Opening balance = every event before
  * `from`; at the same timestamp invoices come first, then payments, then invoice voids,
  * then payment voids, then record id. For a period ending after the last event the
- * closing balance equals outstanding_balance ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ credit_balance.
+ * closing balance equals outstanding_balance − credit_balance.
  */
 class CustomerStatement
 {

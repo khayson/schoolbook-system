@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Customers\CustomerStatement;
+use App\Actions\Customers\RenderStatementPdf;
 use App\Actions\Payments\RecordPayment;
 use App\Actions\Payments\VoidPayment;
 use App\Actions\Sales\ConfirmSale;
@@ -12,6 +13,7 @@ use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
+use Smalot\PdfParser\Parser;
 use Tests\Support\ReportsFixture;
 
 /*
@@ -241,6 +243,43 @@ test('statement PDF shows the ledger figures and escapes user text', function ()
         'business' => ['name' => '', 'address' => '', 'phone' => '', 'footer' => ''],
     ])->render();
     expect($gamma)->toContain('GHS 20.00 CR');
+});
+
+test('a long statement PDF (126 lines) repeats the header row on every page and keeps the running balance in order', function () {
+    $school = Customer::factory()->create(['name' => 'Long School', 'credit_limit' => null]);
+    Carbon::setTestNow(Carbon::parse('2026-07-01 07:00', 'Africa/Accra'));
+    $draft = app(CreateDraftSale::class)->execute($this->owner, ['customer_id' => $school->id, 'items' => [['product_id' => $this->fx->products['A']->id, 'quantity' => 40]]]);
+    app(ConfirmSale::class)->execute($this->owner, $draft, ['due_date' => '2026-12-31']);
+    for ($k = 1; $k <= 125; $k++) {
+        Carbon::setTestNow(Carbon::parse('2026-07-01 08:00', 'Africa/Accra')->addMinutes($k));
+        app(RecordPayment::class)->execute($this->owner, ['customer_id' => $school->id, 'amount' => 1000, 'method' => 'cash', 'paid_at' => now()]);
+    }
+    Carbon::setTestNow();
+
+    $statement = app(CustomerStatement::class)->run($school->fresh(), '2026-07-01', '2026-07-31');
+    expect($statement['lines'])->toHaveCount(126)
+        ->and($statement['closing_balance'])->toBe(200000 - 125 * 1000);
+
+    $pages = (new Parser)->parseContent(app(RenderStatementPdf::class)->execute($school->fresh(), '2026-07-01', '2026-07-31')->output())->getPages();
+    expect(count($pages))->toBeGreaterThanOrEqual(3);
+
+    $text = '';
+    foreach ($pages as $page) {
+        $pageText = $page->getText();
+        // Header row on every page, not only the first.
+        expect(mb_strtoupper($pageText))->toContain('DATE', 'DETAILS', 'CHARGES', 'PAYMENTS / CREDITS', 'BALANCE');
+        $text .= $pageText."\n";
+    }
+
+    // Every running balance (GHS 2,000.00 after the invoice, then down by GHS 10.00 per payment)
+    // appears in order across the page breaks.
+    $position = 0;
+    for ($k = 0; $k <= 125; $k++) {
+        $label = 'GHS '.number_format((200000 - $k * 1000) / 100, 2);
+        $found = strpos($text, $label, $position);
+        expect($found)->not->toBeFalse("balance {$label} (line ".($k + 1).') missing or out of order');
+        $position = $found + strlen($label);
+    }
 });
 
 test('statement parameters are validated', function (string $query, string $field) {

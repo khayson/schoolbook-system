@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\ReferenceEditionController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
+use App\Http\Controllers\Api\V1\StockCountController;
 use App\Http\Controllers\Api\V1\SubjectController;
 use Illuminate\Support\Facades\Route;
 
@@ -72,6 +73,16 @@ Route::prefix('v1')->group(function () {
         Route::get('stock/receipts', [GoodsReceiptController::class, 'index']);
         Route::get('stock/receipts/{goods_receipt}', [GoodsReceiptController::class, 'show']);
         Route::post('stock/adjustments', [StockAdjustmentController::class, 'store']);
+
+        // Stock-take (spec 6.3): owner; apply is idempotent and once only.
+        Route::get('stock/counts', [StockCountController::class, 'index']);
+        Route::post('stock/counts', [StockCountController::class, 'store']);
+        Route::get('stock/counts/{stockCount}', [StockCountController::class, 'show']);
+        Route::put('stock/counts/{stockCount}/items', [StockCountController::class, 'items']);
+        Route::post('stock/counts/{stockCount}/apply', [StockCountController::class, 'apply'])
+            ->middleware('idempotent');
+        Route::post('stock/counts/{stockCount}/cancel', [StockCountController::class, 'cancel']);
+        Route::get('stock/counts/{stockCount}/sheet', [StockCountController::class, 'sheet']);
 
         Route::apiResource('customers', CustomerController::class);
         Route::get('customers/{customer}/statement', [CustomerStatementController::class, 'show']);

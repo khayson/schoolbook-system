@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Active products with stock that have not sold in the `days` before the as-of date:
- * no sale_out movement on or after as_of âˆ’ days belonging to a sale that is still
+ * no sale_out movement on or after as_of − days belonging to a sale that is still
  * confirmed. A voided sale sold nothing, so its sale_out does not count
  * (docs/acceptance-phase3.md 3.6).
  */

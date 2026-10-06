@@ -426,6 +426,50 @@ Manual adjustment or damage write-off. `note` is required. `quantity` is signed 
 
 Response `201` with a `StockMovement` resource. If resulting stock would be negative and `allow_negative_stock` is false, `422` with `code: insufficient_stock` and `details.items` (see [Errors](#errors)).
 
+### Stock-take
+
+Owner only. Rules and worked figures: `docs/build-spec.md` 6.3, `docs/acceptance-phase3.md` 3.10.
+
+#### `POST /stock/counts`
+
+```json
+{ "filters": { "level_id": 4, "subject_id": null, "language_id": null, "publisher_id": null }, "notes": "July count" }
+```
+
+Both optional; without filters the count lists every active product. `201` with the count (below). `422` `validation_failed` on `filters` when no active product matches.
+
+#### `GET /stock/counts?status=open|applied|cancelled` · `GET /stock/counts/{id}`
+
+```json
+{ "data": { "id": 1, "reference": "CNT-2026-000001", "status": "open", "filters": {}, "notes": null,
+  "counted_by": 1, "applied_at": null, "applied_by": null, "cancelled_at": null, "created_at": "...",
+  "totals": { "items": 6, "counted": 5, "variance_units": -3, "losses": 10600, "gains": 1800, "variance_value": -8800 },
+  "items": [ { "id": 1, "product_id": 1, "sku": "RPT-A", "title": "Maths P4", "system_qty": 86, "counted_qty": 84,
+               "variance": -2, "baseline_movement_id": 41, "counted_at": "...", "unit_cost": null } ] } }
+```
+
+Items by SKU (the list endpoint omits items and totals). `system_qty`, `variance` and `baseline_movement_id` are null until counted. Values are in pesewas at the cost stored at apply (`unit_cost`), or the current cost price while open.
+
+#### `PUT /stock/counts/{id}/items`
+
+```json
+{ "items": [ { "product_id": 1, "counted_qty": 84 }, { "product_id": 2, "counted_qty": null } ] }
+```
+
+Records the counted quantity (integer ≥ 0) and, at that moment, `system_qty` = the product's stock, `baseline_movement_id` = its latest movement, `variance` = counted − system. Entering again recomputes; `null` clears. `422` `validation_failed` (field `items`) for a product not in the count; `409` `stock_count_not_open` once applied or cancelled.
+
+#### `POST /stock/counts/{id}/apply` (requires `Idempotency-Key`)
+
+Each counted item with a non-zero variance becomes one `count_adjustment` movement of exactly that variance (stock sold or received since counting is kept). Uncounted items are untouched. `200` with the applied count. `409` `count_conflict` when an adjustment would leave stock below 0 and `allow_negative_stock` is off; nothing is written; `details.items[]` = `{product_id, sku, title, stock_on_hand, variance, resulting}`. A second apply (new key) is `409` `stock_count_not_open` with `details.status`; the same key replays the first response.
+
+#### `POST /stock/counts/{id}/cancel`
+
+Open counts only; nothing is applied. `409` `stock_count_not_open` otherwise.
+
+#### `GET /stock/counts/{id}/sheet`
+
+Printable PDF (`{reference}-sheet.pdf`): SKU, title, level, subject and a blank "Counted" column, by level, subject and title. System quantities are not printed (blind count).
+
 ## Sales
 
 `GET /sales` filters: `customer_id`, `status`, `payment_status` (`unpaid`/`partial`/`paid`).

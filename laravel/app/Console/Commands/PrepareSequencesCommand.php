@@ -12,13 +12,13 @@ use Illuminate\Console\Command;
 class PrepareSequencesCommand extends Command
 {
     /**
-     * Year-scoped sequences: invoices, receipts, goods receipts.
+     * Year-scoped sequences: invoices, receipts, goods receipts, stock counts.
      */
-    public const YEARLY_KEYS = ['inv', 'rct', 'grn'];
+    public const YEARLY_KEYS = ['inv', 'rct', 'grn', 'cnt'];
 
     protected $signature = 'sequences:prepare {--year= : Year to prepare (default: next year)}';
 
-    protected $description = 'Create invoice, receipt and goods-receipt number sequences for a year in advance';
+    protected $description = 'Create invoice, receipt, goods-receipt and stock-count number sequences for a year in advance';
 
     public function handle(NumberSequenceService $sequences): int
     {

@@ -18,6 +18,8 @@
         .header td { vertical-align: top; }
         .meta td { padding: 2px 0; }
         .lines { margin-top: 14px; }
+        .lines thead { display: table-header-group; }
+        .lines tr { page-break-inside: avoid; }
         .lines th { background: #f0f0f0; text-align: left; padding: 5px; border-bottom: 1px solid #bbb; font-size: 9px; text-transform: uppercase; }
         .lines td { padding: 5px; border-bottom: 1px solid #e5e5e5; }
         .lines tr.total td { font-weight: bold; border-top: 1px solid #222; border-bottom: none; }

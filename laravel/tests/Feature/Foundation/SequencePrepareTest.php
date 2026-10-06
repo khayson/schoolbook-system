@@ -7,15 +7,15 @@ use Illuminate\Support\Carbon;
 
 afterEach(fn () => Carbon::setTestNow());
 
-test('sequences:prepare creates next year\'s inv, rct and grn rows at zero', function () {
+test('sequences:prepare creates next year\'s inv, rct, grn and cnt rows at zero', function () {
     Carbon::setTestNow('2026-12-15 01:00:00');
 
     $this->artisan('sequences:prepare')
-        ->expectsOutputToContain('Prepared inv, rct, grn sequences for 2027.')
+        ->expectsOutputToContain('Prepared inv, rct, grn, cnt sequences for 2027.')
         ->assertSuccessful();
 
     expect(NumberSequence::query()->where('year', 2027)->orderBy('key')->pluck('last_number', 'key')->all())
-        ->toBe(['grn' => 0, 'inv' => 0, 'rct' => 0]);
+        ->toBe(['cnt' => 0, 'grn' => 0, 'inv' => 0, 'rct' => 0]);
 
     // The first allocation of the new year uses the prepared row and starts at 1.
     expect(app(NumberSequenceService::class)->next('inv', 2027))->toBe(1);
@@ -29,7 +29,7 @@ test('sequences:prepare is idempotent and never resets a counter', function () {
     $this->artisan('sequences:prepare', ['--year' => 2030])->assertSuccessful();
 
     expect(NumberSequence::query()->where('key', 'rct')->where('year', 2030)->value('last_number'))->toBe(2)
-        ->and(NumberSequence::query()->where('year', 2030)->count())->toBe(3);
+        ->and(NumberSequence::query()->where('year', 2030)->count())->toBe(4);
 });
 
 test('sequences:prepare rejects a nonsense year', function () {

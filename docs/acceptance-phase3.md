@@ -1,4 +1,4 @@
-# Phase 3 acceptance: reports (3.1) and statements (3.2)
+# Phase 3 acceptance: reports (3.1), statements (3.2) and stock-take (3.3)
 
 The dataset below is built by `tests/Support/ReportsFixture.php` with the real actions (`ReceiveStock`, `CreateDraftSale`, `ConfirmSale`, `RecordPayment`, `VoidSale`, `VoidPayment`) on the **test databases only** (SQLite in the default suite, `schoolbook_test` in the mysql group). Every figure in this file was **calculated by hand from the dataset before the report code was written**. The tests assert these exact literals. If a test and this file disagree, the code is wrong, not the file.
 
@@ -419,6 +419,55 @@ Closing **0** = Delta's outstanding 0 − credit 0. (In recording order the bala
 #### Property: closing = outstanding − credit
 
 For a period that ends after the last event (to = 2026-12-31): Alpha 12,000 − 0 = **12,000**; Beta 37,000 − 0 = **37,000**; Gamma 0 − 2,000 = **−2,000**. These match the closing balances above.
+
+### 3.10 Stock-take (3.3)
+
+**Rules.** A count lists products (all active, or a filter). Entering a counted quantity records, at that moment, `system_qty` = the product's `stock_on_hand`, `baseline_movement_id` = its latest movement, and `variance` = counted − system. Re-entering recomputes all three. Applying (owner, once) turns each **non-zero variance of a counted item** into **one** `count_adjustment` movement of exactly that variance, so whatever happened between counting and applying (sales, receipts) is kept. Uncounted items and zero variances write nothing. If any adjustment would leave stock below 0 while `allow_negative_stock` is off, nothing at all is applied (`count_conflict`). Variance value = variance × the product's cost price at apply (stored on the item as `unit_cost`).
+
+Both scenarios start from the end of the dataset (section 1): stock **A 86, B 44, C 34, D 20, E −1, F 9**; costs A 3,000, B 2,500, C 3,600, D 1,800, E 500, F 1,000; `allow_negative_stock` off. All times 2026-07-01, Accra.
+
+#### Count K1: scenarios (1), (2), (3), (5), (6)
+
+- **09:00** count created for all active products: 6 items A–F, reference **CNT-2026-000001**, status open.
+- **10:00** counted: A **84**, B **44**, C **30**, D **21**, F **8**. E is not counted.
+
+  | Item | system_qty | counted | variance |
+  |---|---:|---:|---:|
+  | A | 86 | 84 | **−2** |
+  | B | 44 | 44 | **0** |
+  | C | 34 | 30 | **−4** |
+  | D | 20 | 21 | **+1** |
+  | F | 9 | 8 | **−1** |
+  | E | (null) | (null) | (null) |
+
+- **11:00** sale to Alpha, confirmed: C×2, F×3. Stock C 34 − 2 = **32**, F 9 − 3 = **6**.
+- **11:30** C re-entered as **31**: (3) system_qty is now **32** (the balance after the sale), variance 31 − 32 = **−1** (not −4 any more, and not 31 − 34 = −3), baseline = the C `sale_out` movement of the 11:00 sale.
+- **17:00** applied. Stock just before: A 86, B 44, C 32, D 20, E −1, F 6.
+
+  | Product | Before | Adjustment (= variance) | `balance_after` = after |
+  |---|---:|---:|---:|
+  | A | 86 | −2 | **84** |
+  | B | 44 | none (variance 0) | **44** |
+  | C | 32 | −1 | **31** |
+  | D | 20 | +1 | **21** |
+  | E | −1 | none (uncounted) | **−1** |
+  | F | 6 | −1 | **5** |
+
+  **4** `count_adjustment` movements (A, C, D, F), each referencing the count.
+
+  (1) **F**: counted 8 at 10:00 (variance −1), then 3 sold. Applied: 9 − 3 − 1 = **5**. The sale is preserved; setting stock to the counted 8 would erase it, and applying counted − current (8 − 6 = +2) would invent stock.
+  (2) **E** is untouched: still −1, no movement, its item has no system_qty, counted_qty or variance.
+  (6) **Variance at cost**: A −2 × 3,000 = −6,000; C −1 × 3,600 = −3,600; D +1 × 1,800 = +1,800; F −1 × 1,000 = −1,000. Units −2 − 1 + 1 − 1 = **−3**; losses 6,000 + 3,600 + 1,000 = **10,600**; gains **1,800**; net **−8,800**. Items counted **5** of **6**.
+- **17:05** (5) applied again: **409**, code `stock_count_not_open`; still 4 movements, stock unchanged. Entering a count on the applied count is also 409.
+- `stock:reconcile` afterwards: clean.
+
+#### Count K2: scenario (4), refused
+
+- **09:00** count created (all active, **CNT-2026-000001** in its own test).
+- **10:00** counted: D **22** (system 20, variance **+2**), F **0** (system 9, variance **−9**).
+- **11:00** sale F×1: F **8**.
+- **17:00** apply: F would be 8 − 9 = **−1** < 0 with `allow_negative_stock` off. **Refused, 409 `count_conflict`**, `details.items` = [{RPT-F, stock_on_hand **8**, variance **−9**, resulting **−1**}]. **Nothing written**: D still **20** (its valid +2 is not applied either), F still **8**, no `count_adjustment` movement, count still open, `applied_at` null.
+- With `allow_negative_stock` turned on, the same apply succeeds: D **22**, F **−1**, 2 movements; value +2 × 1,800 − 9 × 1,000 = 3,600 − 9,000 = **−5,400**.
 
 ## 4. Invariants also asserted
 
