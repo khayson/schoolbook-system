@@ -329,3 +329,8 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 - **Import:** `customers:import` command (dry run by default, `--commit`), not an admin upload yet: a one-time migration the owner runs with the reviewer. Matching existing customers by code, else lower-cased name + phone digits (+233 written as 0); duplicates inside the file are skipped; any error refuses the whole commit; one transaction. Template `docs/templates/customers-import-template.csv`, guide `docs/customer-import.md`.
 - **Also fixed:** the invoice PDF printed a discount as "-GHS"; it now uses the 3.5.0 style (U+2212 before GHS).
 
+## 2026-10-06 — School directory: basic schools only
+
+- **Owner:** the directory should list creche, KG, primary and JHS schools only, not SHS. `OsmSchoolMapper::isBasic` skips schools whose only level is SHS and, when no basic level is known, names that say college, university, polytechnic, institute, nursing, seminary or vocational; any basic level or an unknown level keeps the school. The import reports them as "SHS/tertiary (skipped)" and withdraws any loaded earlier.
+- **Fixed with it:** "Junior Secondary School" (the old name for JHS) was tagged SHS by the "secondary school" word; and "Snr.High", "International High School" and plain "... High School" were not tagged SHS. Real files (2026-10-06): Greater Accra 909 kept / 117 skipped, Central 275 / 89; every skipped name was checked by eye.
+

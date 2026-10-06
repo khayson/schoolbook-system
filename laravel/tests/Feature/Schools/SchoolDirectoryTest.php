@@ -5,6 +5,7 @@ use App\Filament\Resources\DirectorySchools\Pages\ListDirectorySchools;
 use App\Models\Customer;
 use App\Models\DirectorySchool;
 use App\Models\User;
+use App\Services\Schools\OsmSchoolMapper;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Laravel\Sanctum\Sanctum;
@@ -51,6 +52,7 @@ function sampleRegion(): array
         ]],
     ], [
         osmSchool('node', 505, ['amenity' => 'school', 'name' => 'Seaview Senior High School', 'operator:type' => 'private']),
+        osmSchool('node', 606, ['amenity' => 'school', 'name' => 'Mankessim Methodist Junior Secondary School']),
     ]);
 }
 
@@ -61,14 +63,15 @@ beforeEach(function () {
 test('importing a region maps names, districts, levels, ownership, phone and position', function () {
     $counts = app(ImportSchoolDirectory::class)->execute(sampleRegion(), 'Central');
 
-    expect($counts)->toBe(['created' => 4, 'updated' => 0, 'unchanged' => 0, 'withdrawn' => 0, 'restored' => 0, 'skipped_unnamed' => 1, 'listed' => 4]);
+    // Seaview Senior High School is skipped: the directory is creche, KG, primary and JHS only.
+    expect($counts)->toBe(['created' => 4, 'updated' => 0, 'unchanged' => 0, 'withdrawn' => 0, 'restored' => 0, 'skipped_unnamed' => 1, 'skipped_not_basic' => 1, 'listed' => 4]);
 
     $rows = DirectorySchool::query()->orderBy('source_ref')->get()
         ->map(fn (DirectorySchool $s) => [$s->source_ref, $s->name, $s->district, $s->town, $s->levels, $s->ownership, $s->phone])->all();
     expect($rows)->toBe([
         ['node/101', "St. Peter's R/C Basic School", 'Awutu Senya East Municipal', 'Kasoa', 'primary,jhs', null, '+233 20 000 0001'],
         ['node/303', 'Gomoa Fetteh D/A Primary and JHS', 'Gomoa East', null, 'primary,jhs', 'public', null],
-        ['node/505', 'Seaview Senior High School', null, null, 'shs', 'private', null],
+        ['node/606', 'Mankessim Methodist Junior Secondary School', null, null, 'jhs', null, null],
         ['way/202', 'Little Stars Creche', 'Awutu Senya East Municipal', null, 'kindergarten', null, null],
     ])
         ->and(DirectorySchool::query()->where('source_ref', 'node/101')->value('search_name'))->toBe('st peters r c basic school')
@@ -87,7 +90,7 @@ test('re-importing never duplicates: unchanged, renamed, withdrawn and restored'
             osmSchool('node', 101, ['amenity' => 'school', 'name' => "St. Peter's R/C Basic School, Kasoa", 'addr:city' => 'Kasoa', 'phone' => '+233 20 000 0001']),
         ]],
         ['Gomoa East District', [osmSchool('node', 303, ['amenity' => 'school', 'name' => 'Gomoa Fetteh D/A Primary and JHS', 'isced:level' => '1;2'])]],
-    ], [osmSchool('node', 505, ['amenity' => 'school', 'name' => 'Seaview Senior High School', 'operator:type' => 'private'])]);
+    ], [osmSchool('node', 606, ['amenity' => 'school', 'name' => 'Mankessim Methodist Junior Secondary School'])]);
     expect($import->execute($changed, 'Central'))->toMatchArray(['created' => 0, 'updated' => 1, 'unchanged' => 2, 'withdrawn' => 1, 'listed' => 3])
         ->and(DirectorySchool::query()->count())->toBe(4)
         ->and(DirectorySchool::query()->where('source_ref', 'way/202')->value('withdrawn_at'))->not->toBeNull();
@@ -101,7 +104,7 @@ test('schools:import --file loads a saved download and reports it', function () 
     file_put_contents($path, json_encode(sampleRegion()));
 
     $this->artisan('schools:import', ['--region' => ['GH-CP'], '--file' => $path])
-        ->expectsTable(['Region', 'New', 'Updated', 'Unchanged', 'Withdrawn', 'Restored', 'No name (skipped)', 'In directory'], [['Central', 4, 0, 0, 0, 0, 1, 4]])
+        ->expectsTable(['Region', 'New', 'Updated', 'Unchanged', 'Withdrawn', 'Restored', 'No name (skipped)', 'SHS/tertiary (skipped)', 'In directory'], [['Central', 4, 0, 0, 0, 0, 1, 1, 4]])
         ->assertSuccessful();
 
     $this->artisan('schools:import', ['--region' => ['GH-XX']])->assertFailed();
@@ -158,7 +161,7 @@ test('adding a directory school creates a prefilled customer once; same-name cus
         ->and(Customer::query()->count())->toBe(2);
 
     // One directory entry per customer.
-    $seaview = DirectorySchool::query()->where('source_ref', 'node/505')->first();
+    $seaview = DirectorySchool::query()->where('source_ref', 'node/606')->first();
     $this->withHeader('Idempotency-Key', 'add-5')->postJson("/api/v1/school-directory/{$seaview->id}/customer", ['link_customer_id' => $existing->id])
         ->assertStatus(409)->assertJsonPath('code', 'customer_already_linked');
 
@@ -182,7 +185,7 @@ test('admin: search, add as customer and link an existing customer from the dire
     $this->actingAs($this->owner);
     Filament::setCurrentPanel(Filament::getPanel('admin'));
     $stPeters = DirectorySchool::query()->where('source_ref', 'node/101')->first();
-    $seaview = DirectorySchool::query()->where('source_ref', 'node/505')->first();
+    $seaview = DirectorySchool::query()->where('source_ref', 'node/606')->first();
 
     Livewire::test(ListDirectorySchools::class)
         ->assertSee('OpenStreetMap contributors')
@@ -200,6 +203,35 @@ test('admin: search, add as customer and link an existing customer from the dire
     $other = Customer::factory()->create(['name' => 'Seaview SHS']);
     Livewire::test(ListDirectorySchools::class)
         ->callAction(TestAction::make('linkCustomer')->table($seaview), data: ['customer_id' => $other->id])
-        ->assertNotified("Seaview Senior High School linked to {$other->code}");
+        ->assertNotified("Mankessim Methodist Junior Secondary School linked to {$other->code}");
     expect($seaview->fresh()->customer_id)->toBe($other->id);
+});
+
+test('only basic schools: SHS, colleges and universities are skipped, and ones loaded before are withdrawn', function () {
+    $mapped = fn (string $name, array $tags = []) => OsmSchoolMapper::map(osmSchool('node', 9, ['amenity' => 'school', 'name' => $name, ...$tags]), 'Central', null);
+    $basic = fn (string $name, array $tags = []) => OsmSchoolMapper::isBasic($mapped($name, $tags));
+
+    expect($basic('Mfantsipim School'))->toBeTrue()                       // level unknown: kept
+        ->and($basic('Bright Stars Creche'))->toBeTrue()
+        ->and($basic('Winneba Presby Junior Secondary School'))->toBeTrue()
+        ->and($mapped('Winneba Presby Junior Secondary School')['levels'])->toBe('jhs')
+        ->and($basic('Akim Oda JHS and SHS'))->toBeTrue()                 // has a basic level
+        ->and($basic('Ghanata Senior High School'))->toBeFalse()
+        ->and($basic('Swedru Secondary School'))->toBeFalse()
+        ->and($basic('St. Andrews Snr.High.School'))->toBeFalse()
+        ->and($basic('The Morning Star International High School'))->toBeFalse()
+        ->and($basic('MCS International High'))->toBeFalse()
+        ->and($basic('Dzorwulu Junior High School'))->toBeTrue()
+        ->and($basic('Kanda High Way School'))->toBeTrue()
+        ->and($basic('Accra Technical Institute'))->toBeFalse()
+        ->and($basic('Some School', ['isced:level' => '3']))->toBeFalse()
+        ->and($basic('University of Cape Coast'))->toBeFalse()
+        ->and($basic('Holy Child College of Education'))->toBeFalse()
+        ->and($basic('Korle Bu Nursing Training College'))->toBeFalse()
+        ->and($basic('St Mary Preparatory College'))->toBeTrue();         // "preparatory": a basic school
+
+    // An SHS loaded by an earlier version of the import is withdrawn by the next one.
+    DirectorySchool::query()->create(['source' => 'osm', 'source_ref' => 'node/505', 'name' => 'Seaview Senior High School', 'search_name' => 'seaview senior high school', 'region' => 'Central', 'levels' => 'shs']);
+    expect(app(ImportSchoolDirectory::class)->execute(sampleRegion(), 'Central'))->toMatchArray(['created' => 4, 'withdrawn' => 1, 'listed' => 4])
+        ->and(DirectorySchool::query()->listed()->where('levels', 'like', '%shs%')->count())->toBe(0);
 });

@@ -39,6 +39,25 @@ final class OsmSchoolMapper
         ];
     }
 
+    /**
+     * The shop supplies basic schools only (creche, KG, primary, JHS). False for a school
+     * that is only senior high, or that is a college, university or institute; a school
+     * with any basic level (e.g. "JHS and SHS") is kept, and so is one whose level is
+     * unknown (most entries).
+     */
+    public static function isBasic(array $row): bool
+    {
+        $levels = $row['levels'] === null ? [] : explode(',', $row['levels']);
+        if (array_intersect($levels, ['kindergarten', 'primary', 'jhs']) !== []) {
+            return true;
+        }
+        if ($levels === ['shs']) {
+            return false;
+        }
+
+        return ! preg_match('/ (university|polytechnic|college|institute|nursing|midwifery|seminary|academy of|vocational|training centre|training center) /', ' '.$row['search_name'].' ');
+    }
+
     /** Lower-case ASCII words: "St. Peter's R/C Basic" → "st peters r c basic". */
     public static function searchName(string $name): string
     {
@@ -73,7 +92,8 @@ final class OsmSchoolMapper
             'kindergarten' => '/ (kg|kindergarten|nursery|creche|preparatory|prep) /',
             'primary' => '/ (primary|basic|preparatory|prep) /',
             'jhs' => '/ (jhs|junior high|junior secondary|basic) /',
-            'shs' => '/ (shs|senior high|senior secondary|secondary school|technical institute) /',
+            // "secondary school" only when not "junior secondary school" (the old name for JHS).
+            'shs' => '/ (shs|shts|senior high|snr high|senior secondary|(?<!junior )secondary school|(?<!junior )high school|international high|technical institute) /',
         ];
         foreach ($patterns as $level => $pattern) {
             if (preg_match($pattern, $words)) {

@@ -52,7 +52,7 @@ class ImportSchoolDirectoryCommand extends Command
             $rows[] = [self::REGIONS[$code], ...array_values($counts)];
         }
 
-        $this->table(['Region', 'New', 'Updated', 'Unchanged', 'Withdrawn', 'Restored', 'No name (skipped)', 'In directory'], $rows);
+        $this->table(['Region', 'New', 'Updated', 'Unchanged', 'Withdrawn', 'Restored', 'No name (skipped)', 'SHS/tertiary (skipped)', 'In directory'], $rows);
         $this->line('Data © OpenStreetMap contributors, ODbL. OpenStreetMap lists the schools volunteers have mapped, not every school.');
 
         return self::SUCCESS;

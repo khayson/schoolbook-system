@@ -31,7 +31,7 @@ class DirectorySchool extends Model
 {
     public const ATTRIBUTION = 'School directory data © OpenStreetMap contributors, available under the Open Database License (ODbL).';
 
-    public const LEVELS = ['kindergarten' => 'KG', 'primary' => 'Primary', 'jhs' => 'JHS', 'shs' => 'SHS'];
+    public const LEVELS = ['kindergarten' => 'Creche/KG', 'primary' => 'Primary', 'jhs' => 'JHS', 'shs' => 'SHS'];
 
     protected function casts(): array
     {

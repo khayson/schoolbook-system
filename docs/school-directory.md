@@ -1,6 +1,6 @@
 # School directory
 
-A searchable list of the schools in the regions the shop supplies (**Greater Accra** and **Central**), used to add a school as a customer in one step instead of typing it in. Directory entries are not customers: an entry becomes linked to a customer when it is added (or linked to an existing customer).
+A searchable list of the **basic schools** (creche, KG, primary and JHS: the shop does not supply senior high schools) in the regions the shop supplies (**Greater Accra** and **Central**), used to add a school as a customer in one step instead of typing it in. Directory entries are not customers: an entry becomes linked to a customer when it is added (or linked to an existing customer).
 
 ## Source and licence
 
@@ -10,12 +10,14 @@ OpenStreetMap data is © OpenStreetMap contributors and available under the **Op
 
 Other "school list" websites were not scraped: their terms do not allow copying, and the government lists found online are either old (the 2012-13 schools census) or behind a login.
 
-## Coverage (first load, 2026-10-06)
+## Coverage (2026-10-06 download)
 
-| Region | Schools listed | Without a name (skipped) | Districts | With levels | With ownership | With phone |
-|---|---:|---:|---:|---:|---:|---:|
-| Greater Accra | 1,026 | 79 | 29 | 333 | 97 | 148 |
-| Central | 364 | 31 | 22 | 234 | 135 | 80 |
+| Region | Basic schools listed | SHS, colleges, universities (skipped) | Without a name (skipped) | Districts |
+|---|---:|---:|---:|---:|
+| Greater Accra | 909 | 117 | 79 | 29 |
+| Central | 275 | 89 | 31 | 22 |
+
+**Only basic schools** (owner's decision): a school is skipped when its only level is SHS ("Senior High", "SHS", "Snr High", "Secondary School" but not "Junior Secondary", "High School" but not "Junior High", "International High", "Technical Institute", or OpenStreetMap's `isced:level=3`), or when it has no basic level and its name says college, university, polytechnic, institute, nursing, seminary or vocational. A school with any basic level ("JHS and SHS", "Preparatory College") is kept, and so is one whose level is unknown (most entries). A few private schools named "... College" or "... International High School" may teach basic levels too; add those by hand. Schools skipped by a later rule are withdrawn on the next import.
 
 OpenStreetMap lists the schools volunteers have mapped, **not every school**: the two regions have several thousand basic schools, and private schools are the least mapped. Any school not in the directory is added as before with "New customer"; the customers CSV import (Phase 3.5.1) is the way to load a list from the district education offices, if the owner obtains one.
 

@@ -15,16 +15,20 @@ use Illuminate\Support\Facades\DB;
  * The response is the stream of `ImportSchoolDirectoryCommand::query()`: each district
  * area followed by its schools, then the region's area and all its schools (a school
  * outside every district gets no district; any area other than a district resets it).
+ * Only basic schools are kept (creche, KG, primary, JHS): senior high schools, colleges
+ * and universities are skipped (OsmSchoolMapper::isBasic), and ones loaded earlier are
+ * withdrawn.
  */
 class ImportSchoolDirectory
 {
     /**
-     * @return array{created: int, updated: int, unchanged: int, withdrawn: int, restored: int, skipped_unnamed: int, listed: int}
+     * @return array{created: int, updated: int, unchanged: int, withdrawn: int, restored: int, skipped_unnamed: int, skipped_not_basic: int, listed: int}
      */
     public function execute(array $response, string $region): array
     {
         $rows = [];
         $unnamed = [];
+        $notBasic = [];
         $district = null;
         foreach ($response['elements'] ?? [] as $element) {
             if (($element['type'] ?? null) === 'area') {
@@ -40,14 +44,19 @@ class ImportSchoolDirectory
 
                 continue;
             }
+            if (! OsmSchoolMapper::isBasic($row)) {
+                $notBasic[$ref] = true;
+
+                continue;
+            }
             // The first sighting carries the district; the region-wide pass only adds the rest.
             if (! isset($rows[$ref]) || ($rows[$ref]['district'] === null && $row['district'] !== null)) {
                 $rows[$ref] = $row;
             }
         }
 
-        return DB::transaction(function () use ($rows, $unnamed, $region) {
-            $counts = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'withdrawn' => 0, 'restored' => 0, 'skipped_unnamed' => count($unnamed), 'listed' => 0];
+        return DB::transaction(function () use ($rows, $unnamed, $notBasic, $region) {
+            $counts = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'withdrawn' => 0, 'restored' => 0, 'skipped_unnamed' => count($unnamed), 'skipped_not_basic' => count($notBasic), 'listed' => 0];
             $existing = DirectorySchool::query()->where('source', 'osm')->where('region', $region)->get()->keyBy('source_ref');
 
             foreach ($rows as $ref => $row) {
