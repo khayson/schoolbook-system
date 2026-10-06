@@ -1,4 +1,4 @@
-# Phase 3 acceptance: reports (3.1), statements (3.2) and stock-take (3.3)
+# Phase 3 acceptance: reports (3.1), statements (3.2), stock-take (3.3), clients (3.4)
 
 The dataset below is built by `tests/Support/ReportsFixture.php` with the real actions (`ReceiveStock`, `CreateDraftSale`, `ConfirmSale`, `RecordPayment`, `VoidSale`, `VoidPayment`) on the **test databases only** (SQLite in the default suite, `schoolbook_test` in the mysql group). Every figure in this file was **calculated by hand from the dataset before the report code was written**. The tests assert these exact literals. If a test and this file disagree, the code is wrong, not the file.
 
@@ -476,3 +476,51 @@ Both scenarios start from the end of the dataset (section 1): stock **A 86, B 44
 - Valuation totals = sum of the product rows.
 - Timezone boundary: sale 7 (23:30) belongs to 2026-06-14 and the week of 06-08; sale 8 (00:30) to 2026-06-15 and the week of 06-15.
 - Money invariants (`customers:reconcile`) hold after the fixture.
+
+## 5. Phase 3.4: the figures through the clients
+
+**Status: admin PASS; phone run pending** (it needs the port-8000 server pointed at `schoolbook_test`; see 5.3). `phase-3-complete` is tagged only when 5.2 passes on the emulator.
+
+### 5.1 Admin (Filament, Livewire): `tests/Feature/Filament/ReportsAndStockTakeTest.php`
+
+Run on the dataset of section 1, every figure as a literal from sections 3.1 to 3.10:
+
+| Screen | Checked |
+|---|---|
+| Sales summary page | June by week: 06-08 gross 870.00, discounts 40.00, revenue 830.00, collections 760.00; 06-15 130.00 / 50.00; totals 1,000.00 / 40.00 / 960.00 / 810.00. Level P4 filter: note shown, gross and revenue 700.00, discounts and collections "—". |
+| Profit page | June by product: Maths P4 12, 600.00, 360.00, 240.00; gross 395.00, order-level discounts −40.00, net 355.00. Jan–Jun by period: Feb 120.00 / 70.00 / 50.00; net 489.00. |
+| Best sellers page | By subject: Mathematics 20, 930.00; Science 2, 70.00. |
+| Stock valuation page | 193 units, 5,354.00 at cost, 8,880.00 at price; negative-stock products 1. |
+| Low stock page | C (34/40, short 6, Low), A (86/90, 4, Low), E (−1/0, 1, Out of stock). |
+| Dead stock page | 90 days: D (never, 360.00), F (2026-02-02, 148 days, 90.00), cut-off 2026-04-01. 15 days: D, F, C (2026-06-10, 20), B (2026-06-14, 16), 2,774.00. |
+| Receivables aging page | "Buckets as of 2026-06-30"; Alpha 120.00 not yet due; Beta 50.00 / 40.00 / 60.00 / 100.00 / 120.00 = 370.00; totals 170.00 / 40.00 / 60.00 / 100.00 / 120.00 = 490.00; no Gamma. |
+| Dashboard widgets (as of 2026-06-30) | Sales today 0.00 (0 sales); this month 960.00 (5); collections today 0.00, month 810.00; owed 490.00, overdue 320.00; credit 20.00; low stock 3. Chart: 30 days from 06-01 summing to 960.00. Who owes most: Beta, Alpha (no Gamma). Low-stock table: C, A, E. |
+| Stock-take resource (count K1) | Created CNT-2026-000001 with 6 items; inline entry A 84, B 44, C 30, D 21, F 8; sale C×2, F×3; C re-entered 31 (system 32, variance −1); "With a variance" filter: A, C, D, F. Apply confirmation: "5 of 6 products counted; 4 stock adjustments of -3 units. Net variance at cost GHS -88.00 (losses GHS 106.00, gains GHS 18.00)". Applied: A 84, B 44, C 31, D 21, E −1, F 5; 4 movements; entries closed; sheet downloads. |
+| Customer "Statement" action | Gamma, June: downloads `statement-{code}-2026-06-01-2026-06-30.pdf`; "to" before "from" is refused. |
+
+Result: **7 tests, 89 assertions, PASS**.
+
+### 5.2 Phone (Pixel_9a): `flutter/integration_test/phase3_acceptance_test.dart`
+
+Dataset: section 1, loaded into `schoolbook_test` by `php artisan test --group=phase3-phone --exclude-group=none` (migrate:fresh on `mysql_testing` only, then the fixture). The run date D must be on or after 2026-08-01, so that no dataset sale falls on D or in its month and every open invoice (due dates up to 2026-07-15) is past due. Hand-calculated:
+
+**a. Dashboard cards on D:** sales today GHS 0.00 (0 sales); this month GHS 0.00 (0 sales); collected today GHS 0.00, month GHS 0.00; owed **GHS 490.00** (12,000 + 37,000); overdue **GHS 490.00** (all seven open invoices are due by 07-15: s1 12,000, s2 10,000, s3 6,000, s4 4,000, s5 5,000, s7 7,000, s8 5,000); credit **GHS 20.00** (Gamma); low stock **3**.
+
+**b. Who owes most** (from the owed card): total GHS 490.00; Beta first, overdue GHS 370.00, owes GHS 370.00; Alpha, overdue GHS 120.00, owes GHS 120.00; Gamma absent. (The "over 90 days" part depends on D: on 2026-10-06 Beta has 32,000 over 90 days, s5 being 83 days past due; not asserted.)
+
+**c. Low stock:** Maths JHS1 (RPT-C) 34 left, reorder at 40, short 6; Maths P4 (RPT-A) 86 left, reorder at 90, short 4; Maths P4 Workbook (RPT-E) −1 left, out of stock.
+
+**d. Statement:** Beta, 2026-01-01 to 2026-06-30, shared from customer detail as `statement-{code}-2026-01-01-2026-06-30.pdf` (a PDF); its figures as in 3.9 (b): opening 0, balances 12,000, 24,000, 30,000, 28,000, 32,000, 37,000; debits 39,000, credits 2,000, closing 37,000.
+
+**e. Stock-take entry:** new count CNT-2026-000001 (0 of 6 counted); entered A 84, B 44, C 30, D 21, F 8 (E not counted). Nothing is sold during the run, so system quantities are the dataset's: variances A 84 − 86 = **−2**, B **0**, C 30 − 34 = **−4**, D 21 − 20 = **+1**, F 8 − 9 = **−1**. Progress **5 of 6 counted**; units −2 − 4 + 1 − 1 = **−6**; value at cost −2 × 3,000 − 4 × 3,600 + 1 × 1,800 − 1 × 1,000 = −6,000 − 14,400 + 1,800 − 1,000 = **−19,600** ("GHS -196.00"). The variances filter lists C (system 34, 30, −4), A (86, 84, −2), D (20, 21, +1), F (9, 8, −1). The phone shows "Applying the count is done from the web admin." and has no apply button.
+
+**f. Apply on the web, then reconcile:** applying the count gives A **84**, B **44**, C **30**, D **21**, E **−1**, F **8**, four `count_adjustment` movements; `customers:reconcile` and `stock:reconcile` both clean.
+
+### 5.3 Procedure for the phone run
+
+1. `cd laravel; php artisan test --group=phase3-phone --exclude-group=none` (loads the dataset into `schoolbook_test`).
+2. A server on **port 8000** serving `schoolbook_test`: `$env:DB_DATABASE='schoolbook_test'; php artisan serve --port=8000` (process environment wins over `.env`). Port 8000 is the owner's dev server's port, so that server is stopped first, by the owner; nothing touches the dev database.
+3. `cd flutter; flutter test integration_test/phase3_acceptance_test.dart -d emulator-5554 | Tee-Object run.txt` (with `--dart-define=OWNER_PASSWORD=...` if `.env` sets one).
+4. Apply the count from the web admin (Inventory → Stock-takes → CNT-2026-000001 → Apply count), then `$env:DB_DATABASE='schoolbook_test'; php artisan customers:reconcile; php artisan stock:reconcile`.
+5. Stop the test server; the owner restarts the dev server.
+

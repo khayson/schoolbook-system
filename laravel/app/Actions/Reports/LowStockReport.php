@@ -2,7 +2,8 @@
 
 namespace App\Actions\Reports;
 
-use Illuminate\Support\Facades\DB;
+use App\Models\Product;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Active products at or below their reorder level; shortfall = reorder level − stock;
@@ -10,15 +11,20 @@ use Illuminate\Support\Facades\DB;
  */
 class LowStockReport
 {
+    /** The low-stock products (active, not deleted, stock at or below the reorder level). */
+    public static function products(): Builder
+    {
+        return Product::query()
+            ->where('is_active', true)
+            ->whereColumn('stock_on_hand', '<=', 'reorder_level');
+    }
+
     /**
      * @return array{rows: list<array>, count: int}
      */
     public function run(): array
     {
-        $rows = DB::table('products')
-            ->whereNull('deleted_at')
-            ->where('is_active', true)
-            ->whereColumn('stock_on_hand', '<=', 'reorder_level')
+        $rows = self::products()->toBase()
             ->selectRaw('id, sku, title, stock_on_hand, reorder_level, reorder_level - stock_on_hand as shortfall')
             ->orderByDesc('shortfall')
             ->orderBy('title')

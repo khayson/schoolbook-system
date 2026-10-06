@@ -18,7 +18,10 @@ import 'package:schoolbook/features/products/presentation/products_list_screen.d
 import 'package:schoolbook/features/sales/presentation/new_sale_screen.dart';
 import 'package:schoolbook/features/sales/presentation/sale_detail_screen.dart';
 import 'package:schoolbook/features/sales/presentation/sales_list_screen.dart';
+import 'package:schoolbook/features/reports/presentation/light_reports_screens.dart';
 import 'package:schoolbook/features/stock/presentation/receive_stock_screen.dart';
+import 'package:schoolbook/features/stock/presentation/stock_count_screen.dart';
+import 'package:schoolbook/features/stock/presentation/stock_counts_screen.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 
 GoRouter createAppRouter(AuthProvider authProvider) {
@@ -106,6 +109,26 @@ GoRouter createAppRouter(AuthProvider authProvider) {
       GoRoute(
         path: '/stock/receive',
         builder: (context, state) => const ReceiveStockScreen(),
+      ),
+      GoRoute(
+        path: '/stock/counts',
+        builder: (context, state) => const StockCountsScreen(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (context, state) => StockCountScreen(
+              countId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/reports/owing',
+        builder: (context, state) => const OwingReportScreen(),
+      ),
+      GoRoute(
+        path: '/reports/low-stock',
+        builder: (context, state) => const LowStockReportScreen(),
       ),
       GoRoute(
         path: '/customers',

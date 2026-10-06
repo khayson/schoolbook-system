@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Customers\Pages;
 
+use App\Actions\Customers\RenderStatementPdf;
 use App\Actions\Payments\AllocateCredit;
 use App\Actions\Payments\RecordPayment;
 use App\Filament\Resources\Customers\CustomerResource;
@@ -12,12 +13,14 @@ use App\Filament\Support\InteractsWithCurrentUser;
 use App\Models\Customer;
 use App\Services\Money;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Components\Utilities\Get;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Customer details are edited here; money moves only through RecordPayment and
@@ -92,6 +95,19 @@ class EditCustomer extends EditRecord
                         ->send();
                 }),
 
+            Action::make('statement')
+                ->label('Statement')
+                ->icon('heroicon-o-document-text')
+                ->modalHeading(fn (Customer $record): string => "Statement for {$record->name}")
+                ->modalSubmitActionLabel('Download PDF')
+                ->schema([
+                    DatePicker::make('from')->native(false)->displayFormat('d M Y')->format('Y-m-d')->required()
+                        ->default(fn (): string => now()->startOfMonth()->toDateString()),
+                    DatePicker::make('to')->native(false)->displayFormat('d M Y')->format('Y-m-d')->required()->afterOrEqual('from')
+                        ->default(fn (): string => now()->toDateString()),
+                ])
+                ->action(fn (array $data, Customer $record): StreamedResponse => self::statement($record, $data['from'], $data['to'])),
+
             Action::make('deactivate')
                 ->label('Deactivate')
                 ->color('danger')
@@ -115,6 +131,16 @@ class EditCustomer extends EditRecord
                     Notification::make()->title("{$record->name} reactivated")->success()->send();
                 }),
         ];
+    }
+
+    public static function statement(Customer $customer, string $from, string $to): StreamedResponse
+    {
+        $render = app(RenderStatementPdf::class);
+        $pdf = $render->execute($customer, $from, $to);
+
+        return response()->streamDownload(fn () => print ($pdf->output()), $render->filename($customer, $from, $to), [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 
     private function refreshBalances(): void

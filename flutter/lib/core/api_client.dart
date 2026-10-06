@@ -96,10 +96,11 @@ class ApiClient {
   }
 
   /// Binary download (PDF invoices and receipts).
-  Future<List<int>> getBytes(String path) async {
+  Future<List<int>> getBytes(String path, {Map<String, dynamic>? queryParameters}) async {
     final response = await _request(
       () => _dio.get<List<int>>(
         path,
+        queryParameters: queryParameters,
         options: Options(
           responseType: ResponseType.bytes,
           headers: {'Accept': 'application/pdf, application/json'},

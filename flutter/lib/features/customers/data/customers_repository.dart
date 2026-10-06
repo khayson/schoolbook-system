@@ -45,6 +45,10 @@ class CustomersRepository {
     return Customer.fromJson(response.data!['data'] as Map<String, dynamic>);
   }
 
+  /// Statement PDF for an inclusive date range (`YYYY-MM-DD`, Africa/Accra).
+  Future<List<int>> statementPdf(int customerId, {required String from, required String to}) =>
+      _api.getBytes('/customers/$customerId/statement', queryParameters: {'from': from, 'to': to, 'format': 'pdf'});
+
   /// Newest first.
   Future<List<SaleSummary>> recentSales(int customerId, {int perPage = 10}) async {
     final response = await _api.get<Map<String, dynamic>>(

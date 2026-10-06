@@ -18,10 +18,15 @@ import 'package:schoolbook/features/reference/data/reference_cache_store.dart';
 import 'package:schoolbook/features/reference/data/reference_repository.dart';
 import 'package:schoolbook/features/reference/presentation/reference_catalog.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
+import 'package:schoolbook/features/reports/data/reports_repository.dart';
+import 'package:schoolbook/features/stock/data/stock_counts_repository.dart';
 import 'package:schoolbook/features/stock/data/stock_repository.dart';
 
 class SchoolbookApp extends StatefulWidget {
-  const SchoolbookApp({super.key});
+  const SchoolbookApp({super.key, this.pdfSharer});
+
+  /// Replaces the system share sheet (acceptance runs record what would be shared).
+  final PdfSharer? pdfSharer;
 
   @override
   State<SchoolbookApp> createState() => _SchoolbookAppState();
@@ -100,6 +105,14 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
           create: (context) =>
               StockRepository(apiClient: context.read<ApiClient>()),
         ),
+        Provider<StockCountsRepository>(
+          create: (context) =>
+              StockCountsRepository(apiClient: context.read<ApiClient>()),
+        ),
+        Provider<ReportsRepository>(
+          create: (context) =>
+              ReportsRepository(apiClient: context.read<ApiClient>()),
+        ),
         Provider<CustomersRepository>(
           create: (context) =>
               CustomersRepository(apiClient: context.read<ApiClient>()),
@@ -117,7 +130,7 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
           create: (_) => PendingSubmissionStore(),
         ),
         Provider<PdfSharer>(
-          create: (_) => const SystemPdfSharer(),
+          create: (_) => widget.pdfSharer ?? const SystemPdfSharer(),
         ),
         ChangeNotifierProvider<ProductsListProvider>(
           create: (context) => ProductsListProvider(

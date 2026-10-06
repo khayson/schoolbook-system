@@ -6,6 +6,7 @@ import 'package:schoolbook/core/error_messages.dart';
 import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/money.dart';
+import 'package:schoolbook/core/pdf_sharer.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
@@ -29,6 +30,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   List<Payment> _payments = const [];
   String? _error;
   bool _applyingCredit = false;
+  bool _sharingStatement = false;
 
   @override
   void initState() {
@@ -109,6 +111,46 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     }
   }
 
+  /// Picks a date range (this month by default) and shares the statement PDF.
+  Future<void> _shareStatement(Customer customer) async {
+    final now = DateTime.now();
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: DateTimeRange(start: DateTime(now.year, now.month), end: DateTime(now.year, now.month, now.day)),
+      helpText: 'Statement period',
+    );
+    if (range == null || !mounted) {
+      return;
+    }
+    await shareStatement(customer, range.start, range.end);
+  }
+
+  /// Fetches and shares the statement for [from]..[to] (inclusive).
+  Future<void> shareStatement(Customer customer, DateTime from, DateTime to) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repository = context.read<CustomersRepository>();
+    final sharer = context.read<PdfSharer>();
+    final f = DateFormat('yyyy-MM-dd');
+    setState(() => _sharingStatement = true);
+    try {
+      final bytes = await repository.statementPdf(customer.id, from: f.format(from), to: f.format(to));
+      await sharer.sharePdf(
+        bytes,
+        fileName: 'statement-${customer.code}-${f.format(from)}-${f.format(to)}.pdf',
+        subject: 'Statement for ${customer.name}',
+      );
+    } on ApiException catch (e) {
+      final d = describeApiError(e);
+      messenger.showSnackBar(SnackBar(content: Text('${d.title}: ${d.body}')));
+    } finally {
+      if (mounted) {
+        setState(() => _sharingStatement = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final customer = _customer;
@@ -165,6 +207,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         icon: const Icon(Icons.payments_outlined),
                         label: const Text('Record payment'),
                         style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        key: const Key('customer_statement'),
+                        onPressed: _sharingStatement ? null : () => _shareStatement(customer),
+                        icon: const Icon(Icons.description_outlined),
+                        label: const Text('Share statement'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                       ),
                       if (customer.creditBalance > 0) ...[
                         const SizedBox(height: 8),
