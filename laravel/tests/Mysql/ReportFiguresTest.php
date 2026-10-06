@@ -49,7 +49,7 @@ test('every report gives the hand-calculated figures on MySQL', function () {
         ->toBe([['RPT-D', null, null], ['RPT-F', '2026-02-02', 148]]);
 
     $aging = app(ReceivablesAgingReport::class)->run('2026-06-30');
-    expect($aging['totals'])->toBe(['not_yet_due' => 17000, 'days_1_30' => 4000, 'days_31_60' => 6000, 'days_61_90' => 10000, 'days_90_plus' => 12000, 'total' => 49000])
+    expect($aging['totals'])->toBe(['not_yet_due' => 17000, 'days_1_30' => 4000, 'days_31_60' => 6000, 'days_61_90' => 10000, 'days_90_plus' => 12000, 'total' => 49000, 'brought_forward' => 0])
         ->and($aging['totals']['total'])->toBe((int) Customer::query()->sum('outstanding_balance'));
     $beta = fn (string $asOf) => collect(app(ReceivablesAgingReport::class)->run($asOf)['rows'])->firstWhere('name', 'Beta School');
     expect([$beta('2026-07-20')['days_1_30'], $beta('2026-07-20')['days_90_plus'], $beta('2026-07-21')['days_31_60']])->toBe([9000, 22000, 4000]);

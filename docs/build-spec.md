@@ -267,7 +267,7 @@ Derived from allocations: `unpaid` (paid = 0), `partial` (0 < paid < total), `pa
 
 ### 9.4 Customer money views
 - **Outstanding balance** = sum of `balance_due` over the customer's confirmed sales.
-- **Statement** (JSON and PDF): opening balance, invoices, payments and a running balance for a date range. Amended Phase 3: positive = the customer owes; events are invoice at `confirmed_at` (+total), invoice void at `voided_at` (−total), payment at `paid_at` (−amount), payment void at `voided_at` (+amount); credit applications are not events. Opening balance = all events before `from`; at the same timestamp invoices, then payments, then invoice voids, then payment voids, then record id. For a period ending after the last event the closing balance equals `outstanding_balance − credit_balance`. Worked figures: `docs/acceptance-phase3.md` 3.9.
+- **Statement** (JSON and PDF): opening balance, invoices, payments and a running balance for a date range. Amended Phase 3: positive = the customer owes; events are invoice at `confirmed_at` (+total), invoice void at `voided_at` (−total), payment at `paid_at` (−amount), payment void at `voided_at` (+amount); credit applications are not events. Opening balance = all events before `from`; at the same timestamp invoices, then payments, then invoice voids, then payment voids, then record id. For a period ending after the last event the closing balance equals `outstanding_balance − credit_balance`. Worked figures: `docs/acceptance-phase3.md` 3.9. An opening balance is an invoice event on its date (00:00) described "Balance brought forward" (amended 3.5.1, section 6).
 - **Aging** buckets by days past `due_date`: current, 1 to 30, 31 to 60, 61 to 90, 90+.
 
 ### 9.5 Money invariants (2C.1)
@@ -378,14 +378,14 @@ Exports (CSV/Excel/PDF) arrive in Phase 5; pages and JSON endpoints in Phase 3.
 
 **Definitions (amended Phase 3; worked example with hand-calculated figures in `docs/acceptance-phase3.md`).** Money in pesewas; dates are Africa/Accra calendar dates; periods inclusive.
 
-- **Revenue** = confirmed sales' `subtotal − discount_total`, by `sale_date`. Voided, cancelled and draft sales never count. `subtotal` is the sum of line totals, which already include line-level price overrides.
+- **Revenue** = confirmed sales' `subtotal − discount_total`, by `sale_date`. Voided, cancelled and draft sales never count; nor do **opening balances** (amended 3.5.1: debt brought forward from before the system, not a sale; excluded from the sales summary, profit, best sellers and the dashboard's sales and top sellers, included in outstanding, overdue, aging, payments and statements). `subtotal` is the sum of line totals, which already include line-level price overrides.
 - **Line revenue** = sum of `line_total` of the lines in scope. Used for anything split by product, level, subject or language; an order-level discount belongs to the whole order and is reported as its own line, never spread over products. With a level, subject or language filter the sales summary shows line revenue and leaves order discounts and collections empty (they cannot be split by catalog).
 - **Collections** = valid payments' `amount`, by `paid_at` (cash received, not allocations).
 - **Gross profit** per line = `line_total − unit_cost × quantity` (snapshot cost); **net profit** = gross profit − order-level discounts.
 - **Catalog grouping** uses each product's current level, subject and language.
 - **Stock valuation** counts `max(0, stock_on_hand)` at current cost and current selling price; negative-stock products are counted separately. Deleted products are excluded; inactive products with stock are included.
 - **Low stock**: active products with `stock_on_hand ≤ reorder_level` (shortfall = reorder level − stock); status `out_of_stock` when stock ≤ 0, otherwise `low`. **Dead stock**: active products with `stock_on_hand > 0` and no `sale_out` movement of a still-confirmed sale on or after `as_of − days` (default 90); a voided sale sold nothing.
-- **Receivables aging**: confirmed sales with `balance_due > 0`, by days past `due_date` on the as-of date: not yet due (≤ 0), 1–30, 31–60, 61–90, 90+. Today's balances; the as-of date only moves the buckets. Grand total = sum of customers' `outstanding_balance`.
+- **Receivables aging**: confirmed sales with `balance_due > 0`, by days past `due_date` on the as-of date: not yet due (≤ 0), 1–30, 31–60, 61–90, 90+. Today's balances; the as-of date only moves the buckets. Grand total = sum of customers' `outstanding_balance`. Each row also gives `brought_forward`, the part that is opening balances (amended 3.5.1).
 - **Dashboard** (for a date, default today): sales and collections today and month to date; total owed, overdue (balances due before the date), customer credit and low-stock count; top 5 sellers this month by quantity.
 - **Weeks** start on Monday and are labelled by their Monday; periods without activity are listed with zeros.
 

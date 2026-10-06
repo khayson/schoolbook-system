@@ -239,7 +239,7 @@ test('3.7 receivables aging as of 2026-06-30: buckets per customer; total = sum 
         ['Alpha School', 12000, 0, 0, 0, 0, 12000],
         ['Beta School', 5000, 4000, 6000, 10000, 12000, 37000],
     ])
-        ->and($r['totals'])->toBe(['not_yet_due' => 17000, 'days_1_30' => 4000, 'days_31_60' => 6000, 'days_61_90' => 10000, 'days_90_plus' => 12000, 'total' => 49000])
+        ->and($r['totals'])->toBe(['not_yet_due' => 17000, 'days_1_30' => 4000, 'days_31_60' => 6000, 'days_61_90' => 10000, 'days_90_plus' => 12000, 'total' => 49000, 'brought_forward' => 0])
         ->and($r['totals']['total'])->toBe((int) Customer::query()->sum('outstanding_balance'));
 });
 

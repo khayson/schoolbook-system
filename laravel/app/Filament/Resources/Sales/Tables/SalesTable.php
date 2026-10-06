@@ -23,7 +23,8 @@ class SalesTable
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with('customer'))
             ->columns([
-                TextColumn::make('invoice_no')->label('Invoice')->placeholder('Draft')->searchable()->sortable(),
+                TextColumn::make('invoice_no')->label('Invoice')->placeholder('Draft')->searchable()->sortable()
+                    ->description(fn ($record): ?string => $record->is_opening_balance ? 'Balance brought forward' : null),
                 TextColumn::make('customer.name')->searchable()->sortable(),
                 TextColumn::make('status')->badge()->color(fn ($state): string => SaleInfolist::statusColor($state)),
                 TextColumn::make('payment_status')->label('Payment')->badge()

@@ -18,7 +18,7 @@ use Spatie\Activitylog\Support\LogOptions;
 
 /**
  * amount_paid and balance_due are cached money fields: deliberately not fillable,
- * set explicitly by actions only.
+ * set explicitly by actions only. is_opening_balance is set only by CreateOpeningBalance.
  */
 #[Fillable([
     'invoice_no',
@@ -101,6 +101,7 @@ class Sale extends Model
             'total' => 'integer',
             'amount_paid' => 'integer',
             'balance_due' => 'integer',
+            'is_opening_balance' => 'boolean',
             'delivered_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'cancelled_at' => 'datetime',

@@ -1,4 +1,4 @@
-# Phase 3 acceptance: reports (3.1), statements (3.2), stock-take (3.3), clients (3.4)
+# Phase 3 acceptance: reports (3.1), statements (3.2), stock-take (3.3), clients (3.4), opening balances (3.5.1)
 
 The dataset below is built by `tests/Support/ReportsFixture.php` with the real actions (`ReceiveStock`, `CreateDraftSale`, `ConfirmSale`, `RecordPayment`, `VoidSale`, `VoidPayment`) on the **test databases only** (SQLite in the default suite, `schoolbook_test` in the mysql group). Every figure in this file was **calculated by hand from the dataset before the report code was written**. The tests assert these exact literals. If a test and this file disagree, the code is wrong, not the file.
 
@@ -581,4 +581,84 @@ Then the test server was stopped and the owner's `composer run dev` restarted (s
 4. Every figure matched, but my expected order of the variance rows was wrong: the API lists count items by SKU (documented in docs/api.md), not C first. Corrected here (5.2 e) and in the test; the dataset was reloaded and the run repeated.
 
 Observations for later phases: a login from the emulator takes 25-35 s on `php artisan serve` on this machine (single-threaded; not seen from the host); a 6-line statement PDF is 879 KB because DomPDF embeds the whole DejaVu font (font subsetting is worth turning on before statements are shared over WhatsApp).
+
+## 6. Phase 3.5.1: opening balances and the customers import
+
+Calculated by hand before the code; `tests/Feature/Customers/OpeningBalanceTest.php` and `CustomersImportTest.php` assert these literals. A separate dataset (the reports dataset of section 1 is not used). Money in pesewas; GHS in the file and on screen.
+
+### 6.1 Rules
+
+- An **opening balance** is a confirmed invoice with `is_opening_balance`, **no items and no stock movement**, created only by `CreateOpeningBalance` (or the import, which calls it). Its number comes from the invoice sequence with the prefix **OB** (`OB-2026-000001`); invoices and opening balances share the counter, so an INV number can be followed by an OB number. `sale_date` and `confirmed_at` are the debt's date (00:00 Accra), `due_date` is given, amount > 0.
+- **Counted** in `outstanding_balance`, payments and allocations (oldest-due first, like any invoice), voiding, receivables aging (each row also shows how much of it is brought forward), overdue on the dashboard, and statements (line **"Balance brought forward"** with its date).
+- **Excluded** from revenue: sales summary (count, gross, revenue), profit, best sellers, dashboard sales today and this month, top sellers. Collections are cash received and do include payments against an opening balance.
+- **One per customer**: a database-generated column (`customer_id` while the opening balance is not void) with a unique index; a second one is `409 opening_balance_exists`. Voiding the opening balance releases it.
+
+### 6.2 The import file
+
+`customers:import file.csv` (dry run by default; `--commit` writes). Before the import one customer exists: **Existing Academy**, Greater Accra, phone `0244000004` (CUS-0001).
+
+| Row | name | region | phone | opening balance (GHS) | date | due | Result |
+|---:|---|---|---|---:|---|---|---|
+| 2 | Kasoa Hilltop School | Central | 0244000001 | 2,500.00 | 2026-08-31 | 2026-09-30 | **create** (credit limit 5,000.00) |
+| 3 | Winneba Bright Stars | Central | 0244000002 | 1,200.00 | 2026-08-31 | 2026-10-15 | **create** |
+| 4 | Osu Little Angels | Greater Accra | 0244000003 | (none) | | | **create**, no opening balance |
+| 5 | Existing Academy | Greater Accra | 024 400 0004 | 300.00 | 2026-08-31 | 2026-09-30 | **skip**: matches CUS-0001 by name + phone (digits 0244000004) |
+| 6 | No Region School | (blank) | 0244000005 | 100.00 | 2026-08-31 | 2026-09-30 | **error**: region is required |
+| 7 | Bad Amount School | Central | 0244000006 | 12.345 | 2026-08-31 | 2026-09-30 | **error**: opening balance has more than 2 decimals |
+| 8 | Kasoa Hilltop School | Central | 0244000001 | 999.00 | 2026-08-31 | 2026-09-30 | **skip**: same school as row 2 in this file |
+
+(Row numbers count the header as row 1.)
+
+**Dry run:** 3 to create, 2 skipped, 2 errors; total opening balances to create **GHS 3,700.00** (2,500.00 + 1,200.00; rows 5 and 8 are skipped and not counted, rows 6 and 7 have errors). Nothing written.
+**Commit with errors:** refused, nothing written ("fix the 2 rows with errors first").
+**Commit of the fixed file** (rows 6 and 7 removed): creates Kasoa Hilltop School **CUS-0002** with **OB-2026-000001** (250,000), Winneba Bright Stars **CUS-0003** with **OB-2026-000002** (120,000), Osu Little Angels **CUS-0004**; 2 skipped; total GHS 3,700.00.
+**Same file again with --commit:** 0 to create, **5 skipped** (rows 2, 3, 4 now match by name + phone, row 5 as before, row 8 duplicates row 2), total GHS 0.00. No duplicates.
+
+### 6.3 After the import
+
+- 2026-08-01 09:00: receipt of A × 10 at cost 3,000 (price 5,000).
+- 2026-09-10 10:00: sale to Kasoa Hilltop, A × 2 = **10,000**, due 2026-10-10 → **INV-2026-000003** (the counter is at 3 after the two opening balances).
+- 2026-09-20 12:00: payment from Kasoa Hilltop, **100,000**, auto-allocated oldest-due first: OB-2026-000001 (due 09-30) before INV-2026-000003 (due 10-10) → the opening balance gets all 100,000.
+
+| Invoice | Total | Paid | Balance due |
+|---|---:|---:|---:|
+| OB-2026-000001 (Hilltop) | 250,000 | 100,000 | 150,000 |
+| OB-2026-000002 (Bright Stars) | 120,000 | 0 | 120,000 |
+| INV-2026-000003 (Hilltop) | 10,000 | 0 | 10,000 |
+
+Outstanding: Hilltop 150,000 + 10,000 = **160,000**; Bright Stars **120,000**; Osu and Existing Academy **0**; total **280,000**. Credit 0.
+
+**Statement, Kasoa Hilltop, 2026-08-01 to 2026-11-05** (opening 0):
+
+| When | Line | Amount | Balance |
+|---|---|---:|---:|
+| 2026-08-31 00:00 | Balance brought forward (OB-2026-000001) | +250,000 | 250,000 |
+| 2026-09-10 10:00 | Invoice INV-2026-000003 | +10,000 | 260,000 |
+| 2026-09-20 12:00 | Payment RCT-2026-000001 | −100,000 | 160,000 |
+
+Debits 260,000, credits 100,000, closing **160,000** (= outstanding 160,000 − credit 0). From 2026-09-01: opening **250,000**, the same two lines, closing 160,000.
+
+**Receivables aging as of 2026-11-05:**
+
+| Customer | Not yet due | 1–30 | 31–60 | 61–90 | 90+ | Total | of which brought forward |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Kasoa Hilltop School | 0 | 10,000 (INV, due 10-10, 26 days) | 150,000 (OB, due 09-30, 36 days) | 0 | 0 | 160,000 | 150,000 |
+| Winneba Bright Stars | 0 | 120,000 (OB, due 10-15, 21 days) | 0 | 0 | 0 | 120,000 | 120,000 |
+| **Total** | 0 | **130,000** | **150,000** | 0 | 0 | **280,000** | **270,000** |
+
+(Days: 09-30 to 11-05 = 31 + 5 = 36; 10-10 to 11-05 = 21 + 5 = 26; 10-15 to 11-05 = 16 + 5 = 21.) Total = sum of outstanding balances.
+
+**Reports ignore the opening balances:**
+
+- Sales summary, August 2026: **0 sales, revenue 0** (the opening balances are dated 08-31); collections 0.
+- Sales summary, September 2026: **1 sale, gross 10,000, revenue 10,000**; collections **100,000** (cash received, although it paid an opening balance).
+- Profit, September: revenue 10,000, cost 2 × 3,000 = 6,000, gross and net **4,000**. August: all 0.
+- Best sellers, September: A, 2, 10,000 (nothing else).
+- Dashboard on 2026-08-31: sales today **0 (0 sales)**, this month **0**; owed **280,000** (today's balances); overdue on 08-31 **0** (nothing due before it). Dashboard on 2026-11-05: overdue **280,000** (OB 150,000 due 09-30, INV 10,000 due 10-10, OB 120,000 due 10-15).
+- `customers:reconcile`: all money invariants hold.
+
+### 6.4 One per customer, voiding releases it
+
+- A second opening balance for Kasoa Hilltop: **409 `opening_balance_exists`** (details: the existing OB-2026-000001); nothing written.
+- Void OB-2026-000002 (Bright Stars, unpaid): Bright Stars outstanding **0**; a new opening balance of **800.00** (80,000) is then accepted as **OB-2026-000004**, outstanding **80,000**.
 

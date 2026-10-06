@@ -38,10 +38,11 @@ class ReceivablesAgingPage extends ReportPage
                 'days_61_90' => ['61-90 days', 'money'],
                 'days_90_plus' => ['Over 90 days', 'money'],
                 'total' => ['Total', 'money'],
+                'brought_forward' => ['Of which brought forward', 'money'],
             ],
             'rows' => $r['rows'],
             'totals' => $r['totals'],
-            'note' => "Buckets as of {$r['as_of']}. Balances are today's: the date only moves invoices between buckets; it is not a historical report.",
+            'note' => "Buckets as of {$r['as_of']}. Balances are today's: the date only moves invoices between buckets; it is not a historical report. \"Brought forward\" is the part owed from before the system (opening balances).",
         ];
     }
 }

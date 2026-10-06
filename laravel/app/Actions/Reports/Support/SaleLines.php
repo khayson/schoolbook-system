@@ -23,6 +23,7 @@ final class SaleLines
             ->join('sales as s', 's.id', '=', 'i.sale_id')
             ->join('products as p', 'p.id', '=', 'i.product_id')
             ->where('s.status', 'confirmed')
+            ->where('s.is_opening_balance', false) // has no lines anyway; explicit for safety
             ->where('s.sale_date', '>=', $start)
             ->where('s.sale_date', '<', $end)
             ->when($filters['customer_id'] ?? null, fn (Builder $q, $id) => $q->where('s.customer_id', $id))

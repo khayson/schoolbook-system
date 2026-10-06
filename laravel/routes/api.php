@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\LanguageController;
 use App\Http\Controllers\Api\V1\LevelController;
 use App\Http\Controllers\Api\V1\LevelGroupController;
+use App\Http\Controllers\Api\V1\OpeningBalanceController;
 use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\ProductController;
@@ -87,6 +88,8 @@ Route::prefix('v1')->group(function () {
 
         Route::apiResource('customers', CustomerController::class);
         Route::get('customers/{customer}/statement', [CustomerStatementController::class, 'show']);
+        Route::post('customers/{customer}/opening-balance', [OpeningBalanceController::class, 'store'])
+            ->middleware('idempotent');
 
         // School directory (OpenStreetMap): search, add a school as a customer.
         Route::get('school-directory', [DirectorySchoolController::class, 'index']);

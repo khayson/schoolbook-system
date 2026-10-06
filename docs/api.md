@@ -379,7 +379,7 @@ Rows per product `{product_id, sku, title, stock_on_hand, counted_quantity, cost
 
 ### `GET /reports/receivables-aging?as_of=`
 
-`{as_of, rows: [{customer_id, name, not_yet_due, days_1_30, days_31_60, days_61_90, days_90_plus, total}], totals: {...}}`, by customer name. `totals.total` equals the sum of customers' `outstanding_balance`. Balances are today's; `as_of` only moves invoices between buckets (label it "buckets as of …" in clients).
+`{as_of, rows: [{customer_id, name, not_yet_due, days_1_30, days_31_60, days_61_90, days_90_plus, total, brought_forward}], totals: {...}}`, by customer name. `brought_forward` is the part of `total` that is opening balances. `totals.total` equals the sum of customers' `outstanding_balance`. Balances are today's; `as_of` only moves invoices between buckets (label it "buckets as of …" in clients).
 
 ## Stock
 
@@ -570,6 +570,10 @@ Payment with `customer`, `allocations` (with `invoice_no`; reversals are negativ
 ### `GET /payments/{id}/receipt`
 
 `application/pdf` download named `RCT-YYYY-NNNNNN.pdf`: business details, receipt no., date, customer, method and reference, amount, per-invoice breakdown with each invoice's remaining balance, unapplied amount, customer credit and outstanding balance. Void payments return `409 payment_already_void` (`details.action: receipt`).
+
+### `POST /customers/{id}/opening-balance` (requires `Idempotency-Key`)
+
+Owner only. What the customer owed before the system, as an invoice with no items and no stock movement: `{amount, date, due_date, notes?}` (`amount` in pesewas > 0; `date` the debt's date, not in the future; `due_date` required). `201` with the sale (`invoice_no` `OB-YYYY-NNNNNN` from the invoice counter, `is_opening_balance: true`, `items: []`). It counts in outstanding, payments, aging and statements ("Balance brought forward"), never in revenue. `409 opening_balance_exists` (`details.{sale_id, invoice_no}`) while the customer has a live one; voiding it (`POST /sales/{id}/void`) releases it. Sales carry `is_opening_balance` in every response. Bulk entry: `php artisan customers:import` (docs/customer-import.md).
 
 ### `GET /school-directory?search=&region=&district=&added=0|1`
 

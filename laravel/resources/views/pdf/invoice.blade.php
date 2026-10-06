@@ -80,6 +80,15 @@
             </tr>
         </thead>
         <tbody>
+            @if ($sale->is_opening_balance)
+                <tr>
+                    <td>1</td>
+                    <td>Balance brought forward ({{ $sale->sale_date?->format('d M Y') }})</td>
+                    <td class="num"></td>
+                    <td class="num"></td>
+                    <td class="num">{{ Money::formatGhsGrouped($sale->total) }}</td>
+                </tr>
+            @endif
             @foreach ($sale->items as $index => $item)
                 <tr>
                     <td>{{ $index + 1 }}</td>
@@ -95,7 +104,7 @@
     <table class="totals">
         <tr><td>Subtotal</td><td class="num">{{ Money::formatGhsGrouped($sale->subtotal) }}</td></tr>
         @if ($sale->discount_total > 0)
-            <tr><td>Discount</td><td class="num">-{{ Money::formatGhsGrouped($sale->discount_total) }}</td></tr>
+            <tr><td>Discount</td><td class="num">{{ Money::formatGhsGrouped(-$sale->discount_total) }}</td></tr>
         @endif
         @if ($sale->tax_total > 0)
             <tr><td>Tax</td><td class="num">{{ Money::formatGhsGrouped($sale->tax_total) }}</td></tr>

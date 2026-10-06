@@ -44,6 +44,7 @@ class ProfitReport
         [$start, $end] = ReportPeriods::bounds($from, $to);
         $orderDiscounts = (int) DB::table('sales')
             ->where('status', 'confirmed')
+            ->where('is_opening_balance', false)
             ->where('sale_date', '>=', $start)
             ->where('sale_date', '<', $end)
             ->sum('discount_total');

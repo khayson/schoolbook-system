@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\DB;
  * A customer's statement for an inclusive date range (spec 9.4; docs/acceptance-phase3.md
  * 3.9). Positive = the customer owes. Events: invoice at confirmed_at (+total), invoice
  * void at voided_at (−total), payment at paid_at (−amount), payment void at voided_at
- * (+amount). Credit applications are not events. Opening balance = every event before
+ * (+amount); an opening balance is an invoice shown as "Balance brought forward". Credit
+ * applications are not events. Opening balance = every event before
  * `from`; at the same timestamp invoices come first, then payments, then invoice voids,
  * then payment voids, then record id. For a period ending after the last event the
  * closing balance equals outstanding_balance − credit_balance.
@@ -65,6 +66,7 @@ class CustomerStatement
                 'sale_id' => $isSale ? (int) $row->source_id : null,
                 'payment_id' => $isSale ? null : (int) $row->source_id,
                 'reference' => $row->reference,
+                'opening_balance' => (bool) $row->opening_balance,
                 'description' => $this->describe($row),
                 'debit' => max(0, $amount),
                 'credit' => max(0, -$amount),
@@ -97,24 +99,24 @@ class CustomerStatement
             ->where('customer_id', $customerId)
             ->whereIn('status', $confirmedOrVoid)
             ->whereNotNull('confirmed_at')
-            ->selectRaw("confirmed_at as at, 1 as kind_order, 'invoice' as type, id as source_id, invoice_no as reference, NULL as note, CAST(total AS SIGNED) as amount");
+            ->selectRaw("confirmed_at as at, 1 as kind_order, 'invoice' as type, id as source_id, invoice_no as reference, NULL as note, CAST(total AS SIGNED) as amount, is_opening_balance as opening_balance");
 
         $invoiceVoids = DB::table('sales')
             ->where('customer_id', $customerId)
             ->where('status', SaleStatus::Void->value)
             ->whereNotNull('confirmed_at')
             ->whereNotNull('voided_at')
-            ->selectRaw("voided_at as at, 3 as kind_order, 'invoice_void' as type, id as source_id, invoice_no as reference, void_reason as note, -CAST(total AS SIGNED) as amount");
+            ->selectRaw("voided_at as at, 3 as kind_order, 'invoice_void' as type, id as source_id, invoice_no as reference, void_reason as note, -CAST(total AS SIGNED) as amount, is_opening_balance as opening_balance");
 
         $payments = DB::table('payments')
             ->where('customer_id', $customerId)
-            ->selectRaw("paid_at as at, 2 as kind_order, 'payment' as type, id as source_id, receipt_no as reference, method as note, -CAST(amount AS SIGNED) as amount");
+            ->selectRaw("paid_at as at, 2 as kind_order, 'payment' as type, id as source_id, receipt_no as reference, method as note, -CAST(amount AS SIGNED) as amount, 0 as opening_balance");
 
         $paymentVoids = DB::table('payments')
             ->where('customer_id', $customerId)
             ->where('status', PaymentRecordStatus::Void->value)
             ->whereNotNull('voided_at')
-            ->selectRaw("voided_at as at, 4 as kind_order, 'payment_void' as type, id as source_id, receipt_no as reference, void_reason as note, CAST(amount AS SIGNED) as amount");
+            ->selectRaw("voided_at as at, 4 as kind_order, 'payment_void' as type, id as source_id, receipt_no as reference, void_reason as note, CAST(amount AS SIGNED) as amount, 0 as opening_balance");
 
         return $invoices->unionAll($invoiceVoids)->unionAll($payments)->unionAll($paymentVoids);
     }
@@ -124,9 +126,9 @@ class CustomerStatement
         $note = trim((string) $row->note);
 
         return match ($row->type) {
-            'invoice' => "Invoice {$row->reference}",
+            'invoice' => (bool) $row->opening_balance ? "Balance brought forward ({$row->reference})" : "Invoice {$row->reference}",
             'payment' => "Payment {$row->reference}".($note !== '' ? ' ('.(self::METHODS[$note] ?? $note).')' : ''),
-            'invoice_void' => "Void of invoice {$row->reference}".($note !== '' ? ": {$note}" : ''),
+            'invoice_void' => ((bool) $row->opening_balance ? "Void of balance brought forward {$row->reference}" : "Void of invoice {$row->reference}").($note !== '' ? ": {$note}" : ''),
             'payment_void' => "Void of payment {$row->reference}".($note !== '' ? ": {$note}" : ''),
         };
     }

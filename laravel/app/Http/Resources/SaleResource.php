@@ -19,6 +19,7 @@ class SaleResource extends JsonResource
             'status' => $this->status?->value,
             'payment_status' => $this->payment_status?->value,
             'source' => $this->source?->value,
+            'is_opening_balance' => (bool) $this->is_opening_balance,
             'sale_date' => $this->sale_date?->toDateString(),
             'due_date' => $this->due_date?->toDateString(),
             'subtotal' => $this->subtotal,

@@ -31,6 +31,8 @@ class ReceivablesAgingReport
             sprintf($case, 's.due_date < ? AND s.due_date >= ?', 'days_61_90'),
             sprintf($case, 's.due_date < ?', 'days_90_plus'),
             'SUM(s.balance_due) as total',
+            // How much of the total is debt brought forward from before the system.
+            'SUM(CASE WHEN s.is_opening_balance = 1 THEN s.balance_due ELSE 0 END) as brought_forward',
         ]);
 
         $rows = DB::table('sales as s')
@@ -48,12 +50,12 @@ class ReceivablesAgingReport
             ->orderBy('c.name')
             ->get()
             ->map(fn ($r) => ['customer_id' => (int) $r->customer_id, 'name' => $r->name]
-                + array_map('intval', array_intersect_key((array) $r, array_flip([...self::BUCKETS, 'total']))))
-            ->map(fn (array $r) => array_merge(array_flip(['customer_id', 'name', ...self::BUCKETS, 'total']), $r))
+                + array_map('intval', array_intersect_key((array) $r, array_flip([...self::BUCKETS, 'total', 'brought_forward']))))
+            ->map(fn (array $r) => array_merge(array_flip(['customer_id', 'name', ...self::BUCKETS, 'total', 'brought_forward']), $r))
             ->all();
 
         $totals = [];
-        foreach ([...self::BUCKETS, 'total'] as $b) {
+        foreach ([...self::BUCKETS, 'total', 'brought_forward'] as $b) {
             $totals[$b] = array_sum(array_column($rows, $b));
         }
 

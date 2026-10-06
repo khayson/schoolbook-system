@@ -36,6 +36,7 @@ class SalesSummaryReport
         } else {
             $rows = DB::table('sales')
                 ->where('status', 'confirmed')
+                ->where('is_opening_balance', false) // debt brought forward, not a sale
                 ->where('sale_date', '>=', $start)
                 ->where('sale_date', '<', $end)
                 ->when($customer, fn (Builder $q, $id) => $q->where('customer_id', $id))

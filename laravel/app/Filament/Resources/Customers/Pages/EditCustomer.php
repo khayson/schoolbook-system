@@ -5,12 +5,14 @@ namespace App\Filament\Resources\Customers\Pages;
 use App\Actions\Customers\RenderStatementPdf;
 use App\Actions\Payments\AllocateCredit;
 use App\Actions\Payments\RecordPayment;
+use App\Actions\Sales\CreateOpeningBalance;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Filament\Resources\Payments\Schemas\PaymentForm;
 use App\Filament\Support\DomainErrorNotifier;
 use App\Filament\Support\GhsInput;
 use App\Filament\Support\InteractsWithCurrentUser;
 use App\Models\Customer;
+use App\Models\Sale;
 use App\Services\Money;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -93,6 +95,31 @@ class EditCustomer extends EditRecord
                         ->body('Credit left '.Money::formatGhsGrouped($result->customer->credit_balance))
                         ->success()
                         ->send();
+                }),
+
+            Action::make('openingBalance')
+                ->label('Opening balance')
+                ->icon('heroicon-o-arrow-uturn-right')
+                ->visible(fn (Customer $record): bool => ! Sale::query()->where('customer_id', $record->id)->where('is_opening_balance', true)->where('status', '<>', 'void')->exists())
+                ->modalHeading(fn (Customer $record): string => "Opening balance for {$record->name}")
+                ->modalDescription('What this customer owed before the system (paper ledger). It counts in what they owe, statements and aging, never in sales or profit. One per customer; void it to replace it.')
+                ->schema([
+                    GhsInput::make('amount')->label('Amount owed')->required(),
+                    DatePicker::make('date')->label('Owed since')->native(false)->displayFormat('d M Y')->format('Y-m-d')->required()->maxDate(now())
+                        ->default(fn (): string => now()->toDateString()),
+                    DatePicker::make('due_date')->label('Due date')->native(false)->displayFormat('d M Y')->format('Y-m-d')->required(),
+                ])
+                ->action(function (array $data, Customer $record, Action $action): void {
+                    $sale = DomainErrorNotifier::attempt(
+                        fn () => app(CreateOpeningBalance::class)->execute($this->getUser(), $record, [
+                            'amount' => (int) $data['amount'],
+                            'date' => $data['date'],
+                            'due_date' => $data['due_date'],
+                        ]),
+                        $action,
+                    );
+                    $this->refreshBalances();
+                    Notification::make()->title("Opening balance {$sale->invoice_no} recorded: ".Money::formatGhsGrouped($sale->total))->success()->send();
                 }),
 
             Action::make('statement')
