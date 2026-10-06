@@ -1,4 +1,4 @@
-# Phase 3 acceptance: reports (3.1)
+# Phase 3 acceptance: reports (3.1) and statements (3.2)
 
 The dataset below is built by `tests/Support/ReportsFixture.php` with the real actions (`ReceiveStock`, `CreateDraftSale`, `ConfirmSale`, `RecordPayment`, `VoidSale`, `VoidPayment`) on the **test databases only** (SQLite in the default suite, `schoolbook_test` in the mysql group). Every figure in this file was **calculated by hand from the dataset before the report code was written**. The tests assert these exact literals. If a test and this file disagree, the code is wrong, not the file.
 
@@ -97,8 +97,8 @@ Customers: Alpha owes 7,000 + 5,000 = **12,000**; Beta owes 12,000 + 10,000 + 6,
 - **Gross profit** per line = `line_total − unit_cost × quantity` (snapshot cost at confirmation). **Net profit** = gross profit − order-level discounts.
 - **Catalog grouping** uses each product's *current* level, subject and language.
 - **Stock valuation** counts `max(0, stock_on_hand)` at current cost and current selling price; products with negative stock are counted separately.
-- **Low stock**: active products with `stock_on_hand ≤ reorder_level`; shortfall = `reorder_level − stock_on_hand`.
-- **Dead stock**: active products with `stock_on_hand > 0` and no `sale_out` movement in the `days` (default 90) before the as-of date, i.e. none on or after `as_of − days`.
+- **Low stock**: active products with `stock_on_hand ≤ reorder_level`; shortfall = `reorder_level − stock_on_hand`. Each row has a `status`: `out_of_stock` when `stock_on_hand ≤ 0`, otherwise `low` (amended 3.2).
+- **Dead stock**: active products with `stock_on_hand > 0` and no sale in the `days` (default 90) before the as-of date, i.e. no `sale_out` movement on or after `as_of − days` **belonging to a sale that is still confirmed**. A voided sale sold nothing, so its `sale_out` is ignored (amended 3.2).
 - **Receivables aging**: confirmed sales with `balance_due > 0`, by days past `due_date` on the as-of date: *not yet due* (≤ 0 days), 1–30, 31–60, 61–90, 90+. Balances are today's balances; the as-of date only moves the buckets. Grand total = sum of customers' `outstanding_balance`.
 - **Weeks** start on Monday; a week is labelled by its Monday. Periods with no activity are listed with zeros.
 - **Row order**: periods in date order; profit rows by gross profit, largest first; best sellers by the chosen measure (quantity or revenue), then the other; low stock by shortfall, largest first; dead stock never-sold first, then oldest last sale; stock valuation by SKU; aging by customer name. Ties: by label.
@@ -222,7 +222,9 @@ Negative-stock products: **1** (E, −1). The totals equal the sum of the produc
 
 ### 3.5 Low stock
 
-`stock ≤ reorder_level`: **C** 34 ≤ 40 (shortfall 6), **A** 86 ≤ 90 (shortfall 4), **E** −1 ≤ 0 (shortfall 1). Count **3**. Ordered by shortfall, largest first. B (44 > 10), D (20 > 5), F (9 > 0) are not low.
+`stock ≤ reorder_level`: **C** 34 ≤ 40 (shortfall 6, status `low`), **A** 86 ≤ 90 (shortfall 4, `low`), **E** −1 ≤ 0 (shortfall 1, `out_of_stock` since −1 ≤ 0). Count **3**. Ordered by shortfall, largest first. B (44 > 10), D (20 > 5), F (9 > 0) are not low.
+
+Edge case (separate test, not in the fixture): a product with stock **0** and reorder level **0** is listed (0 ≤ 0) with shortfall **0** and status **`out_of_stock`**; the ordering and the count rules are unchanged.
 
 ### 3.6 Dead stock, as of 2026-06-30, days = 90
 
@@ -231,7 +233,19 @@ Cut-off: 2026-06-30 − 90 days = **2026-04-01**. Products with stock > 0 and no
 - **D**: never sold; 20 on hand; 36,000 at cost.
 - **F**: last sold 2026-02-02 (148 days before 2026-06-30); 9 on hand; 9,000 at cost.
 
-Not dead: A (last sold 06-15), B (06-14), C (06-16; also 06-10 and 04-20). E has stock −1, not > 0. With days = 150 the cut-off is 2026-01-31 and only D remains.
+Not dead: A (last sold 06-15), B (06-14), C (06-10 and 04-20; the 06-16 sale was voided and does not count). E has stock −1, not > 0. With days = 150 the cut-off is 2026-01-31 and only D remains.
+
+**Voided sale ignored: as of 2026-06-30, days = 15.** Cut-off 2026-06-30 − 15 = **2026-06-15**. Last *confirmed* sale per product: A 06-15 (s5, s8: on the cut-off, so sold), B 06-14 (s7), C **06-10** (s6; s9 on 06-16 is void), D never, F 02-02.
+
+| Product | Last sold | Days since | On hand | At cost |
+|---|---|---:|---:|---:|
+| D | never | | 20 | 36,000 |
+| F | 2026-02-02 | 148 | 9 | 9,000 |
+| C | 2026-06-10 | 20 | 34 | 122,400 |
+| B | 2026-06-14 | 16 | 44 | 110,000 |
+| **Total** | | | | **277,400** (count **4**) |
+
+If the voided sale counted, C would show last sold 06-16 (≥ cut-off) and drop out: D, F, B only. This is the case that tells the two rules apart.
 
 ### 3.7 Receivables aging, as of 2026-06-30
 
@@ -291,6 +305,120 @@ Beta's row on those dates:
 - Sales today: **10,000** (2 sales: s5 and s8; s7 at 23:30 the night before is not today); month to date (June 1–15): 76,000 + 7,000 + 10,000 = **93,000** (4 sales)
 - Collections today: **0**; month to date: **76,000**
 - Overdue on 2026-06-15: sales 1, 2, 3 (due before 06-15) = 12,000 + 10,000 + 6,000 = **28,000** (sale 4, due 06-20, is not yet overdue)
+
+### 3.9 Customer statements (3.2)
+
+**Events and signs** (positive = the customer owes):
+
+| Event | When | Amount |
+|---|---|---:|
+| Invoice | sale `confirmed_at` | + total |
+| Invoice void | sale `voided_at` | − total |
+| Payment | `paid_at` | − amount |
+| Payment void | payment `voided_at` | + amount |
+
+Credit applications move money between a payment and an invoice and are not statement events (they change neither side). Drafts and cancelled sales never appear. **Opening balance** = sum of all events before `from` (00:00 Accra). **Lines** = events from `from` 00:00 to the end of `to`, ordered by time; at the **same timestamp**: invoices, then payments, then invoice voids, then payment voids; then by record id. **Running balance** = opening + lines so far; **closing** = opening + debits − credits, where debits are the positive lines and credits the negative lines (as positive numbers).
+
+Every event in the dataset, by customer:
+
+- **Alpha**: s6 06-10 11:00 +76,000; P2 06-12 12:00 −76,000; s7 06-14 23:30 +7,000; s8 06-15 00:30 +5,000; s9 06-16 09:00 +12,000; s9 void 06-16 15:00 −12,000; P4 06-25 12:00 −1,000; P4 void 06-25 13:00 +1,000.
+- **Beta**: s1 02-02 10:00 +12,000; s2 03-20 10:00 +12,000; s3 04-20 10:00 +6,000; P1 05-10 12:00 −2,000; s4 05-20 10:00 +4,000; s5 06-15 10:00 +5,000.
+- **Gamma**: s10 06-20 10:00 +3,000; P3 06-21 12:00 −5,000.
+
+#### (a) June 2026 (2026-06-01 to 2026-06-30)
+
+**Alpha**, opening **0** (no events before June):
+
+| When | Line | Amount | Balance |
+|---|---|---:|---:|
+| 06-10 11:00 | Invoice s6 | +76,000 | 76,000 |
+| 06-12 12:00 | Payment P2 | −76,000 | 0 |
+| 06-14 23:30 | Invoice s7 | +7,000 | 7,000 |
+| 06-15 00:30 | Invoice s8 | +5,000 | 12,000 |
+| 06-16 09:00 | Invoice s9 | +12,000 | 24,000 |
+| 06-16 15:00 | Void of invoice s9 | −12,000 | 12,000 |
+| 06-25 12:00 | Payment P4 | −1,000 | 11,000 |
+| 06-25 13:00 | Void of payment P4 | +1,000 | 12,000 |
+
+Debits 76,000 + 7,000 + 5,000 + 12,000 + 1,000 = **101,000**; credits 76,000 + 12,000 + 1,000 = **89,000**; closing 0 + 101,000 − 89,000 = **12,000**.
+
+**Beta**, opening = 12,000 + 12,000 + 6,000 − 2,000 + 4,000 = **32,000**:
+
+| When | Line | Amount | Balance |
+|---|---|---:|---:|
+| 06-15 10:00 | Invoice s5 | +5,000 | 37,000 |
+
+Debits **5,000**; credits **0**; closing **37,000**.
+
+**Gamma**, opening **0**:
+
+| When | Line | Amount | Balance |
+|---|---|---:|---:|
+| 06-20 10:00 | Invoice s10 | +3,000 | 3,000 |
+| 06-21 12:00 | Payment P3 | −5,000 | −2,000 |
+
+Debits **3,000**; credits **5,000**; closing **−2,000** (the customer is owed 2,000: its credit).
+
+#### (b) January to June 2026 (2026-01-01 to 2026-06-30)
+
+**Alpha** and **Gamma**: no events before June, so identical to (a): opening 0; Alpha closing **12,000** (8 lines, debits 101,000, credits 89,000); Gamma closing **−2,000** (2 lines, debits 3,000, credits 5,000).
+
+**Beta**, opening **0**:
+
+| When | Line | Amount | Balance |
+|---|---|---:|---:|
+| 02-02 10:00 | Invoice s1 | +12,000 | 12,000 |
+| 03-20 10:00 | Invoice s2 | +12,000 | 24,000 |
+| 04-20 10:00 | Invoice s3 | +6,000 | 30,000 |
+| 05-10 12:00 | Payment P1 | −2,000 | 28,000 |
+| 05-20 10:00 | Invoice s4 | +4,000 | 32,000 |
+| 06-15 10:00 | Invoice s5 | +5,000 | 37,000 |
+
+Debits 12,000 + 12,000 + 6,000 + 4,000 + 5,000 = **39,000**; credits **2,000**; closing **37,000**.
+
+#### (c) Mid-dataset: 2026-06-21 to 2026-06-30 (every opening balance non-zero)
+
+**Alpha**, opening = 76,000 − 76,000 + 7,000 + 5,000 + 12,000 − 12,000 = **12,000**:
+
+| When | Line | Amount | Balance |
+|---|---|---:|---:|
+| 06-25 12:00 | Payment P4 | −1,000 | 11,000 |
+| 06-25 13:00 | Void of payment P4 | +1,000 | 12,000 |
+
+Debits **1,000**; credits **1,000**; closing **12,000**.
+
+**Beta**, opening = 32,000 + 5,000 = **37,000**; no lines; debits 0, credits 0; closing **37,000**.
+
+**Gamma**, opening = **3,000** (s10 on 06-20; P3 is 06-21 12:00, inside the period):
+
+| When | Line | Amount | Balance |
+|---|---|---:|---:|
+| 06-21 12:00 | Payment P3 | −5,000 | −2,000 |
+
+Debits **0**; credits **5,000**; closing **−2,000**.
+
+#### (d) Timezone boundary (Alpha)
+
+- **2026-06-15 to 2026-06-15**: opening = 76,000 − 76,000 + 7,000 (s7 at 06-14 23:30 is the day before) = **7,000**; one line, s8 at 00:30 +5,000 → **12,000**.
+- **2026-06-01 to 2026-06-14**: opening 0; lines s6, P2, s7 (23:30 is still the 14th); closing **7,000**; s8 is not included.
+- **Midnight exactly** (separate test; customer Echo, not in the fixture): one invoice, A×1 = **5,000**, confirmed at **2026-07-02 00:00:00**. Statement 2026-07-02 to 07-02: opening **0** (the event is not *before* `from`), one line +5,000, closing **5,000**. Statement 2026-07-01 to 07-01: opening 0, no lines, closing **0**. Counting it in the opening as well would give 10,000.
+
+#### (e) Same-timestamp ordering (separate test; customer Delta, not in the fixture)
+
+Everything at **2026-07-01 10:00:00**, recorded in this order: payment Q of 4,000 (no open invoice, so all of it is credit), then sale X (A×2 = 10,000) confirmed, then payment Q voided, then sale X voided. Statement for 2026-07-01, opening 0, lines in rule order (not recording order):
+
+| Line | Amount | Balance |
+|---|---:|---:|
+| Invoice X | +10,000 | 10,000 |
+| Payment Q | −4,000 | 6,000 |
+| Void of invoice X | −10,000 | −4,000 |
+| Void of payment Q | +4,000 | 0 |
+
+Closing **0** = Delta's outstanding 0 − credit 0. (In recording order the balances would read −4,000, 6,000, 10,000, 0.)
+
+#### Property: closing = outstanding − credit
+
+For a period that ends after the last event (to = 2026-12-31): Alpha 12,000 − 0 = **12,000**; Beta 37,000 − 0 = **37,000**; Gamma 0 − 2,000 = **−2,000**. These match the closing balances above.
 
 ## 4. Invariants also asserted
 

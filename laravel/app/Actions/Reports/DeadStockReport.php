@@ -2,12 +2,15 @@
 
 namespace App\Actions\Reports;
 
+use App\Enums\SaleStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Active products with stock that have not sold (no sale_out movement) in the `days`
- * before the as-of date, i.e. none on or after as_of − days (docs/acceptance-phase3.md 3.6).
+ * Active products with stock that have not sold in the `days` before the as-of date:
+ * no sale_out movement on or after as_of âˆ’ days belonging to a sale that is still
+ * confirmed. A voided sale sold nothing, so its sale_out does not count
+ * (docs/acceptance-phase3.md 3.6).
  */
 class DeadStockReport
 {
@@ -20,11 +23,13 @@ class DeadStockReport
         $cutoff = $asOfDate->copy()->subDays($days)->toDateString();
         $until = $asOfDate->copy()->addDay()->toDateString();
 
-        $lastSale = DB::table('stock_movements')
-            ->where('type', 'sale_out')
-            ->where('occurred_at', '<', $until)
-            ->groupBy('product_id')
-            ->selectRaw('product_id, MAX(occurred_at) as last_sold_at');
+        $lastSale = DB::table('stock_movements as sm')
+            ->join('sales as s', fn ($join) => $join->on('s.id', '=', 'sm.reference_id')->where('sm.reference_type', '=', 'sale'))
+            ->where('sm.type', 'sale_out')
+            ->where('s.status', SaleStatus::Confirmed->value)
+            ->where('sm.occurred_at', '<', $until)
+            ->groupBy('sm.product_id')
+            ->selectRaw('sm.product_id, MAX(sm.occurred_at) as last_sold_at');
 
         $rows = DB::table('products as p')
             ->leftJoinSub($lastSale, 'm', 'm.product_id', '=', 'p.id')

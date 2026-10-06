@@ -3,6 +3,7 @@
 use App\Console\Commands\PrepareSequencesCommand;
 use App\Console\Commands\PruneIdempotencyKeysCommand;
 use App\Console\Commands\ReconcileCustomersCommand;
+use App\Console\Commands\ReconcileStockCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +19,11 @@ Schedule::command(PruneIdempotencyKeysCommand::class)->daily();
 Schedule::command(ReconcileCustomersCommand::class)
     ->dailyAt('02:30')
     ->onFailure(fn () => ReconcileCustomersCommand::logScheduledFailure());
+
+// Report-only; a non-zero exit flags stock_on_hand or balance_after drift.
+Schedule::command(ReconcileStockCommand::class)
+    ->dailyAt('02:45')
+    ->onFailure(fn () => ReconcileStockCommand::logScheduledFailure());
 
 // Nightly database-only backup, then retention cleanup and a health check. Failures inside
 // the package raise events logged as critical (App\Listeners\LogBackupProblems); the

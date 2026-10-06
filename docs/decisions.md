@@ -270,3 +270,14 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 - **Indexes:** `sales (status, sale_date)` already existed; the migration adds `sale_items (product_id)`, `stock_movements (type, occurred_at)`, `payments (paid_at)`. Not applied to the owner's dev database (new rule: tests and fixtures never touch it); `php artisan migrate` applies it.
 - **Spec:** section 14 gained the definitions; section 6.3 the stock-count fields and rules for 3.3.
 
+## 2026-10-06 — Phase 3.2: statements, stock:reconcile, report definition changes
+
+- **Hand figures first:** the statement figures (`docs/acceptance-phase3.md` 3.9: June, January–June, 06-21..06-30, timezone and midnight boundaries, same-timestamp ordering), the dead-stock voided-sale case and the low-stock status were written before the code; `StatementTest`, `ReportFiguresTest` and `tests/Mysql/StatementReconcileTest` assert them. Reviewer's closing balances (Alpha 12,000, Beta 37,000, Gamma −2,000) matched mine.
+- **Dead stock ignores voided sales** (reviewer, reversing my 3.1 literal reading): the last-sale subquery joins `sale_out` movements to sales still `confirmed`.
+- **Low-stock status:** `out_of_stock` when stock ≤ 0, else `low`; the 0/0 product stays listed (counts and order unchanged).
+- **Statement events** come from `sales` (confirmed or void, with `confirmed_at`) and `payments` (valid or void) in one `UNION ALL`; money columns are unsigned on MySQL, so amounts are `CAST(... AS SIGNED)` before negating. Credit applications are not events: they move money between a payment and an invoice and change neither side, so closing = `outstanding_balance − credit_balance` holds.
+- **Same timestamp:** invoices, payments, invoice voids, payment voids, then id. Invoice voids before payment voids is my choice (the instruction says only "then voids").
+- **Datetime bounds:** the statement compares against `Y-m-d 00:00:00`, not a bare date: on SQLite (text comparison) a bare date sorts before midnight of that day, so `<` and `<=` could not be told apart and a mutation of the opening-balance boundary survived. With full datetimes an event at exactly 00:00 is tested and belongs to its day on both databases. The reports' half-open day ranges were already correct on both.
+- **`from`/`to` required** for statements (no default period); no maximum range.
+- **stock:reconcile:** `LAG(balance_after, 1, 0) OVER (PARTITION BY product_id ORDER BY id)` for the chain, a grouped sum for stock; includes soft-deleted products; `--product=*` filter; `--fix` repairs `stock_on_hand` only, logs each change as a warning, and still exits non-zero when a broken chain remains. Scheduled 02:45 (after `customers:reconcile` at 02:30) with `onFailure` → `Log::critical` carrying counts and product ids.
+

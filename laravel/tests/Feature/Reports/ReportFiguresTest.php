@@ -11,6 +11,7 @@ use App\Actions\Reports\StockValuationReport;
 use App\Models\Customer;
 use App\Models\Language;
 use App\Models\Level;
+use App\Models\Product;
 use App\Models\Subject;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -177,14 +178,27 @@ test('3.4 stock valuation: product rows, totals equal to their sum, negative sto
         ->and($r['totals']['value_at_price'])->toBe(array_sum(array_column($r['rows'], 'value_at_price')));
 });
 
-test('3.5 low stock: C, A, E by shortfall', function () {
+test('3.5 low stock: C, A, E by shortfall; E is out of stock', function () {
     $r = app(LowStockReport::class)->run();
 
-    expect(array_map(fn ($row) => [$row['sku'], $row['stock_on_hand'], $row['reorder_level'], $row['shortfall']], $r['rows']))->toBe([
-        ['RPT-C', 34, 40, 6],
-        ['RPT-A', 86, 90, 4],
-        ['RPT-E', -1, 0, 1],
+    expect(array_map(fn ($row) => [$row['sku'], $row['stock_on_hand'], $row['reorder_level'], $row['shortfall'], $row['status']], $r['rows']))->toBe([
+        ['RPT-C', 34, 40, 6, 'low'],
+        ['RPT-A', 86, 90, 4, 'low'],
+        ['RPT-E', -1, 0, 1, 'out_of_stock'],
     ])->and($r['count'])->toBe(3);
+});
+
+test('3.5 low stock: stock 0 with reorder level 0 is listed as out of stock, shortfall 0', function () {
+    Product::query()->create([...$this->fx->products['A']->only(['level_id', 'subject_id', 'language_id']), 'sku' => 'RPT-Z', 'title' => 'Zero', 'cost_price' => 100, 'selling_price' => 200, 'reorder_level' => 0, 'is_active' => true]);
+
+    $r = app(LowStockReport::class)->run();
+
+    expect(array_map(fn ($row) => [$row['sku'], $row['stock_on_hand'], $row['shortfall'], $row['status']], $r['rows']))->toBe([
+        ['RPT-C', 34, 6, 'low'],
+        ['RPT-A', 86, 4, 'low'],
+        ['RPT-E', -1, 1, 'out_of_stock'],
+        ['RPT-Z', 0, 0, 'out_of_stock'],
+    ])->and($r['count'])->toBe(4);
 });
 
 test('3.6 dead stock as of 2026-06-30: D never sold, F last sold 148 days before; 150 days leaves D', function () {
@@ -200,6 +214,19 @@ test('3.6 dead stock as of 2026-06-30: D never sold, F last sold 148 days before
     $longer = app(DeadStockReport::class)->run('2026-06-30', 150);
     expect($longer['cutoff'])->toBe('2026-01-31')
         ->and(array_column($longer['rows'], 'sku'))->toBe(['RPT-D']);
+});
+
+test('3.6 dead stock ignores the voided sale: as of 2026-06-30, 15 days, C last sold 06-10 not 06-16', function () {
+    $r = app(DeadStockReport::class)->run('2026-06-30', 15);
+
+    expect($r['cutoff'])->toBe('2026-06-15')
+        ->and(array_map(fn ($row) => [$row['sku'], $row['last_sold_at'], $row['days_since_sale'], $row['stock_on_hand'], $row['value_at_cost']], $r['rows']))->toBe([
+            ['RPT-D', null, null, 20, 36000],
+            ['RPT-F', '2026-02-02', 148, 9, 9000],
+            ['RPT-C', '2026-06-10', 20, 34, 122400],
+            ['RPT-B', '2026-06-14', 16, 44, 110000],
+        ])
+        ->and($r['totals'])->toBe(['count' => 4, 'value_at_cost' => 277400]);
 });
 
 // --- 3.7 Receivables aging ---------------------------------------------------------------

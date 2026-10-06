@@ -369,15 +369,15 @@ Rows per product `{product_id, sku, title, stock_on_hand, counted_quantity, cost
 
 ### `GET /reports/low-stock`
 
-`{rows: [{product_id, sku, title, stock_on_hand, reorder_level, shortfall}], count}`, largest shortfall first.
+`{rows: [{product_id, sku, title, stock_on_hand, reorder_level, shortfall, status}], count}`, largest shortfall first. `status` is `out_of_stock` when `stock_on_hand ≤ 0`, otherwise `low`.
 
 ### `GET /reports/dead-stock?as_of=&days=90`
 
-`{as_of, days, cutoff, rows: [{product_id, sku, title, stock_on_hand, last_sold_at, days_since_sale, value_at_cost}], totals: {count, value_at_cost}}`. Never-sold products first (`last_sold_at` null), then the oldest last sale.
+`{as_of, days, cutoff, rows: [{product_id, sku, title, stock_on_hand, last_sold_at, days_since_sale, value_at_cost}], totals: {count, value_at_cost}}`. Never-sold products first (`last_sold_at` null), then the oldest last sale. Only sales that are still confirmed count; a voided sale's stock-out is ignored. Uses today's stock; `as_of` only moves the window.
 
 ### `GET /reports/receivables-aging?as_of=`
 
-`{as_of, rows: [{customer_id, name, not_yet_due, days_1_30, days_31_60, days_61_90, days_90_plus, total}], totals: {...}}`, by customer name. `totals.total` equals the sum of customers' `outstanding_balance`.
+`{as_of, rows: [{customer_id, name, not_yet_due, days_1_30, days_31_60, days_61_90, days_90_plus, total}], totals: {...}}`, by customer name. `totals.total` equals the sum of customers' `outstanding_balance`. Balances are today's; `as_of` only moves invoices between buckets (label it "buckets as of …" in clients).
 
 ## Stock
 
@@ -524,6 +524,25 @@ Payment with `customer`, `allocations` (with `invoice_no`; reversals are negativ
 ### `GET /payments/{id}/receipt`
 
 `application/pdf` download named `RCT-YYYY-NNNNNN.pdf`: business details, receipt no., date, customer, method and reference, amount, per-invoice breakdown with each invoice's remaining balance, unapplied amount, customer credit and outstanding balance. Void payments return `409 payment_already_void` (`details.action: receipt`).
+
+### `GET /customers/{id}/statement?from=&to=&format=json|pdf`
+
+Owner only. `from` and `to` required (`YYYY-MM-DD`, Africa/Accra, inclusive). `format=pdf` downloads `statement-{code}-{from}-{to}.pdf` (business details from settings); JSON otherwise. Positive = the customer owes; negative = credit held. Definitions and worked figures: `docs/acceptance-phase3.md` 3.9.
+
+```json
+{ "data": {
+  "customer": { "id": 3, "code": "CUS-0003", "name": "Gamma Academy" },
+  "from": "2026-06-21", "to": "2026-06-30",
+  "opening_balance": 3000,
+  "lines": [ { "at": "2026-06-21T12:00:00+00:00", "date": "2026-06-21", "type": "payment",
+               "sale_id": null, "payment_id": 3, "reference": "RCT-2026-000003",
+               "description": "Payment RCT-2026-000003 (cash)",
+               "debit": 0, "credit": 5000, "amount": -5000, "balance": -2000 } ],
+  "totals": { "debits": 0, "credits": 5000 },
+  "closing_balance": -2000 } }
+```
+
+`type`: `invoice` (+total at `confirmed_at`), `payment` (−amount at `paid_at`), `invoice_void` (−total at the sale's `voided_at`), `payment_void` (+amount at the payment's `voided_at`). Same timestamp: invoice, payment, invoice void, payment void, then id. `opening_balance` = all events before `from`; `closing_balance` = opening + debits − credits.
 
 ### `POST /customers/{id}/apply-credit`
 

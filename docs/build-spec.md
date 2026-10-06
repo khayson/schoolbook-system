@@ -231,7 +231,7 @@ The owner can override a line `unit_price` with a required reason. Flag `is_pric
 - `ReceiveStock`: creates a goods receipt, a `receipt_in` movement per item, updates `stock_on_hand` and `cost_price`.
 - `AdjustStock`: manual adjustment or damage, with a mandatory note.
 - `ApplyStockCount`: for each item with a variance, creates a `count_adjustment` movement; marks the count `applied`.
-- Every movement writes `balance_after`. A nightly check command `stock:reconcile` verifies `stock_on_hand` equals the sum of movements and reports mismatches.
+- Every movement writes `balance_after`. A nightly check command `stock:reconcile` (02:45, amended Phase 3) verifies `stock_on_hand` equals the sum of movements and that each `balance_after` equals the previous movement's `balance_after` (by id, per product; 0 before the first) plus its `quantity`. Report-only by default and exits non-zero while problems remain; `--fix` rewrites `stock_on_hand` only, under the product lock, never movements; a scheduled failure is logged as critical.
 - **Low stock:** `stock_on_hand <= reorder_level`.
 - **Confirming a sale** checks availability per item. If insufficient and `allow_negative_stock` is false, the whole confirm fails with a clear per-item error.
 
@@ -267,7 +267,7 @@ Derived from allocations: `unpaid` (paid = 0), `partial` (0 < paid < total), `pa
 
 ### 9.4 Customer money views
 - **Outstanding balance** = sum of `balance_due` over the customer's confirmed sales.
-- **Statement** (JSON and PDF): opening balance, invoices, payments and a running balance for a date range.
+- **Statement** (JSON and PDF): opening balance, invoices, payments and a running balance for a date range. Amended Phase 3: positive = the customer owes; events are invoice at `confirmed_at` (+total), invoice void at `voided_at` (−total), payment at `paid_at` (−amount), payment void at `voided_at` (+amount); credit applications are not events. Opening balance = all events before `from`; at the same timestamp invoices, then payments, then invoice voids, then payment voids, then record id. For a period ending after the last event the closing balance equals `outstanding_balance − credit_balance`. Worked figures: `docs/acceptance-phase3.md` 3.9.
 - **Aging** buckets by days past `due_date`: current, 1 to 30, 31 to 60, 61 to 90, 90+.
 
 ### 9.5 Money invariants (2C.1)
@@ -384,7 +384,7 @@ Exports (CSV/Excel/PDF) arrive in Phase 5; pages and JSON endpoints in Phase 3.
 - **Gross profit** per line = `line_total − unit_cost × quantity` (snapshot cost); **net profit** = gross profit − order-level discounts.
 - **Catalog grouping** uses each product's current level, subject and language.
 - **Stock valuation** counts `max(0, stock_on_hand)` at current cost and current selling price; negative-stock products are counted separately. Deleted products are excluded; inactive products with stock are included.
-- **Low stock**: active products with `stock_on_hand ≤ reorder_level` (shortfall = reorder level − stock). **Dead stock**: active products with `stock_on_hand > 0` and no `sale_out` movement on or after `as_of − days` (default 90).
+- **Low stock**: active products with `stock_on_hand ≤ reorder_level` (shortfall = reorder level − stock); status `out_of_stock` when stock ≤ 0, otherwise `low`. **Dead stock**: active products with `stock_on_hand > 0` and no `sale_out` movement of a still-confirmed sale on or after `as_of − days` (default 90); a voided sale sold nothing.
 - **Receivables aging**: confirmed sales with `balance_due > 0`, by days past `due_date` on the as-of date: not yet due (≤ 0), 1–30, 31–60, 61–90, 90+. Today's balances; the as-of date only moves the buckets. Grand total = sum of customers' `outstanding_balance`.
 - **Dashboard** (for a date, default today): sales and collections today and month to date; total owed, overdue (balances due before the date), customer credit and low-stock count; top 5 sellers this month by quantity.
 - **Weeks** start on Monday and are labelled by their Monday; periods without activity are listed with zeros.
