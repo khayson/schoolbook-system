@@ -11,6 +11,7 @@ import 'package:schoolbook/features/auth/data/auth_repository.dart';
 import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
 import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
+import 'package:schoolbook/features/customers/data/school_directory_repository.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/presentation/products_list_provider.dart';
@@ -104,6 +105,10 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
         Provider<StockRepository>(
           create: (context) =>
               StockRepository(apiClient: context.read<ApiClient>()),
+        ),
+        Provider<SchoolDirectoryRepository>(
+          create: (context) =>
+              SchoolDirectoryRepository(apiClient: context.read<ApiClient>()),
         ),
         Provider<StockCountsRepository>(
           create: (context) =>

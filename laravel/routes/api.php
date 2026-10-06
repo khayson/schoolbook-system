@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerCreditController;
 use App\Http\Controllers\Api\V1\CustomerStatementController;
+use App\Http\Controllers\Api\V1\DirectorySchoolController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\LanguageController;
 use App\Http\Controllers\Api\V1\LevelController;
@@ -86,6 +87,11 @@ Route::prefix('v1')->group(function () {
 
         Route::apiResource('customers', CustomerController::class);
         Route::get('customers/{customer}/statement', [CustomerStatementController::class, 'show']);
+
+        // School directory (OpenStreetMap): search, add a school as a customer.
+        Route::get('school-directory', [DirectorySchoolController::class, 'index']);
+        Route::post('school-directory/{directorySchool}/customer', [DirectorySchoolController::class, 'addAsCustomer'])
+            ->middleware('idempotent');
         Route::post('customers/{customer}/apply-credit', [CustomerCreditController::class, 'apply'])
             ->middleware('idempotent');
 

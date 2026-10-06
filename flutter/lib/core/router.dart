@@ -5,6 +5,7 @@ import 'package:schoolbook/features/auth/presentation/login_screen.dart';
 import 'package:schoolbook/features/customers/presentation/customer_detail_screen.dart';
 import 'package:schoolbook/features/customers/presentation/customer_form_screen.dart';
 import 'package:schoolbook/features/customers/presentation/customers_list_screen.dart';
+import 'package:schoolbook/features/customers/presentation/school_directory_screen.dart';
 import 'package:schoolbook/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:schoolbook/features/payments/presentation/payment_detail_screen.dart';
 import 'package:schoolbook/features/payments/presentation/payments_list_screen.dart';
@@ -134,6 +135,10 @@ GoRouter createAppRouter(AuthProvider authProvider) {
           GoRoute(
             path: 'new',
             builder: (context, state) => const CustomerFormScreen(),
+          ),
+          GoRoute(
+            path: 'directory',
+            builder: (context, state) => const SchoolDirectoryScreen(),
           ),
           GoRoute(
             path: ':id',

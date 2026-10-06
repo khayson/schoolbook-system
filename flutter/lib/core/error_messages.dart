@@ -64,6 +64,12 @@ ErrorDescription describeApiError(ApiException e) {
         'No credit',
         'This customer has no credit to apply.',
       );
+    case 'already_customer':
+      return ErrorDescription('Already a customer', e.message);
+    case 'customer_name_exists':
+      return ErrorDescription('Customer already exists', e.message);
+    case 'customer_already_linked':
+      return ErrorDescription('Customer already linked', e.message);
     case 'sale_not_payable':
       return ErrorDescription('Invoice cannot be paid', e.message);
     case 'payment_already_void':

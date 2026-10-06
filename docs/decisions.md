@@ -310,3 +310,11 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 - **Formatting:** `dart format` over the whole Flutter app as its own `style:` commit (`db6f4a6`), with `dart fix` adding braces to three one-line ifs the new breaks made lint.
 - **Livewire testing note:** `assertSeeInOrder` matches against the JSON payload, where non-ASCII text (—, −) is \u-escaped; such cells are asserted with `assertSeeHtml`.
 
+## 2026-10-06 — School directory (owner request, before 3.5.1)
+
+- **Owner asked** to "scrape the internet for all schools in Central and Greater Accra" so schools are fast to add and search. Source chosen: **OpenStreetMap** via Overpass (ODbL: free to use with attribution). Not scraped: commercial school-listing sites (terms forbid copying) and government lists (2012-13 census, or behind a login). Coverage is partial (1,026 + 364 named schools; the regions have several thousand), stated on every screen; schools not listed are added by hand as before.
+- **Design** follows the approved list: a separate `directory_schools` table (not customers), `schools:import` (download, keep the raw file in git-ignored `storage/app/reference/`, upsert by OpenStreetMap id, withdraw/restore, never touch customers), search by name/district/town words, "add as customer" (prefilled) or "link existing customer". One entry per customer (unique `customer_id`); same-name customers are never duplicated silently (`customer_name_exists`).
+- **Districts** come from the `admin_level=6` boundary each school lies in (all 1,390 got one), with "District" dropped from the name; levels and ownership are hints from tags or name words.
+- **Found by the synthetic test:** the Overpass stream had no marker between the last district's schools and the region-wide pass, so schools outside every district inherited the last district; the query now prints the region's area before that pass.
+- **Real load verified on `schoolbook_test` only** (1,026 + 364, re-run: all unchanged); the dev database is the owner's step (`php artisan migrate; php artisan schools:import`). PHP on the dev machine has no CA bundle (cURL error 60), so the files were downloaded with Python and loaded with `--file`; the fix (`curl.cainfo`) is in docs/school-directory.md.
+

@@ -571,6 +571,14 @@ Payment with `customer`, `allocations` (with `invoice_no`; reversals are negativ
 
 `application/pdf` download named `RCT-YYYY-NNNNNN.pdf`: business details, receipt no., date, customer, method and reference, amount, per-invoice breakdown with each invoice's remaining balance, unapplied amount, customer credit and outstanding balance. Void payments return `409 payment_already_void` (`details.action: receipt`).
 
+### `GET /school-directory?search=&region=&district=&added=0|1`
+
+Owner only. Schools in Greater Accra and Central from OpenStreetMap (`docs/school-directory.md`), paginated, by name. `search`: every word must appear in the name, district or town. `region`: `Greater Accra` or `Central`. `added`: only schools already added as customers (1) or not yet (0). Rows `{id, name, region, district, town, phone, levels[], level_label, ownership, customer_id, source_ref}`; `meta.attribution` carries the OpenStreetMap attribution to show with the list.
+
+### `POST /school-directory/{id}/customer` (requires `Idempotency-Key`)
+
+Adds the school as a customer: `201` with the new customer (type `school`; name, region, district from the entry; town as address; `phone` from the body, else from the entry). Optional body: `contact_person`, `phone`, `email`, `credit_limit`. With `link_customer_id` the entry is linked to that existing customer instead (`200`). `409`: `already_customer` (entry already linked; `details.customer_id`), `customer_name_exists` (a customer with the same name exists; `details.{customer_id, code, name}`; send `link_customer_id` to link it), `customer_already_linked` (that customer is linked to another entry).
+
 ### `GET /customers/{id}/statement?from=&to=&format=json|pdf`
 
 Owner only. `from` and `to` required (`YYYY-MM-DD`, Africa/Accra, inclusive). `format=pdf` downloads `statement-{code}-{from}-{to}.pdf` (business details from settings); JSON otherwise. Positive = the customer owes; negative = credit held. Definitions and worked figures: `docs/acceptance-phase3.md` 3.9.

@@ -112,7 +112,20 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
   Widget build(BuildContext context) {
     final c = _controller;
     return Scaffold(
-      appBar: AppBar(title: const Text('Customers')),
+      appBar: AppBar(
+        title: const Text('Customers'),
+        actions: [
+          IconButton(
+            key: const Key('customers_directory'),
+            tooltip: 'Add from school directory',
+            icon: const Icon(Icons.travel_explore),
+            onPressed: () async {
+              await context.push('/customers/directory');
+              _controller.load();
+            },
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('customers_new'),
         onPressed: () async {

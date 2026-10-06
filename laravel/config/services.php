@@ -41,4 +41,9 @@ return [
         ],
     ],
 
+    // School directory download (schools:import, docs/school-directory.md).
+    'overpass' => [
+        'url' => env('OVERPASS_URL', 'https://overpass-api.de/api/interpreter'),
+    ],
+
 ];
