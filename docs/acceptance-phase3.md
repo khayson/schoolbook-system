@@ -479,7 +479,7 @@ Both scenarios start from the end of the dataset (section 1): stock **A 86, B 44
 
 ## 5. Phase 3.4: the figures through the clients
 
-**Status: admin PASS; phone run pending** (it needs the port-8000 server pointed at `schoolbook_test`; see 5.3). `phase-3-complete` is tagged only when 5.2 passes on the emulator.
+**Status: PASS** (2026-10-06). Admin (5.1), phone (5.2 a to e) and apply plus reconcile (5.2 f) all pass; tagged `phase-3-complete`. Exact output in 5.4.
 
 ### 5.1 Admin (Filament, Livewire): `tests/Feature/Filament/ReportsAndStockTakeTest.php`
 
@@ -512,7 +512,7 @@ Dataset: section 1, loaded into `schoolbook_test` by `php artisan test --group=p
 
 **d. Statement:** Beta, 2026-01-01 to 2026-06-30, shared from customer detail as `statement-{code}-2026-01-01-2026-06-30.pdf` (a PDF); its figures as in 3.9 (b): opening 0, balances 12,000, 24,000, 30,000, 28,000, 32,000, 37,000; debits 39,000, credits 2,000, closing 37,000.
 
-**e. Stock-take entry:** new count CNT-2026-000001 (0 of 6 counted); entered A 84, B 44, C 30, D 21, F 8 (E not counted). Nothing is sold during the run, so system quantities are the dataset's: variances A 84 − 86 = **−2**, B **0**, C 30 − 34 = **−4**, D 21 − 20 = **+1**, F 8 − 9 = **−1**. Progress **5 of 6 counted**; units −2 − 4 + 1 − 1 = **−6**; value at cost −2 × 3,000 − 4 × 3,600 + 1 × 1,800 − 1 × 1,000 = −6,000 − 14,400 + 1,800 − 1,000 = **−19,600** ("GHS -196.00"). The variances filter lists C (system 34, 30, −4), A (86, 84, −2), D (20, 21, +1), F (9, 8, −1). The phone shows "Applying the count is done from the web admin." and has no apply button.
+**e. Stock-take entry:** new count CNT-2026-000001 (0 of 6 counted); entered A 84, B 44, C 30, D 21, F 8 (E not counted). Nothing is sold during the run, so system quantities are the dataset's: variances A 84 − 86 = **−2**, B **0**, C 30 − 34 = **−4**, D 21 − 20 = **+1**, F 8 − 9 = **−1**. Progress **5 of 6 counted**; units −2 − 4 + 1 − 1 = **−6**; value at cost −2 × 3,000 − 4 × 3,600 + 1 × 1,800 − 1 × 1,000 = −6,000 − 14,400 + 1,800 − 1,000 = **−19,600** ("GHS -196.00"). The variances filter lists, by SKU (the API's item order), A (system 86, 84, −2), C (34, 30, −4), D (20, 21, +1), F (9, 8, −1). The phone shows "Applying the count is done from the web admin." and has no apply button.
 
 **f. Apply on the web, then reconcile:** applying the count gives A **84**, B **44**, C **30**, D **21**, E **−1**, F **8**, four `count_adjustment` movements; `customers:reconcile` and `stock:reconcile` both clean.
 
@@ -523,4 +523,60 @@ Dataset: section 1, loaded into `schoolbook_test` by `php artisan test --group=p
 3. `cd flutter; flutter test integration_test/phase3_acceptance_test.dart -d emulator-5554 | Tee-Object run.txt` (with `--dart-define=OWNER_PASSWORD=...` if `.env` sets one).
 4. Apply the count from the web admin (Inventory → Stock-takes → CNT-2026-000001 → Apply count), then `$env:DB_DATABASE='schoolbook_test'; php artisan customers:reconcile; php artisan stock:reconcile`.
 5. Stop the test server; the owner restarts the dev server.
+
+### 5.4 Run record (2026-10-06, Pixel_9a `emulator-5554`)
+
+Server: the owner's `composer run dev` was stopped (owner's choice: "You stop and restart it"); `$env:DB_DATABASE='schoolbook_test'; php artisan serve --port=8000`. Checked before the run that this server served the throwaway database: `/customers` listed only Alpha School, Beta School and Gamma Academy, and `/reports/dashboard` gave owed 49000, overdue 49000, credit 2000, low stock 3.
+
+Dataset: `php artisan test --group=phase3-phone --exclude-group=none` → `1 passed (6 assertions)` (reloaded before the final run).
+
+Phone, `flutter test integration_test/phase3_acceptance_test.dart -d emulator-5554`:
+
+```
+ACCEPTANCE: 1 card_sales_today: Sales today | GHS 0.00 | 0 sales
+ACCEPTANCE: 1 card_sales_month: This month | GHS 0.00 | 0 sales
+ACCEPTANCE: 1 card_collections: Collected today | GHS 0.00 | Month GHS 0.00
+ACCEPTANCE: 1 card_owed: Owed to you | GHS 490.00
+ACCEPTANCE: 1 card_overdue: Overdue | GHS 490.00
+ACCEPTANCE: 1 card_credit: Credit held | GHS 20.00
+ACCEPTANCE: 1 card_low_stock: Low stock | 3 | products
+ACCEPTANCE: 2 who owes most: Total owed | GHS 490.00 | Beta School | Overdue GHS 370.00 (over 90 days GHS 320.00) | GHS 370.00 | Alpha School | Overdue GHS 120.00 | GHS 120.00
+ACCEPTANCE: 3 low stock: Maths JHS1 | RPT-C | reorder at 40 | 34 left | Short 6 | Maths P4 | RPT-A | reorder at 90 | 86 left | Short 4 | Maths P4 Workbook | RPT-E | reorder at 0 | -1 left | Out of stock
+ACCEPTANCE: 4 statement shared: statement-CUS-6636-2026-01-01-2026-06-30.pdf, 878831 bytes, starts %PDF
+ACCEPTANCE: 4b Beta statement: opening 0, balances [12000, 24000, 30000, 28000, 32000, 37000], totals {debits: 39000, credits: 2000}, closing 37000
+ACCEPTANCE: 5 count opened: CNT-2026-000001, 0 of 6 counted
+ACCEPTANCE: 5b 5 of 6 counted; Variance so far: -6 units, GHS -196.00 at cost
+ACCEPTANCE: 5c variances: Maths P4 | RPT-A | system 86 | 84 | -2 | Maths JHS1 | RPT-C | system 34 | 30 | -4 | Science JHS1 | RPT-D | system 20 | 21 | +1 | Science JHS1 Workbook | RPT-F | system 9 | 8 | -1
+ACCEPTANCE: 5d done: apply CNT-2026-000001 on the web admin, then run both reconcile commands
+00:56 +1: All tests passed!
+```
+
+Beta's "over 90 days GHS 320.00" is the 2026-10-06 value predicted in 5.2 b (s1 to s4; s5 is 83 days past due).
+
+Apply (5.2 f), with the action the admin's "Apply count" button calls (`ApplyStockCount`, run through `php artisan tinker` with `DB_DATABASE=schoolbook_test`: I cannot click the browser; the button itself is covered by 5.1):
+
+```
+database: schoolbook_test
+before: {"items":6,"counted":5,"variance_units":-6,"losses":21400,"gains":1800,"variance_value":-19600}
+status: applied, applied_at: 2026-10-06 08:40:48
+stock: {"RPT-A":84,"RPT-B":44,"RPT-C":30,"RPT-D":21,"RPT-E":-1,"RPT-F":8}
+count_adjustment movements: [["RPT-A",-2,84,3000],["RPT-C",-4,30,3600],["RPT-D",1,21,1800],["RPT-F",-1,8,1000]]
+--- customers:reconcile
+All money invariants hold.
+exit 0
+--- stock:reconcile
+Stock matches the movements.
+exit 0
+```
+
+Then the test server was stopped and the owner's `composer run dev` restarted (server, queue, Vite; port 8000) without the database override.
+
+**Attempts before the passing run** (all recorded, none changed a figure):
+
+1. Timed out waiting for the dashboard after login: the phone's login took 35 s and hit PHP's 30-second limit (`Maximum execution time of 30 seconds exceeded`); my own login a minute earlier took 3 s.
+2. Same wait timed out: login took 25 s and the dashboard request queued behind it on the single-threaded `php artisan serve`. The test's network waits went from 30 s to 90 s. Steps 1 to 4 then passed.
+3. Step 5 read the progress text through a helper that looks *under* a key; the key is on the `Text` itself (test bug, fixed).
+4. Every figure matched, but my expected order of the variance rows was wrong: the API lists count items by SKU (documented in docs/api.md), not C first. Corrected here (5.2 e) and in the test; the dataset was reloaded and the run repeated.
+
+Observations for later phases: a login from the emulator takes 25-35 s on `php artisan serve` on this machine (single-threaded; not seen from the host); a 6-line statement PDF is 879 KB because DomPDF embeds the whole DejaVu font (font subsetting is worth turning on before statements are shared over WhatsApp).
 

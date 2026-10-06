@@ -132,8 +132,8 @@ void main() {
     await tester.tap(find.byKey(const Key('start_count_confirm')));
     await _waitFor(tester, find.byKey(const Key('count_progress')));
     final reference = _texts(tester, find.byType(AppBar));
-    step('5 count opened: $reference, ${_texts(tester, find.byKey(const Key('count_progress')))}');
-    expect(_texts(tester, find.byKey(const Key('count_progress'))), '0 of 6 counted');
+    step('5 count opened: $reference, ${_text(tester, const Key('count_progress'))}');
+    expect(_text(tester, const Key('count_progress')), '0 of 6 counted');
 
     const counts = {'RPT-A': ('Maths P4', 84), 'RPT-B': ('Science P4', 44), 'RPT-C': ('Maths JHS1', 30), 'RPT-D': ('Science JHS1', 21), 'RPT-F': ('Science JHS1 Workbook', 8)};
     for (final entry in counts.entries) {
@@ -150,8 +150,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('count_search')), '');
     await _settle(tester);
 
-    final progress = _texts(tester, find.byKey(const Key('count_progress')));
-    final variance = _texts(tester, find.byKey(const Key('count_variance_total')));
+    final progress = _text(tester, const Key('count_progress'));
+    final variance = _text(tester, const Key('count_variance_total'));
     step('5b $progress; $variance');
     expect(progress, '5 of 6 counted');
     expect(variance, 'Variance so far: -6 units, GHS -196.00 at cost');
@@ -160,8 +160,8 @@ void main() {
     await _settle(tester);
     final variances = _texts(tester, find.byType(ListView));
     step('5c variances: $variances');
-    expect(variances, 'Maths JHS1 | RPT-C | system 34 | 30 | -4 | '
-        'Maths P4 | RPT-A | system 86 | 84 | -2 | '
+    expect(variances, 'Maths P4 | RPT-A | system 86 | 84 | -2 | '
+        'Maths JHS1 | RPT-C | system 34 | 30 | -4 | '
         'Science JHS1 | RPT-D | system 20 | 21 | +1 | '
         'Science JHS1 Workbook | RPT-F | system 9 | 8 | -1');
     expect(find.text('Applying the count is done from the web admin.'), findsOneWidget);
@@ -173,6 +173,9 @@ Future<int> _customerId(ApiClient api, String name) async {
   final rows = (await api.get<Map<String, dynamic>>('/customers', queryParameters: {'search': name})).data!['data'] as List;
   return ((rows.firstWhere((r) => (r as Map)['name'] == name)) as Map)['id'] as int;
 }
+
+/// The text of the Text widget that carries [key] itself.
+String _text(WidgetTester tester, Key key) => tester.widget<Text>(find.byKey(key)).data ?? '';
 
 /// The visible Text widgets under [finder], joined with " | ".
 String _texts(WidgetTester tester, Finder finder) => tester
@@ -193,7 +196,9 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Future<void> _waitFor(WidgetTester tester, Finder finder, {Duration timeout = const Duration(seconds: 30)}) async {
+/// 90 s: `php artisan serve` is single-threaded and a login from the emulator has taken
+/// 25-35 s on this machine (docs/acceptance-phase3.md 5.4); requests queue behind it.
+Future<void> _waitFor(WidgetTester tester, Finder finder, {Duration timeout = const Duration(seconds: 90)}) async {
   final end = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(end)) {
     await tester.pump(const Duration(milliseconds: 200));
@@ -205,7 +210,7 @@ Future<void> _waitFor(WidgetTester tester, Finder finder, {Duration timeout = co
   throw TestFailure('Timed out waiting for $finder');
 }
 
-Future<void> _until(WidgetTester tester, bool Function() condition, String what, {Duration timeout = const Duration(seconds: 60)}) async {
+Future<void> _until(WidgetTester tester, bool Function() condition, String what, {Duration timeout = const Duration(seconds: 90)}) async {
   final end = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(end)) {
     if (condition()) return;
