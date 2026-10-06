@@ -29,8 +29,15 @@ void main() {
     final router = GoRouter(
       initialLocation: '/customers/new',
       routes: [
-        GoRoute(path: '/customers/new', builder: (_, _) => const CustomerFormScreen()),
-        GoRoute(path: '/customers/:id', builder: (_, s) => Scaffold(body: Text('customer ${s.pathParameters['id']}'))),
+        GoRoute(
+          path: '/customers/new',
+          builder: (_, _) => const CustomerFormScreen(),
+        ),
+        GoRoute(
+          path: '/customers/:id',
+          builder: (_, s) =>
+              Scaffold(body: Text('customer ${s.pathParameters['id']}')),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -51,23 +58,40 @@ void main() {
 
   setUp(() => repo = _RecordingCustomersRepository());
 
-  testWidgets('name and region are required; the credit limit must be exact GHS', (tester) async {
-    await pumpForm(tester);
-    await tester.enterText(find.byKey(const Key('cust_credit_limit')), '10.999');
-    await tester.tap(find.byKey(const Key('cust_save')));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'name and region are required; the credit limit must be exact GHS',
+    (tester) async {
+      await pumpForm(tester);
+      await tester.enterText(
+        find.byKey(const Key('cust_credit_limit')),
+        '10.999',
+      );
+      await tester.tap(find.byKey(const Key('cust_save')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Name is required'), findsOneWidget);
-    expect(find.text('Pick a region'), findsOneWidget);
-    expect(find.text('Use an amount like 1250, 1,250 or 1,250.50'), findsOneWidget);
-    expect(repo.created, isEmpty);
-  });
+      expect(find.text('Name is required'), findsOneWidget);
+      expect(find.text('Pick a region'), findsOneWidget);
+      expect(
+        find.text('Use an amount like 1250, 1,250 or 1,250.50'),
+        findsOneWidget,
+      );
+      expect(repo.created, isEmpty);
+    },
+  );
 
-  testWidgets('saving sends API keys with the credit limit in pesewas', (tester) async {
+  testWidgets('saving sends API keys with the credit limit in pesewas', (
+    tester,
+  ) async {
     await pumpForm(tester);
-    await tester.enterText(find.byKey(const Key('cust_name')), '  Bethel Academy ');
+    await tester.enterText(
+      find.byKey(const Key('cust_name')),
+      '  Bethel Academy ',
+    );
     await pickRegion(tester, 'Bono East');
-    await tester.enterText(find.byKey(const Key('cust_credit_limit')), '2,500.29');
+    await tester.enterText(
+      find.byKey(const Key('cust_credit_limit')),
+      '2,500.29',
+    );
     await tester.tap(find.byKey(const Key('cust_save')));
     await tester.pumpAndSettle();
 
@@ -81,7 +105,10 @@ void main() {
 
   testWidgets('a blank credit limit means no limit', (tester) async {
     await pumpForm(tester);
-    await tester.enterText(find.byKey(const Key('cust_name')), 'No Limit School');
+    await tester.enterText(
+      find.byKey(const Key('cust_name')),
+      'No Limit School',
+    );
     await pickRegion(tester, 'Volta');
     await tester.tap(find.byKey(const Key('cust_save')));
     await tester.pumpAndSettle();

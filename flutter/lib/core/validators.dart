@@ -41,7 +41,9 @@ abstract final class Validators {
       return null;
     }
     final v = value.trim();
-    if (v.length < 4 || v.length > 64 || !RegExp(r'^[A-Za-z0-9\- ]+$').hasMatch(v)) {
+    if (v.length < 4 ||
+        v.length > 64 ||
+        !RegExp(r'^[A-Za-z0-9\- ]+$').hasMatch(v)) {
       return 'A code is 4 to 64 letters, digits or hyphens';
     }
     return null;
@@ -74,7 +76,9 @@ abstract final class Validators {
     if (value == null) {
       return 'Pick a date';
     }
-    return value.isAfter(now ?? DateTime.now()) ? 'Cannot be in the future' : null;
+    return value.isAfter(now ?? DateTime.now())
+        ? 'Cannot be in the future'
+        : null;
   }
 
   static String? optionalEmail(String? value) {

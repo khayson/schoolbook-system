@@ -18,7 +18,10 @@ import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/sales/presentation/new_sale_controller.dart';
 
 class NewSaleScreen extends StatefulWidget {
-  const NewSaleScreen({super.key, this.previewDebounce = const Duration(milliseconds: 400)});
+  const NewSaleScreen({
+    super.key,
+    this.previewDebounce = const Duration(milliseconds: 400),
+  });
 
   final Duration previewDebounce;
 
@@ -86,7 +89,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     if (sale == null || !mounted) {
       return;
     }
-    context.pushReplacement('/sales/${sale.id}${thenConfirm ? '?confirm=1' : ''}');
+    context.pushReplacement(
+      '/sales/${sale.id}${thenConfirm ? '?confirm=1' : ''}',
+    );
   }
 
   @override
@@ -106,8 +111,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               title: Text(customer?.name ?? 'Choose customer'),
               subtitle: customer == null
                   ? null
-                  : Text('Owes ${Money.formatPesewas(customer.outstandingBalance)} | credit ${Money.formatPesewas(customer.creditBalance)}'
-                      '${customer.creditLimit == null ? '' : ' | limit ${Money.formatPesewas(customer.creditLimit!)}'}'),
+                  : Text(
+                      'Owes ${Money.formatPesewas(customer.outstandingBalance)} | credit ${Money.formatPesewas(customer.creditBalance)}'
+                      '${customer.creditLimit == null ? '' : ' | limit ${Money.formatPesewas(customer.creditLimit!)}'}',
+                    ),
               trailing: const Icon(Icons.chevron_right),
               onTap: _pickCustomer,
             ),
@@ -154,7 +161,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _notes,
-            decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Notes (optional)',
+              border: OutlineInputBorder(),
+            ),
             maxLines: 2,
           ),
         ],
@@ -171,7 +181,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
 /// Bottom bar: server-priced total (or the pricing/save error) and both save actions.
 class _SaveBar extends StatelessWidget {
-  const _SaveBar({required this.controller, required this.onSave, required this.onSaveAndConfirm});
+  const _SaveBar({
+    required this.controller,
+    required this.onSave,
+    required this.onSaveAndConfirm,
+  });
 
   final NewSaleController controller;
   final VoidCallback onSave;
@@ -200,24 +214,35 @@ class _SaveBar extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      c.lines.isEmpty ? 'No books yet' : 'Total for $books book${books == 1 ? '' : 's'}',
+                      c.lines.isEmpty
+                          ? 'No books yet'
+                          : 'Total for $books book${books == 1 ? '' : 's'}',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),
                   if (c.previewLoading)
                     const Padding(
                       padding: EdgeInsets.only(right: 8),
-                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
                   Text(
-                    c.lines.isEmpty || preview == null ? '…' : Money.formatPesewas(preview.total),
+                    c.lines.isEmpty || preview == null
+                        ? '…'
+                        : Money.formatPesewas(preview.total),
                     key: const Key('new_sale_total'),
                     style: theme.textTheme.titleLarge,
                   ),
                 ],
               ),
               if (c.previewError != null)
-                Text(describeApiError(c.previewError!).body, style: TextStyle(color: theme.colorScheme.error)),
+                Text(
+                  describeApiError(c.previewError!).body,
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
               if (c.saveError != null)
                 Text(
                   '${describeApiError(c.saveError!).title}: ${describeApiError(c.saveError!).body}',
@@ -231,7 +256,9 @@ class _SaveBar extends StatelessWidget {
                     child: OutlinedButton(
                       key: const Key('new_sale_save'),
                       onPressed: c.canSave ? onSave : null,
-                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
                       child: const Text('Save draft'),
                     ),
                   ),
@@ -241,7 +268,9 @@ class _SaveBar extends StatelessWidget {
                     child: FilledButton(
                       key: const Key('new_sale_save_confirm'),
                       onPressed: c.canSave ? onSaveAndConfirm : null,
-                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
                       child: Text(c.saving ? 'Saving…' : 'Save & confirm'),
                     ),
                   ),
@@ -313,12 +342,21 @@ class _LineRowState extends State<_LineRow> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(p.title, style: Theme.of(context).textTheme.titleSmall),
-                  Text('${p.sku} | stock ${p.stockOnHand}', style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    '${p.sku} | stock ${p.stockOnHand}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   Text(widget.priceText),
                 ],
               ),
             ),
-            IconButton(key: const Key('qty_minus'), onPressed: widget.line.quantity > 1 ? () => widget.onStep(-1) : null, icon: const Icon(Icons.remove)),
+            IconButton(
+              key: const Key('qty_minus'),
+              onPressed: widget.line.quantity > 1
+                  ? () => widget.onStep(-1)
+                  : null,
+              icon: const Icon(Icons.remove),
+            ),
             SizedBox(
               width: 56,
               child: TextField(
@@ -335,8 +373,15 @@ class _LineRowState extends State<_LineRow> {
                 },
               ),
             ),
-            IconButton(key: const Key('qty_plus'), onPressed: () => widget.onStep(1), icon: const Icon(Icons.add)),
-            IconButton(onPressed: widget.onRemove, icon: const Icon(Icons.delete_outline)),
+            IconButton(
+              key: const Key('qty_plus'),
+              onPressed: () => widget.onStep(1),
+              icon: const Icon(Icons.add),
+            ),
+            IconButton(
+              onPressed: widget.onRemove,
+              icon: const Icon(Icons.delete_outline),
+            ),
           ],
         ),
       ),
@@ -375,7 +420,9 @@ class _CustomerPickerState extends State<_CustomerPicker> {
       _error = null;
     });
     try {
-      final page = await context.read<CustomersRepository>().listCustomers(search: query);
+      final page = await context.read<CustomersRepository>().listCustomers(
+        search: query,
+      );
       if (mounted) {
         setState(() => _customers = page.data);
       }
@@ -402,10 +449,17 @@ class _CustomerPickerState extends State<_CustomerPicker> {
               child: TextField(
                 key: const Key('customer_picker_search'),
                 autofocus: true,
-                decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search customers', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search customers',
+                  border: OutlineInputBorder(),
+                ),
                 onChanged: (v) {
                   _debounce?.cancel();
-                  _debounce = Timer(const Duration(milliseconds: 300), () => _search(v));
+                  _debounce = Timer(
+                    const Duration(milliseconds: 300),
+                    () => _search(v),
+                  );
                 },
               ),
             ),
@@ -419,9 +473,11 @@ class _CustomerPickerState extends State<_CustomerPicker> {
                       key: Key('pick_customer_${c.id}'),
                       enabled: c.isActive,
                       title: Text(c.name),
-                      subtitle: Text(c.isActive
-                          ? 'Owes ${Money.formatPesewas(c.outstandingBalance)} | credit ${Money.formatPesewas(c.creditBalance)}'
-                          : 'Inactive: cannot get new sales'),
+                      subtitle: Text(
+                        c.isActive
+                            ? 'Owes ${Money.formatPesewas(c.outstandingBalance)} | credit ${Money.formatPesewas(c.creditBalance)}'
+                            : 'Inactive: cannot get new sales',
+                      ),
                       onTap: () => Navigator.pop(context, c),
                     ),
                 ],
@@ -495,11 +551,11 @@ class _ProductPickerState extends State<_ProductPicker> {
     });
     try {
       final page = await context.read<ProductsRepository>().listProducts(
-            search: _query,
-            levelId: _levelId,
-            subjectId: _subjectId,
-            languageId: _languageId,
-          );
+        search: _query,
+        levelId: _levelId,
+        subjectId: _subjectId,
+        languageId: _languageId,
+      );
       if (mounted) {
         setState(() => _results = page.data.where((p) => p.isActive).toList());
       }
@@ -514,7 +570,11 @@ class _ProductPickerState extends State<_ProductPicker> {
     }
   }
 
-  Widget _chips(List<NamedLookup> items, int? selected, void Function(int?) onSelect) {
+  Widget _chips(
+    List<NamedLookup> items,
+    int? selected,
+    void Function(int?) onSelect,
+  ) {
     return SizedBox(
       height: 44,
       child: ListView(
@@ -553,7 +613,10 @@ class _ProductPickerState extends State<_ProductPicker> {
                   prefixIcon: const Icon(Icons.search),
                   hintText: 'Title, SKU, ISBN…',
                   border: const OutlineInputBorder(),
-                  suffixIcon: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+                  suffixIcon: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'),
+                  ),
                 ),
                 onChanged: (v) {
                   _query = v;
@@ -563,10 +626,19 @@ class _ProductPickerState extends State<_ProductPicker> {
               ),
             ),
             _chips(_levels, _levelId, (v) => setState(() => _levelId = v)),
-            _chips(_subjects, _subjectId, (v) => setState(() => _subjectId = v)),
-            _chips(_languages, _languageId, (v) => setState(() => _languageId = v)),
+            _chips(
+              _subjects,
+              _subjectId,
+              (v) => setState(() => _subjectId = v),
+            ),
+            _chips(
+              _languages,
+              _languageId,
+              (v) => setState(() => _languageId = v),
+            ),
             if (_loading) const LinearProgressIndicator(),
-            if (_error != null) Padding(padding: const EdgeInsets.all(8), child: Text(_error!)),
+            if (_error != null)
+              Padding(padding: const EdgeInsets.all(8), child: Text(_error!)),
             Expanded(
               child: ListView(
                 children: [
@@ -574,7 +646,9 @@ class _ProductPickerState extends State<_ProductPicker> {
                     ListTile(
                       key: Key('pick_product_${p.id}'),
                       title: Text(p.title),
-                      subtitle: Text('${p.sku} | ${Money.formatPesewas(p.sellingPrice)} | stock ${p.stockOnHand}'),
+                      subtitle: Text(
+                        '${p.sku} | ${Money.formatPesewas(p.sellingPrice)} | stock ${p.stockOnHand}',
+                      ),
                       trailing: _added[p.id] == null
                           ? const Icon(Icons.add_circle_outline)
                           : Chip(label: Text('+${_added[p.id]}')),

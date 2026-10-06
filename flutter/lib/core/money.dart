@@ -7,8 +7,9 @@ abstract final class Money {
 
   /// Plain digits, or thousands correctly grouped in threes (1,250 / 1,250,000.50),
   /// with at most 2 decimals. Same rule as the admin's GHS input.
-  static final RegExp _pattern =
-      RegExp(r'^(\d{1,10}|\d{1,3}(,\d{3}){1,3})(\.(\d{1,2}))?$');
+  static final RegExp _pattern = RegExp(
+    r'^(\d{1,10}|\d{1,3}(,\d{3}){1,3})(\.(\d{1,2}))?$',
+  );
 
   /// Formats [pesewas] as `GHS 12.34`.
   static String formatPesewas(int pesewas) {
@@ -39,8 +40,9 @@ abstract final class Money {
 
     final whole = int.parse(match.group(1)!.replaceAll(',', ''));
     final fractionRaw = match.group(4);
-    final fraction =
-        fractionRaw == null ? 0 : int.parse(fractionRaw.padRight(2, '0'));
+    final fraction = fractionRaw == null
+        ? 0
+        : int.parse(fractionRaw.padRight(2, '0'));
 
     final pesewas = whole * 100 + fraction;
     return pesewas > maxPesewas ? null : pesewas;

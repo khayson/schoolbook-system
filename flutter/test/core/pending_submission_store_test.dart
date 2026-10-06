@@ -3,7 +3,12 @@ import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 
 void main() {
   const intent = 'record_payment.customer.1';
-  final payload = {'customer_id': 1, 'amount': 50000, 'method': 'momo', 'reference': 'MP-1'};
+  final payload = {
+    'customer_id': 1,
+    'amount': 50000,
+    'method': 'momo',
+    'reference': 'MP-1',
+  };
 
   test('the same payload gets the same key until completed', () async {
     final store = PendingSubmissionStore(store: InMemoryKeyValueStore());
@@ -12,7 +17,14 @@ void main() {
     final again = await store.keyFor(intent, Map.of(payload));
 
     expect(again, first);
-    expect(first, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
+    expect(
+      first,
+      matches(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ),
+      ),
+    );
 
     await store.complete(intent);
     expect(await store.pending(intent), isNull);
@@ -31,8 +43,14 @@ void main() {
 
   test('key order in the payload does not matter', () {
     expect(
-      PendingSubmissionStore.payloadHash({'a': 1, 'b': {'y': 2, 'x': 1}}),
-      PendingSubmissionStore.payloadHash({'b': {'x': 1, 'y': 2}, 'a': 1}),
+      PendingSubmissionStore.payloadHash({
+        'a': 1,
+        'b': {'y': 2, 'x': 1},
+      }),
+      PendingSubmissionStore.payloadHash({
+        'b': {'x': 1, 'y': 2},
+        'a': 1,
+      }),
     );
     expect(
       PendingSubmissionStore.payloadHash({'a': 1}),
@@ -43,7 +61,11 @@ void main() {
   test('survives an app restart (a new store over the same storage)', () async {
     final backing = InMemoryKeyValueStore();
     final before = PendingSubmissionStore(store: backing);
-    final key = await before.keyFor(intent, payload, now: DateTime(2026, 10, 2, 9, 30));
+    final key = await before.keyFor(
+      intent,
+      payload,
+      now: DateTime(2026, 10, 2, 9, 30),
+    );
 
     // App killed; started again.
     final after = PendingSubmissionStore(store: backing);
@@ -64,7 +86,8 @@ void main() {
   });
 
   test('corrupt stored data is discarded, not crashed on', () async {
-    final backing = InMemoryKeyValueStore()..values['pending_submission.$intent'] = '{not json';
+    final backing = InMemoryKeyValueStore()
+      ..values['pending_submission.$intent'] = '{not json';
     final store = PendingSubmissionStore(store: backing);
 
     expect(await store.pending(intent), isNull);

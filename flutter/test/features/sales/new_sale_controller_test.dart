@@ -10,11 +10,13 @@ void main() {
   late FakeSalesRepository sales;
   late NewSaleController controller;
 
-  NewSaleController make({Duration debounce = const Duration(milliseconds: 400)}) => NewSaleController(
-        sales: sales,
-        pendingStore: PendingSubmissionStore(store: InMemoryKeyValueStore()),
-        debounce: debounce,
-      );
+  NewSaleController make({
+    Duration debounce = const Duration(milliseconds: 400),
+  }) => NewSaleController(
+    sales: sales,
+    pendingStore: PendingSubmissionStore(store: InMemoryKeyValueStore()),
+    debounce: debounce,
+  );
 
   setUp(() => sales = FakeSalesRepository());
 
@@ -24,7 +26,10 @@ void main() {
       ..addProduct(testProduct(id: 11))
       ..addProduct(testProduct(id: 12));
 
-    expect(controller.lines.map((l) => '${l.product.id}x${l.quantity}'), ['11x2', '12x1']);
+    expect(controller.lines.map((l) => '${l.product.id}x${l.quantity}'), [
+      '11x2',
+      '12x1',
+    ]);
 
     controller
       ..step(11, 5)
@@ -37,33 +42,37 @@ void main() {
     controller.dispose();
   });
 
-  test('totals come from one debounced server preview, never computed locally', () {
-    fakeAsync((async) {
-      controller = make()
-        ..setCustomer(testCustomer())
-        ..addProduct(testProduct(id: 11))
-        ..step(11, 1)
-        ..step(11, 1);
+  test(
+    'totals come from one debounced server preview, never computed locally',
+    () {
+      fakeAsync((async) {
+        controller = make()
+          ..setCustomer(testCustomer())
+          ..addProduct(testProduct(id: 11))
+          ..step(11, 1)
+          ..step(11, 1);
 
-      async.elapse(const Duration(milliseconds: 399));
-      expect(sales.previewCalls, isEmpty);
+        async.elapse(const Duration(milliseconds: 399));
+        expect(sales.previewCalls, isEmpty);
 
-      async.elapse(const Duration(milliseconds: 1));
-      async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 1));
+        async.flushMicrotasks();
 
-      expect(sales.previewCalls, hasLength(1));
-      expect(sales.previewCalls.single, [
-        {'product_id': 11, 'quantity': 3},
-      ]);
-      expect(controller.preview!.total, 3000);
-      expect(controller.previewFor(11)!.lineTotal, 3000);
-      controller.dispose();
-    });
-  });
+        expect(sales.previewCalls, hasLength(1));
+        expect(sales.previewCalls.single, [
+          {'product_id': 11, 'quantity': 3},
+        ]);
+        expect(controller.preview!.total, 3000);
+        expect(controller.previewFor(11)!.lineTotal, 3000);
+        controller.dispose();
+      });
+    },
+  );
 
   test('a slow older preview never overwrites a newer one', () {
     fakeAsync((async) {
-      controller = make(debounce: Duration.zero)..addProduct(testProduct(id: 11));
+      controller = make(debounce: Duration.zero)
+        ..addProduct(testProduct(id: 11));
       sales.previewResult = null;
 
       // First (slow) request for qty 1; then a fast one for qty 2.
@@ -110,18 +119,28 @@ void main() {
     controller.dispose();
   });
 
-  test('a definitive save error (inactive customer 422) forgets the key', () async {
-    final store = PendingSubmissionStore(store: InMemoryKeyValueStore());
-    sales.createResults.add(ApiException(message: 'm', code: 'validation_failed', statusCode: 422));
-    controller = NewSaleController(sales: sales, pendingStore: store, debounce: const Duration(hours: 1))
-      ..setCustomer(testCustomer())
-      ..addProduct(testProduct());
+  test(
+    'a definitive save error (inactive customer 422) forgets the key',
+    () async {
+      final store = PendingSubmissionStore(store: InMemoryKeyValueStore());
+      sales.createResults.add(
+        ApiException(message: 'm', code: 'validation_failed', statusCode: 422),
+      );
+      controller =
+          NewSaleController(
+              sales: sales,
+              pendingStore: store,
+              debounce: const Duration(hours: 1),
+            )
+            ..setCustomer(testCustomer())
+            ..addProduct(testProduct());
 
-    await controller.saveDraft();
+      await controller.saveDraft();
 
-    expect(await store.pending(NewSaleController.intent), isNull);
-    controller.dispose();
-  });
+      expect(await store.pending(NewSaleController.intent), isNull);
+      controller.dispose();
+    },
+  );
 
   test('cannot save without a customer or without books', () async {
     controller = make(debounce: const Duration(hours: 1));

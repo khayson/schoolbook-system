@@ -77,7 +77,9 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
 
   Future<void> _loadCustomer() async {
     try {
-      final customer = await context.read<CustomersRepository>().getCustomer(widget.customerId);
+      final customer = await context.read<CustomersRepository>().getCustomer(
+        widget.customerId,
+      );
       if (mounted) {
         setState(() => _customer = customer);
       }
@@ -195,7 +197,9 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
             TextFormField(
               key: const Key('pay_amount'),
               controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Amount',
                 prefixText: 'GHS ',
@@ -208,15 +212,21 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
               key: const Key('pay_method'),
               // Keyed on the value so a restored unfinished payment shows its method.
               child: DropdownButtonFormField<String>(
-              key: ValueKey('pay_method_$_method'),
-              initialValue: _method,
-              decoration: const InputDecoration(labelText: 'Method', border: OutlineInputBorder()),
-              items: [
-                for (final m in PaymentMethods.all)
-                  DropdownMenuItem(value: m, child: Text(PaymentMethods.label(m))),
-              ],
-              onChanged: (v) => setState(() => _method = v ?? 'cash'),
-            ),
+                key: ValueKey('pay_method_$_method'),
+                initialValue: _method,
+                decoration: const InputDecoration(
+                  labelText: 'Method',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final m in PaymentMethods.all)
+                    DropdownMenuItem(
+                      value: m,
+                      child: Text(PaymentMethods.label(m)),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _method = v ?? 'cash'),
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -244,10 +254,16 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
               key: const Key('pay_notes'),
               controller: _notes,
               maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Notes (optional)',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 12),
-            Text('Apply the money', style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'Apply the money',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             RadioGroup<bool>(
               groupValue: _keepAsCredit,
               onChanged: (v) => setState(() => _keepAsCredit = v ?? false),
@@ -276,10 +292,20 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
             FilledButton(
               key: const Key('pay_submit'),
               onPressed: c.submitting ? null : _submit,
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
               child: c.submitting
-                  ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(c.error?.isNetworkError ?? false ? 'Try again' : 'Record payment'),
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      c.error?.isNetworkError ?? false
+                          ? 'Try again'
+                          : 'Record payment',
+                    ),
             ),
             const SizedBox(height: 24),
             Text(
@@ -301,7 +327,9 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
                 child: Text('No payments yet.'),
               )
             else
-              ...c.recent.map((p) => PaymentTile(key: Key('recent_${p.id}'), payment: p)),
+              ...c.recent.map(
+                (p) => PaymentTile(key: Key('recent_${p.id}'), payment: p),
+              ),
           ],
         ),
       ),
@@ -318,7 +346,10 @@ class _CustomerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (error != null) {
-      return Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error));
+      return Text(
+        error!,
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      );
     }
     final c = customer;
     if (c == null) {
@@ -327,14 +358,20 @@ class _CustomerHeader extends StatelessWidget {
     return Card(
       child: ListTile(
         title: Text(c.name),
-        subtitle: Text('Owes ${Money.formatPesewas(c.outstandingBalance)} | credit ${Money.formatPesewas(c.creditBalance)}'),
+        subtitle: Text(
+          'Owes ${Money.formatPesewas(c.outstandingBalance)} | credit ${Money.formatPesewas(c.creditBalance)}',
+        ),
       ),
     );
   }
 }
 
 class _UnfinishedBanner extends StatelessWidget {
-  const _UnfinishedBanner({required this.unfinished, required this.onRestore, required this.onDiscard});
+  const _UnfinishedBanner({
+    required this.unfinished,
+    required this.onRestore,
+    required this.onDiscard,
+  });
 
   final PendingSubmission unfinished;
   final VoidCallback onRestore;
@@ -343,7 +380,9 @@ class _UnfinishedBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = unfinished.payload;
-    final amount = p['amount'] is int ? Money.formatPesewas(p['amount'] as int) : '?';
+    final amount = p['amount'] is int
+        ? Money.formatPesewas(p['amount'] as int)
+        : '?';
     final method = PaymentMethods.label('${p['method']}');
     final reference = p['reference'] == null ? '' : ' (${p['reference']})';
     final when = DateFormat('d MMM, HH:mm').format(unfinished.startedAt);
@@ -355,7 +394,10 @@ class _UnfinishedBanner extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Unfinished payment', style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'Unfinished payment',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 4),
             Text(
               '$amount by $method$reference was sent at $when but never confirmed. '
@@ -365,8 +407,16 @@ class _UnfinishedBanner extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(key: const Key('pay_unfinished_discard'), onPressed: onDiscard, child: const Text('Discard')),
-                FilledButton.tonal(key: const Key('pay_unfinished_restore'), onPressed: onRestore, child: const Text('Restore')),
+                TextButton(
+                  key: const Key('pay_unfinished_discard'),
+                  onPressed: onDiscard,
+                  child: const Text('Discard'),
+                ),
+                FilledButton.tonal(
+                  key: const Key('pay_unfinished_restore'),
+                  onPressed: onRestore,
+                  child: const Text('Restore'),
+                ),
               ],
             ),
           ],
@@ -380,15 +430,17 @@ class _UnfinishedBanner extends StatelessWidget {
 Future<void> shareReceipt(BuildContext context, Payment payment) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   try {
-    final bytes = await context.read<PaymentsRepository>().receiptPdf(payment.id);
+    final bytes = await context.read<PaymentsRepository>().receiptPdf(
+      payment.id,
+    );
     if (!context.mounted) {
       return;
     }
     await context.read<PdfSharer>().sharePdf(
-          bytes,
-          fileName: '${payment.receiptNo}.pdf',
-          subject: 'Receipt ${payment.receiptNo}',
-        );
+      bytes,
+      fileName: '${payment.receiptNo}.pdf',
+      subject: 'Receipt ${payment.receiptNo}',
+    );
   } on ApiException catch (e) {
     messenger?.showSnackBar(SnackBar(content: Text(describeApiError(e).body)));
   }

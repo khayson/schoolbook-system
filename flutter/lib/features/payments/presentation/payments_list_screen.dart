@@ -46,7 +46,10 @@ class PaymentsListController extends ChangeNotifier {
     loadingMore = true;
     notifyListeners();
     try {
-      final page = await _repository.listPayments(page: _page + 1, status: status);
+      final page = await _repository.listPayments(
+        page: _page + 1,
+        status: status,
+      );
       payments = [...payments, ...page.data];
       _page = page.meta.currentPage;
       _lastPage = page.meta.lastPage;
@@ -129,7 +132,10 @@ class _PaymentsListScreenState extends State<PaymentsListScreen> {
       return ErrorState(message: c.error!, onRetry: c.load);
     }
     if (c.payments.isEmpty) {
-      return const EmptyState(title: 'No payments', subtitle: 'Record one from a customer.');
+      return const EmptyState(
+        title: 'No payments',
+        subtitle: 'Record one from a customer.',
+      );
     }
     return RefreshIndicator(
       onRefresh: c.load,
@@ -139,7 +145,10 @@ class _PaymentsListScreenState extends State<PaymentsListScreen> {
         itemBuilder: (context, i) {
           if (i == c.payments.length) {
             c.loadMore();
-            return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
           final p = c.payments[i];
           return PaymentTile(

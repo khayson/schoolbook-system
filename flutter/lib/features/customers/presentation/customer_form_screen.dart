@@ -50,7 +50,16 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _district, _address, _contact, _phone, _email, _creditLimit, _notes]) {
+    for (final c in [
+      _name,
+      _district,
+      _address,
+      _contact,
+      _phone,
+      _email,
+      _creditLimit,
+      _notes,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -62,14 +71,18 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       _loadError = null;
     });
     try {
-      final c = await context.read<CustomersRepository>().getCustomer(widget.customerId!);
+      final c = await context.read<CustomersRepository>().getCustomer(
+        widget.customerId!,
+      );
       _name.text = c.name;
       _district.text = c.district ?? '';
       _address.text = c.address ?? '';
       _contact.text = c.contactPerson ?? '';
       _phone.text = c.phone ?? '';
       _email.text = c.email ?? '';
-      _creditLimit.text = c.creditLimit == null ? '' : Money.toGhsInput(c.creditLimit!);
+      _creditLimit.text = c.creditLimit == null
+          ? ''
+          : Money.toGhsInput(c.creditLimit!);
       _notes.text = c.notes ?? '';
       _type = c.type;
       _region = CustomerOptions.regions.contains(c.region) ? c.region : null;
@@ -83,7 +96,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     }
   }
 
-  String? _blankToNull(TextEditingController c) => c.text.trim().isEmpty ? null : c.text.trim();
+  String? _blankToNull(TextEditingController c) =>
+      c.text.trim().isEmpty ? null : c.text.trim();
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
@@ -98,7 +112,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       'contact_person': _blankToNull(_contact),
       'phone': _blankToNull(_phone),
       'email': _blankToNull(_email),
-      'credit_limit': _creditLimit.text.trim().isEmpty ? null : Money.parseGhsToPesewas(_creditLimit.text),
+      'credit_limit': _creditLimit.text.trim().isEmpty
+          ? null
+          : Money.parseGhsToPesewas(_creditLimit.text),
       'notes': _blankToNull(_notes),
       'is_active': _active,
     };
@@ -115,8 +131,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${saved.name} saved')));
-      _isEdit ? context.pop() : context.pushReplacement('/customers/${saved.id}');
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${saved.name} saved')));
+      _isEdit
+          ? context.pop()
+          : context.pushReplacement('/customers/${saved.id}');
     } on ApiException catch (e) {
       setState(() => _saveError = e);
     } finally {
@@ -133,72 +152,98 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       body: _loading
           ? const LoadingBody()
           : _loadError != null
-              ? ErrorState(message: _loadError!, onRetry: _load)
-              : Form(
-                  key: _formKey,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _field(_name, 'Name', key: 'cust_name', validator: (v) => Validators.required(v, label: 'Name')),
-                      DropdownButtonFormField<String>(
-                        key: ValueKey('cust_type_$_type'),
-                        initialValue: _type,
-                        decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()),
-                        items: [
-                          for (final e in CustomerOptions.types.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
-                        ],
-                        onChanged: (v) => setState(() => _type = v ?? 'school'),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        key: ValueKey('cust_region_$_region'),
-                        initialValue: _region,
-                        decoration: const InputDecoration(labelText: 'Region', border: OutlineInputBorder()),
-                        items: [
-                          for (final r in CustomerOptions.regions) DropdownMenuItem(value: r, child: Text(r)),
-                        ],
-                        validator: (v) => v == null ? 'Pick a region' : null,
-                        onChanged: (v) => setState(() => _region = v),
-                      ),
-                      const SizedBox(height: 12),
-                      _field(_district, 'District'),
-                      _field(_address, 'Address', maxLines: 2),
-                      _field(_contact, 'Contact person'),
-                      _field(_phone, 'Phone', keyboard: TextInputType.phone),
-                      _field(_email, 'Email', keyboard: TextInputType.emailAddress, validator: Validators.optionalEmail),
-                      _field(
-                        _creditLimit,
-                        'Credit limit (GHS, blank = no limit)',
-                        key: 'cust_credit_limit',
-                        keyboard: const TextInputType.numberWithOptions(decimal: true),
-                        validator: Validators.optionalGhsAmount,
-                      ),
-                      _field(_notes, 'Notes', maxLines: 3),
-                      if (_isEdit)
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Active'),
-                          subtitle: const Text('Inactive customers can still pay but cannot get new sales.'),
-                          value: _active,
-                          onChanged: (v) => setState(() => _active = v),
-                        ),
-                      if (_saveError != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          describeApiError(_saveError!).body,
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        key: const Key('cust_save'),
-                        onPressed: _saving ? null : _save,
-                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                        child: Text(_saving ? 'Saving…' : 'Save'),
-                      ),
-                    ],
+          ? ErrorState(message: _loadError!, onRetry: _load)
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _field(
+                    _name,
+                    'Name',
+                    key: 'cust_name',
+                    validator: (v) => Validators.required(v, label: 'Name'),
                   ),
-                ),
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('cust_type_$_type'),
+                    initialValue: _type,
+                    decoration: const InputDecoration(
+                      labelText: 'Type',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final e in CustomerOptions.types.entries)
+                        DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    ],
+                    onChanged: (v) => setState(() => _type = v ?? 'school'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('cust_region_$_region'),
+                    initialValue: _region,
+                    decoration: const InputDecoration(
+                      labelText: 'Region',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final r in CustomerOptions.regions)
+                        DropdownMenuItem(value: r, child: Text(r)),
+                    ],
+                    validator: (v) => v == null ? 'Pick a region' : null,
+                    onChanged: (v) => setState(() => _region = v),
+                  ),
+                  const SizedBox(height: 12),
+                  _field(_district, 'District'),
+                  _field(_address, 'Address', maxLines: 2),
+                  _field(_contact, 'Contact person'),
+                  _field(_phone, 'Phone', keyboard: TextInputType.phone),
+                  _field(
+                    _email,
+                    'Email',
+                    keyboard: TextInputType.emailAddress,
+                    validator: Validators.optionalEmail,
+                  ),
+                  _field(
+                    _creditLimit,
+                    'Credit limit (GHS, blank = no limit)',
+                    key: 'cust_credit_limit',
+                    keyboard: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    validator: Validators.optionalGhsAmount,
+                  ),
+                  _field(_notes, 'Notes', maxLines: 3),
+                  if (_isEdit)
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Active'),
+                      subtitle: const Text(
+                        'Inactive customers can still pay but cannot get new sales.',
+                      ),
+                      value: _active,
+                      onChanged: (v) => setState(() => _active = v),
+                    ),
+                  if (_saveError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      describeApiError(_saveError!).body,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    key: const Key('cust_save'),
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                    child: Text(_saving ? 'Saving…' : 'Save'),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -218,7 +263,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         maxLines: maxLines,
         keyboardType: keyboard,
         validator: validator,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
       ),
     );
   }

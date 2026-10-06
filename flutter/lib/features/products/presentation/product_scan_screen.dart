@@ -106,9 +106,14 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
     if (picked == null || !mounted) return;
     setState(() => _handling = true);
     try {
-      final product = await context.read<ProductsRepository>().attachCode(code: code, productId: picked.id);
+      final product = await context.read<ProductsRepository>().attachCode(
+        code: code,
+        productId: picked.id,
+      );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Code $code saved on ${product.title}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Code $code saved on ${product.title}')),
+      );
       _done(product);
     } on ApiException catch (e) {
       final d = describeApiError(e);
@@ -122,7 +127,9 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
   /// A new product from an approved title, with the code attached.
   Future<void> _addFromList(ReferenceBook? hinted) async {
     final code = _unknownCode!;
-    final book = hinted ?? await context.push<ReferenceBook>('/products/approved?pick=1');
+    final book =
+        hinted ??
+        await context.push<ReferenceBook>('/products/approved?pick=1');
     if (book == null || !mounted) return;
     final product = await context.push<Product>(
       '/products/approved/${book.id}/new?code=${Uri.encodeQueryComponent(code)}',
@@ -134,7 +141,9 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
   Widget build(BuildContext context) {
     final onCode = _lookup;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.captureMode ? 'Scan a code' : 'Scan product')),
+      appBar: AppBar(
+        title: Text(widget.captureMode ? 'Scan a code' : 'Scan product'),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -146,7 +155,9 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
                     MobileScanner(
                       controller: _camera,
                       onDetect: (capture) {
-                        final raw = capture.barcodes.isEmpty ? null : capture.barcodes.first.rawValue;
+                        final raw = capture.barcodes.isEmpty
+                            ? null
+                            : capture.barcodes.first.rawValue;
                         if (raw != null) onCode(raw);
                       },
                     ),
@@ -163,13 +174,18 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                if (_unknownCode != null) _unknownPanel(context) else ..._manualEntry(context),
+                if (_unknownCode != null)
+                  _unknownPanel(context)
+                else
+                  ..._manualEntry(context),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Text(
                     _error!,
                     key: const Key('scan_error'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ],
               ],
@@ -181,22 +197,28 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
   }
 
   List<Widget> _manualEntry(BuildContext context) => [
-        Text('Or enter SKU / ISBN / barcode', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
-        TextField(
-          key: const Key('scan_manual'),
-          controller: _manualController,
-          decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Code'),
-          onSubmitted: _lookup,
-        ),
-        const SizedBox(height: 12),
-        FilledButton(
-          key: const Key('scan_lookup'),
-          onPressed: _handling ? null : () => _lookup(_manualController.text),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-          child: Text(widget.captureMode ? 'Use this code' : 'Look up'),
-        ),
-      ];
+    Text(
+      'Or enter SKU / ISBN / barcode',
+      style: Theme.of(context).textTheme.titleSmall,
+    ),
+    const SizedBox(height: 8),
+    TextField(
+      key: const Key('scan_manual'),
+      controller: _manualController,
+      decoration: const InputDecoration(
+        border: OutlineInputBorder(),
+        hintText: 'Code',
+      ),
+      onSubmitted: _lookup,
+    ),
+    const SizedBox(height: 12),
+    FilledButton(
+      key: const Key('scan_lookup'),
+      onPressed: _handling ? null : () => _lookup(_manualController.text),
+      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+      child: Text(widget.captureMode ? 'Use this code' : 'Look up'),
+    ),
+  ];
 
   Widget _unknownPanel(BuildContext context) {
     final code = _unknownCode!;
@@ -260,7 +282,9 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
 
   Future<void> _search(String text) async {
     try {
-      final page = await context.read<ProductsRepository>().listProducts(search: text);
+      final page = await context.read<ProductsRepository>().listProducts(
+        search: text,
+      );
       if (mounted) setState(() => _results = page.data);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = describeApiError(e).body);
@@ -271,7 +295,9 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: SizedBox(
           height: MediaQuery.of(context).size.height * 0.7,
           child: Column(
@@ -289,7 +315,11 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                   onChanged: _search,
                 ),
               ),
-              if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              if (_error != null)
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               Expanded(
                 child: ListView(
                   children: [

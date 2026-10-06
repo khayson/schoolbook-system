@@ -18,7 +18,12 @@ import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 /// with the created product when opened with `push` (receive stock, scan); otherwise
 /// opens it.
 class QuickCreateProductScreen extends StatelessWidget {
-  const QuickCreateProductScreen({super.key, required this.bookId, this.code, this.forReceive = false});
+  const QuickCreateProductScreen({
+    super.key,
+    required this.bookId,
+    this.code,
+    this.forReceive = false,
+  });
 
   final int bookId;
 
@@ -53,7 +58,11 @@ class QuickCreateProductScreen extends StatelessWidget {
 }
 
 class _QuickCreateForm extends StatefulWidget {
-  const _QuickCreateForm({required this.book, required this.code, required this.forReceive});
+  const _QuickCreateForm({
+    required this.book,
+    required this.code,
+    required this.forReceive,
+  });
 
   final ReferenceBook book;
   final String? code;
@@ -69,7 +78,9 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
   final _cost = TextEditingController();
   final _price = TextEditingController();
   final _opening = TextEditingController();
-  late final TextEditingController _code = TextEditingController(text: widget.code ?? '');
+  late final TextEditingController _code = TextEditingController(
+    text: widget.code ?? '',
+  );
 
   List<LevelLookup> _levels = const [];
   List<NamedLookup> _subjects = const [];
@@ -94,12 +105,20 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
   Future<void> _loadLookups() async {
     final lookups = context.read<LookupsRepository>();
     final book = widget.book;
-    final levels = book.needsLevel ? await lookups.fetchLevels() : <LevelLookup>[];
-    final subjects = book.subjectId == null ? await lookups.fetchSubjects() : <NamedLookup>[];
-    final languages = book.languageId == null ? await lookups.fetchLanguages() : <LanguageLookup>[];
+    final levels = book.needsLevel
+        ? await lookups.fetchLevels()
+        : <LevelLookup>[];
+    final subjects = book.subjectId == null
+        ? await lookups.fetchSubjects()
+        : <NamedLookup>[];
+    final languages = book.languageId == null
+        ? await lookups.fetchLanguages()
+        : <LanguageLookup>[];
     if (!mounted) return;
     final band = _bandLevels[book.band];
-    final inBand = band == null ? levels : levels.where((l) => band.contains(l.name)).toList();
+    final inBand = band == null
+        ? levels
+        : levels.where((l) => band.contains(l.name)).toList();
     setState(() {
       _levels = inBand.isEmpty ? levels : inBand;
       _subjects = subjects;
@@ -118,7 +137,9 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final controller = context.read<QuickCreateController>();
-    final opening = widget.forReceive ? 0 : int.tryParse(_opening.text.trim()) ?? 0;
+    final opening = widget.forReceive
+        ? 0
+        : int.tryParse(_opening.text.trim()) ?? 0;
     final payload = QuickCreateController.buildPayload(
       book: widget.book,
       variant: _variant.text,
@@ -134,10 +155,14 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
 
     context.read<ReferenceCatalog>().noteProductAdded(widget.book.id, opening);
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(SnackBar(
-      content: Text(controller.codeWarning ?? 'Added ${product.title} (${product.sku})'),
-      duration: Duration(seconds: controller.codeWarning == null ? 3 : 8),
-    ));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          controller.codeWarning ?? 'Added ${product.title} (${product.sku})',
+        ),
+        duration: Duration(seconds: controller.codeWarning == null ? 3 : 8),
+      ),
+    );
     if (context.canPop()) {
       context.pop(product);
     } else {
@@ -159,10 +184,15 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(book.title, style: theme.textTheme.titleLarge, key: const Key('qc_title')),
+            Text(
+              book.title,
+              style: theme.textTheme.titleLarge,
+              key: const Key('qc_title'),
+            ),
             const SizedBox(height: 4),
             Text(book.subtitle, style: theme.textTheme.bodyMedium),
-            if (book.author != null) Text(book.author!, style: theme.textTheme.bodySmall),
+            if (book.author != null)
+              Text(book.author!, style: theme.textTheme.bodySmall),
             const SizedBox(height: 16),
             TextFormField(
               key: const Key('qc_variant'),
@@ -181,11 +211,16 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
                 initialValue: _levelId,
                 decoration: InputDecoration(
                   labelText: 'Class',
-                  helperText: book.level == null ? null : 'Listed for ${book.level}: choose the class.',
+                  helperText: book.level == null
+                      ? null
+                      : 'Listed for ${book.level}: choose the class.',
                   border: const OutlineInputBorder(),
                   errorText: error?.fieldError('level_id'),
                 ),
-                items: [for (final l in _levels) DropdownMenuItem(value: l.id, child: Text(l.name))],
+                items: [
+                  for (final l in _levels)
+                    DropdownMenuItem(value: l.id, child: Text(l.name)),
+                ],
                 onChanged: (v) => setState(() => _levelId = v),
                 validator: (v) => v == null ? 'Choose the class' : null,
               ),
@@ -200,7 +235,10 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
                   border: const OutlineInputBorder(),
                   errorText: error?.fieldError('subject_id'),
                 ),
-                items: [for (final s in _subjects) DropdownMenuItem(value: s.id, child: Text(s.name))],
+                items: [
+                  for (final s in _subjects)
+                    DropdownMenuItem(value: s.id, child: Text(s.name)),
+                ],
                 onChanged: (v) => setState(() => _subjectId = v),
                 validator: (v) => v == null ? 'Choose the subject' : null,
               ),
@@ -215,7 +253,10 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
                   border: const OutlineInputBorder(),
                   errorText: error?.fieldError('language_id'),
                 ),
-                items: [for (final l in _languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
+                items: [
+                  for (final l in _languages)
+                    DropdownMenuItem(value: l.id, child: Text(l.name)),
+                ],
                 onChanged: (v) => setState(() => _languageId = v),
                 validator: (v) => v == null ? 'Choose the language' : null,
               ),
@@ -228,7 +269,9 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
                   child: TextFormField(
                     key: const Key('qc_cost'),
                     controller: _cost,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Cost price',
                       prefixText: 'GHS ',
@@ -243,7 +286,9 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
                   child: TextFormField(
                     key: const Key('qc_price'),
                     controller: _price,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Selling price',
                       prefixText: 'GHS ',
@@ -282,7 +327,9 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
                   tooltip: 'Scan',
                   icon: const Icon(Icons.qr_code_scanner),
                   onPressed: () async {
-                    final scanned = await context.push<String>('/products/scan?capture=1');
+                    final scanned = await context.push<String>(
+                      '/products/scan?capture=1',
+                    );
                     if (scanned != null) _code.text = scanned;
                   },
                 ),
@@ -301,7 +348,9 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
             FilledButton(
               key: const Key('qc_save'),
               onPressed: controller.saving ? null : _save,
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
               child: Text(controller.saving ? 'Saving…' : 'Add to my products'),
             ),
           ],

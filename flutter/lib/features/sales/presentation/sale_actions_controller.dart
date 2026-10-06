@@ -49,14 +49,19 @@ class ConfirmFailed extends ConfirmOutcome {
 }
 
 class ShortItem {
-  const ShortItem({required this.sku, required this.title, required this.requested, required this.available});
+  const ShortItem({
+    required this.sku,
+    required this.title,
+    required this.requested,
+    required this.available,
+  });
 
   factory ShortItem.fromJson(Map<String, dynamic> json) => ShortItem(
-        sku: json['sku']?.toString() ?? '',
-        title: json['title']?.toString() ?? '',
-        requested: json['requested'] as int? ?? 0,
-        available: json['available'] as int? ?? 0,
-      );
+    sku: json['sku']?.toString() ?? '',
+    title: json['title']?.toString() ?? '',
+    requested: json['requested'] as int? ?? 0,
+    available: json['available'] as int? ?? 0,
+  );
 
   final String sku;
   final String title;
@@ -82,7 +87,11 @@ class SaleActionsController extends ChangeNotifier {
   static String confirmIntent(int saleId) => 'confirm_sale.$saleId';
 
   /// Exact request body for `POST /sales/{id}/confirm`.
-  static Map<String, dynamic> confirmBody({DateTime? dueDate, bool applyCredit = false, bool overrideCreditLimit = false}) {
+  static Map<String, dynamic> confirmBody({
+    DateTime? dueDate,
+    bool applyCredit = false,
+    bool overrideCreditLimit = false,
+  }) {
     return {
       'due_date': dueDate == null
           ? null
@@ -93,8 +102,16 @@ class SaleActionsController extends ChangeNotifier {
   }
 
   /// What the key is derived from: the body plus the draft's identity and version.
-  static Map<String, dynamic> confirmKeyPayload(Sale sale, Map<String, dynamic> body) {
-    return {'sale_id': sale.id, 'total': sale.total, 'updated_at': sale.updatedAt, ...body};
+  static Map<String, dynamic> confirmKeyPayload(
+    Sale sale,
+    Map<String, dynamic> body,
+  ) {
+    return {
+      'sale_id': sale.id,
+      'total': sale.total,
+      'updated_at': sale.updatedAt,
+      ...body,
+    };
   }
 
   Future<ConfirmOutcome> confirm(
@@ -103,13 +120,24 @@ class SaleActionsController extends ChangeNotifier {
     bool applyCredit = false,
     bool overrideCreditLimit = false,
   }) async {
-    final body = confirmBody(dueDate: dueDate, applyCredit: applyCredit, overrideCreditLimit: overrideCreditLimit);
+    final body = confirmBody(
+      dueDate: dueDate,
+      applyCredit: applyCredit,
+      overrideCreditLimit: overrideCreditLimit,
+    );
     final intent = confirmIntent(sale.id);
 
     return _run(() async {
-      final key = await _pendingStore.keyFor(intent, confirmKeyPayload(sale, body));
+      final key = await _pendingStore.keyFor(
+        intent,
+        confirmKeyPayload(sale, body),
+      );
       try {
-        final confirmed = await _sales.confirm(sale.id, idempotencyKey: key, options: body);
+        final confirmed = await _sales.confirm(
+          sale.id,
+          idempotencyKey: key,
+          options: body,
+        );
         await _pendingStore.complete(intent);
         return Confirmed(confirmed);
       } on ApiException catch (e) {
@@ -123,11 +151,14 @@ class SaleActionsController extends ChangeNotifier {
 
   /// "Accept new prices": `PUT /sales/{id}` with `{}` re-prices the draft. Returns the
   /// re-priced draft (new updated_at), so the next confirm gets a new key.
-  Future<Sale> acceptNewPrices(Sale sale) => _run(() => _sales.updateDraft(sale.id, const {}));
+  Future<Sale> acceptNewPrices(Sale sale) =>
+      _run(() => _sales.updateDraft(sale.id, const {}));
 
-  Future<Sale> cancel(Sale sale, {String? reason}) => _run(() => _sales.cancel(sale.id, reason: reason));
+  Future<Sale> cancel(Sale sale, {String? reason}) =>
+      _run(() => _sales.cancel(sale.id, reason: reason));
 
-  Future<Sale> voidSale(Sale sale, String reason) => _run(() => _sales.voidSale(sale.id, reason));
+  Future<Sale> voidSale(Sale sale, String reason) =>
+      _run(() => _sales.voidSale(sale.id, reason));
 
   Future<Sale> deliver(Sale sale) => _run(() => _sales.deliver(sale.id));
 
@@ -153,7 +184,14 @@ class SaleActionsController extends ChangeNotifier {
       case 'insufficient_stock':
         final items = d['items'];
         if (items is List) {
-          return StockShort(items.map((i) => ShortItem.fromJson(Map<String, dynamic>.from(i as Map))).toList());
+          return StockShort(
+            items
+                .map(
+                  (i) =>
+                      ShortItem.fromJson(Map<String, dynamic>.from(i as Map)),
+                )
+                .toList(),
+          );
         }
       case 'credit_limit_exceeded':
         return CreditWarning(

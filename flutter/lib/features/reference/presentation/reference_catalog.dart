@@ -11,8 +11,11 @@ import 'package:schoolbook/features/reference/domain/reference_search.dart';
 /// server when its ETag changes (at login and on pull-to-refresh), searched offline.
 /// Stock per title comes from the server too and is shown "as of" the last sync.
 class ReferenceCatalog extends ChangeNotifier {
-  ReferenceCatalog({required this._repository, required this._cache, DateTime Function()? clock})
-      : _clock = clock ?? DateTime.now;
+  ReferenceCatalog({
+    required this._repository,
+    required this._cache,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   final ReferenceRepository _repository;
   final ReferenceCacheStore _cache;
@@ -35,7 +38,8 @@ class ReferenceCatalog extends ChangeNotifier {
   String? get etag => _etag;
   bool get isEmpty => _books.isEmpty;
 
-  List<ReferenceBook> search(String query, {int limit = 50}) => _index.search(query, limit: limit);
+  List<ReferenceBook> search(String query, {int limit = 50}) =>
+      _index.search(query, limit: limit);
 
   /// Null when the shop has no product for the title.
   TitleStock? stockFor(int bookId) => _stock[bookId];
@@ -72,7 +76,9 @@ class ReferenceCatalog extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final snapshot = await _repository.fetchSnapshot(etag: _books.isEmpty ? null : _etag);
+      final snapshot = await _repository.fetchSnapshot(
+        etag: _books.isEmpty ? null : _etag,
+      );
       final stock = await _repository.fetchStockedTitles();
       final stored = _stored();
       if (!snapshot.notModified) {
@@ -82,7 +88,10 @@ class ReferenceCatalog extends ChangeNotifier {
           ..['books'] = snapshot.data!['books'];
       }
       stored
-        ..['stock'] = {for (final e in stock.entries) '${e.key}': [e.value.productsCount, e.value.stockOnHand]}
+        ..['stock'] = {
+          for (final e in stock.entries)
+            '${e.key}': [e.value.productsCount, e.value.stockOnHand],
+        }
         ..['synced_at'] = _clock().toIso8601String();
       _apply(stored);
       await _cache.write(jsonEncode(stored));
@@ -110,23 +119,30 @@ class ReferenceCatalog extends ChangeNotifier {
   }
 
   Map<String, dynamic> _stored() => {
-        'etag': _etag,
-        'edition': editionLabel == null ? null : {'label': editionLabel},
-        'books': [for (final b in _books) b.toJson()],
-      };
+    'etag': _etag,
+    'edition': editionLabel == null ? null : {'label': editionLabel},
+    'books': [for (final b in _books) b.toJson()],
+  };
 
   void _apply(Map<String, dynamic> json) {
     _etag = json['etag'] as String?;
-    editionLabel = (json['edition'] as Map<String, dynamic>?)?['label'] as String?;
+    editionLabel =
+        (json['edition'] as Map<String, dynamic>?)?['label'] as String?;
     _books = [
-      for (final b in (json['books'] as List<dynamic>? ?? const [])) ReferenceBook.fromJson(b as Map<String, dynamic>),
+      for (final b in (json['books'] as List<dynamic>? ?? const []))
+        ReferenceBook.fromJson(b as Map<String, dynamic>),
     ];
     _index = ReferenceSearchIndex(_books);
     final stock = json['stock'] as Map<String, dynamic>? ?? const {};
     _stock = {
       for (final e in stock.entries)
-        int.parse(e.key): TitleStock(productsCount: (e.value as List)[0] as int, stockOnHand: (e.value as List)[1] as int),
+        int.parse(e.key): TitleStock(
+          productsCount: (e.value as List)[0] as int,
+          stockOnHand: (e.value as List)[1] as int,
+        ),
     };
-    syncedAt = json['synced_at'] == null ? null : DateTime.tryParse(json['synced_at'] as String);
+    syncedAt = json['synced_at'] == null
+        ? null
+        : DateTime.tryParse(json['synced_at'] as String);
   }
 }

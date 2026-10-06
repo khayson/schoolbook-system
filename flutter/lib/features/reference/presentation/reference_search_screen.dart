@@ -37,7 +37,8 @@ class _ReferenceSearchScreenState extends State<ReferenceSearchScreen> {
     super.dispose();
   }
 
-  void _search(String text) => setState(() => _results = context.read<ReferenceCatalog>().search(text));
+  void _search(String text) =>
+      setState(() => _results = context.read<ReferenceCatalog>().search(text));
 
   Future<void> _open(ReferenceBook book) async {
     if (widget.pickMode) {
@@ -53,7 +54,11 @@ class _ReferenceSearchScreenState extends State<ReferenceSearchScreen> {
     final catalog = context.watch<ReferenceCatalog>();
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.pickMode ? 'Choose an approved title' : 'Approved list')),
+      appBar: AppBar(
+        title: Text(
+          widget.pickMode ? 'Choose an approved title' : 'Approved list',
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: catalog.sync,
         child: ListView(
@@ -76,10 +81,17 @@ class _ReferenceSearchScreenState extends State<ReferenceSearchScreen> {
                 subtitle: 'Pull down to download it. It is published from the admin (Approved list).',
               )
             else if (_query.text.trim().isNotEmpty && _results.isEmpty)
-              const EmptyState(title: 'Nothing found', subtitle: 'Try fewer words, or a class like "p4".')
+              const EmptyState(
+                title: 'Nothing found',
+                subtitle: 'Try fewer words, or a class like "p4".',
+              )
             else
               for (final book in _results)
-                ReferenceBookTile(book: book, stock: catalog.stockFor(book.id), onTap: () => _open(book)),
+                ReferenceBookTile(
+                  book: book,
+                  stock: catalog.stockFor(book.id),
+                  onTap: () => _open(book),
+                ),
           ],
         ),
       ),
@@ -95,16 +107,20 @@ class _StatusLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final synced = catalog.syncedAt == null ? null : DateFormat('d MMM, HH:mm').format(catalog.syncedAt!.toLocal());
+    final synced = catalog.syncedAt == null
+        ? null
+        : DateFormat('d MMM, HH:mm').format(catalog.syncedAt!.toLocal());
     final String text;
     if (catalog.syncing) {
       text = 'Updating the approved list…';
     } else if (catalog.offline) {
-      text = 'Offline: using the copy on this phone${synced == null ? '' : ' from $synced'}.';
+      text =
+          'Offline: using the copy on this phone${synced == null ? '' : ' from $synced'}.';
     } else if (catalog.error != null) {
       text = catalog.error!;
     } else {
-      text = '${catalog.editionLabel ?? 'Approved list'} · ${catalog.books.length} titles${synced == null ? '' : ' · stock as of $synced'}';
+      text =
+          '${catalog.editionLabel ?? 'Approved list'} · ${catalog.books.length} titles${synced == null ? '' : ' · stock as of $synced'}';
     }
 
     return Padding(
@@ -113,7 +129,9 @@ class _StatusLine extends StatelessWidget {
       child: Text(
         text,
         style: theme.textTheme.bodySmall?.copyWith(
-          color: catalog.offline || catalog.error != null ? theme.colorScheme.error : null,
+          color: catalog.offline || catalog.error != null
+              ? theme.colorScheme.error
+              : null,
         ),
       ),
     );

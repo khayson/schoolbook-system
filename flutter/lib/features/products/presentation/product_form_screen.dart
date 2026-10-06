@@ -182,201 +182,196 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       body: _loading
           ? const LoadingBody()
           : _error != null && _levels.isEmpty
-              ? ErrorState(message: _error!, onRetry: _load)
-              : Form(
-                  key: _formKey,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      TextFormField(
-                        controller: _skuController,
-                        decoration: const InputDecoration(
-                          labelText: 'SKU',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _titleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Title',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<int>(
-                        initialValue: _levelId,
-                        decoration: const InputDecoration(
-                          labelText: 'Level',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: _levels
-                            .map(
-                              (l) => DropdownMenuItem(
-                                value: l.id,
-                                child: Text(l.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(() => _levelId = v),
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<int>(
-                        initialValue: _subjectId,
-                        decoration: const InputDecoration(
-                          labelText: 'Subject',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: _subjects
-                            .map(
-                              (s) => DropdownMenuItem(
-                                value: s.id,
-                                child: Text(s.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(() => _subjectId = v),
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<int>(
-                        initialValue: _languageId,
-                        decoration: const InputDecoration(
-                          labelText: 'Language',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: _languages
-                            .map(
-                              (l) => DropdownMenuItem(
-                                value: l.id,
-                                child: Text(l.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(() => _languageId = v),
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<int?>(
-                        initialValue: _publisherId,
-                        decoration: const InputDecoration(
-                          labelText: 'Publisher (optional)',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('None'),
+          ? ErrorState(message: _error!, onRetry: _load)
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  TextFormField(
+                    controller: _skuController,
+                    decoration: const InputDecoration(
+                      labelText: 'SKU',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Title',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _levelId,
+                    decoration: const InputDecoration(
+                      labelText: 'Level',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _levels
+                        .map(
+                          (l) => DropdownMenuItem(
+                            value: l.id,
+                            child: Text(l.name),
                           ),
-                          ..._publishers.map(
-                            (p) => DropdownMenuItem(
-                              value: p.id,
-                              child: Text(p.name),
-                            ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _levelId = v),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _subjectId,
+                    decoration: const InputDecoration(
+                      labelText: 'Subject',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _subjects
+                        .map(
+                          (s) => DropdownMenuItem(
+                            value: s.id,
+                            child: Text(s.name),
                           ),
-                        ],
-                        onChanged: (v) => setState(() => _publisherId = v),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _isbnController,
-                        decoration: const InputDecoration(
-                          labelText: 'ISBN',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _barcodeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Barcode',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _editionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Edition',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _costController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Cost price (GHS)',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) =>
-                            Money.parseGhsToPesewas(v ?? '') == null
-                                ? 'Invalid amount'
-                                : null,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _priceController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Selling price (GHS)',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) =>
-                            Money.parseGhsToPesewas(v ?? '') == null
-                                ? 'Invalid amount'
-                                : null,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _reorderController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Reorder level',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Active'),
-                        value: _isActive,
-                        onChanged: (v) => setState(() => _isActive = v),
-                      ),
-                      if (_error != null) ...[
-                        Text(
-                          _error!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _subjectId = v),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _languageId,
+                    decoration: const InputDecoration(
+                      labelText: 'Language',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _languages
+                        .map(
+                          (l) => DropdownMenuItem(
+                            value: l.id,
+                            child: Text(l.name),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      FilledButton(
-                        onPressed: _saving ? null : _save,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                        ),
-                        child: _saving
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(widget.isEditing ? 'Save changes' : 'Create'),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _languageId = v),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: _publisherId,
+                    decoration: const InputDecoration(
+                      labelText: 'Publisher (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('None'),
+                      ),
+                      ..._publishers.map(
+                        (p) =>
+                            DropdownMenuItem(value: p.id, child: Text(p.name)),
                       ),
                     ],
+                    onChanged: (v) => setState(() => _publisherId = v),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _isbnController,
+                    decoration: const InputDecoration(
+                      labelText: 'ISBN',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _barcodeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Barcode',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _editionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Edition',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _costController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Cost price (GHS)',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => Money.parseGhsToPesewas(v ?? '') == null
+                        ? 'Invalid amount'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Selling price (GHS)',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => Money.parseGhsToPesewas(v ?? '') == null
+                        ? 'Invalid amount'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _reorderController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Reorder level',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Active'),
+                    value: _isActive,
+                    onChanged: (v) => setState(() => _isActive = v),
+                  ),
+                  if (_error != null) ...[
+                    Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(widget.isEditing ? 'Save changes' : 'Create'),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

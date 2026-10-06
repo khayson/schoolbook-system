@@ -24,7 +24,9 @@ class SalesRepository {
     );
     final body = response.data!;
     return PaginatedResponse(
-      data: (body['data'] as List<dynamic>).map((e) => Sale.fromJson(e as Map<String, dynamic>)).toList(),
+      data: (body['data'] as List<dynamic>)
+          .map((e) => Sale.fromJson(e as Map<String, dynamic>))
+          .toList(),
       meta: PaginatedMeta.fromJson(body['meta'] as Map<String, dynamic>),
     );
   }
@@ -35,7 +37,10 @@ class SalesRepository {
   }
 
   /// Server-side pricing for live totals; the app never computes money.
-  Future<PricedOrder> preview({int? customerId, required List<Map<String, dynamic>> items}) async {
+  Future<PricedOrder> preview({
+    int? customerId,
+    required List<Map<String, dynamic>> items,
+  }) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/pricing/preview',
       data: {'customer_id': customerId, 'items': items},
@@ -44,7 +49,10 @@ class SalesRepository {
   }
 
   /// `POST /sales` (idempotent).
-  Future<Sale> createDraft({required String idempotencyKey, required Map<String, dynamic> payload}) async {
+  Future<Sale> createDraft({
+    required String idempotencyKey,
+    required Map<String, dynamic> payload,
+  }) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/sales',
       data: payload,
@@ -55,12 +63,19 @@ class SalesRepository {
 
   /// `PUT /sales/{id}`; `{}` re-prices the draft at current prices.
   Future<Sale> updateDraft(int id, Map<String, dynamic> payload) async {
-    final response = await _api.put<Map<String, dynamic>>('/sales/$id', data: payload);
+    final response = await _api.put<Map<String, dynamic>>(
+      '/sales/$id',
+      data: payload,
+    );
     return _sale(response.data!);
   }
 
   /// `POST /sales/{id}/confirm` (idempotent).
-  Future<Sale> confirm(int id, {required String idempotencyKey, required Map<String, dynamic> options}) async {
+  Future<Sale> confirm(
+    int id, {
+    required String idempotencyKey,
+    required Map<String, dynamic> options,
+  }) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/sales/$id/confirm',
       data: options,
@@ -70,21 +85,30 @@ class SalesRepository {
   }
 
   Future<Sale> cancel(int id, {String? reason}) async {
-    final response = await _api.post<Map<String, dynamic>>('/sales/$id/cancel', data: {'reason': reason});
+    final response = await _api.post<Map<String, dynamic>>(
+      '/sales/$id/cancel',
+      data: {'reason': reason},
+    );
     return _sale(response.data!);
   }
 
   Future<Sale> voidSale(int id, String reason) async {
-    final response = await _api.post<Map<String, dynamic>>('/sales/$id/void', data: {'reason': reason});
+    final response = await _api.post<Map<String, dynamic>>(
+      '/sales/$id/void',
+      data: {'reason': reason},
+    );
     return _sale(response.data!);
   }
 
   Future<Sale> deliver(int id) async {
-    final response = await _api.post<Map<String, dynamic>>('/sales/$id/deliver');
+    final response = await _api.post<Map<String, dynamic>>(
+      '/sales/$id/deliver',
+    );
     return _sale(response.data!);
   }
 
   Future<List<int>> invoicePdf(int id) => _api.getBytes('/sales/$id/invoice');
 
-  Sale _sale(Map<String, dynamic> body) => Sale.fromJson(body['data'] as Map<String, dynamic>);
+  Sale _sale(Map<String, dynamic> body) =>
+      Sale.fromJson(body['data'] as Map<String, dynamic>);
 }

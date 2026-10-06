@@ -4,9 +4,7 @@ import 'package:schoolbook/features/reference/domain/reference_book.dart';
 
 /// Result of `GET /reference-books/snapshot`.
 class SnapshotResult {
-  const SnapshotResult.notModified(this.etag)
-      : notModified = true,
-        data = null;
+  const SnapshotResult.notModified(this.etag) : notModified = true, data = null;
 
   const SnapshotResult.downloaded(this.etag, this.data) : notModified = false;
 
@@ -29,7 +27,8 @@ class ReferenceRepository {
       '/reference-books/snapshot',
       options: Options(
         headers: {'If-None-Match': ?etag},
-        validateStatus: (status) => status != null && (status < 300 || status == 304),
+        validateStatus: (status) =>
+            status != null && (status < 300 || status == 304),
       ),
     );
     final newEtag = response.headers.value('etag');
@@ -37,7 +36,10 @@ class ReferenceRepository {
       return SnapshotResult.notModified(newEtag ?? etag);
     }
 
-    return SnapshotResult.downloaded(newEtag, response.data!['data'] as Map<String, dynamic>);
+    return SnapshotResult.downloaded(
+      newEtag,
+      response.data!['data'] as Map<String, dynamic>,
+    );
   }
 
   /// Titles the shop has products for, with their total stock (`stocked=1`).

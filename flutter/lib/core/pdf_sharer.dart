@@ -6,14 +6,22 @@ import 'package:share_plus/share_plus.dart';
 /// Writes PDF bytes to a temporary file and opens the system share sheet
 /// (WhatsApp, email, print...). Behind an interface so widget tests can fake it.
 abstract interface class PdfSharer {
-  Future<void> sharePdf(List<int> bytes, {required String fileName, String? subject});
+  Future<void> sharePdf(
+    List<int> bytes, {
+    required String fileName,
+    String? subject,
+  });
 }
 
 class SystemPdfSharer implements PdfSharer {
   const SystemPdfSharer();
 
   @override
-  Future<void> sharePdf(List<int> bytes, {required String fileName, String? subject}) async {
+  Future<void> sharePdf(
+    List<int> bytes, {
+    required String fileName,
+    String? subject,
+  }) async {
     final directory = await getTemporaryDirectory();
     final file = File('${directory.path}${Platform.pathSeparator}$fileName');
     await file.writeAsBytes(bytes, flush: true);

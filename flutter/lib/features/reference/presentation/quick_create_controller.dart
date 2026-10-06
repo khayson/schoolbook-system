@@ -74,9 +74,13 @@ class QuickCreateController extends ChangeNotifier {
       final trimmed = code?.trim() ?? '';
       if (trimmed.isNotEmpty) {
         try {
-          product = await _products.attachCode(code: trimmed, productId: product.id);
+          product = await _products.attachCode(
+            code: trimmed,
+            productId: product.id,
+          );
         } on ApiException catch (e) {
-          codeWarning = 'Product saved, but the code was not attached: ${e.message}';
+          codeWarning =
+              'Product saved, but the code was not attached: ${e.message}';
         }
       }
       created = product;

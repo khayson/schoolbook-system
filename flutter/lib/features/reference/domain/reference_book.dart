@@ -47,55 +47,56 @@ class ReferenceBook {
   bool get needsLevel => levelId == null;
 
   String get categoryLabel => switch (category) {
-        'textbook' => 'Textbook',
-        'subject_supplement' => 'Supplement',
-        'reader' => 'Reader',
-        'guidance' => 'Guidance',
-        'elearning' => 'E-learning',
-        _ => category,
-      };
+    'textbook' => 'Textbook',
+    'subject_supplement' => 'Supplement',
+    'reader' => 'Reader',
+    'guidance' => 'Guidance',
+    'elearning' => 'E-learning',
+    _ => category,
+  };
 
   /// "Primary 4 · Science · Baobab Publishing"
-  String get subtitle => [level ?? categoryLabel, subject, publisher]
-      .whereType<String>()
-      .where((s) => s.isNotEmpty)
-      .join(' · ');
+  String get subtitle => [
+    level ?? categoryLabel,
+    subject,
+    publisher,
+  ].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
 
   factory ReferenceBook.fromJson(Map<String, dynamic> json) => ReferenceBook(
-        id: json['id'] as int,
-        category: json['category'] as String,
-        title: json['title'] as String,
-        searchTitle: json['search_title'] as String? ?? '',
-        levelId: json['level_id'] as int?,
-        level: json['level'] as String?,
-        band: json['band'] as String?,
-        subjectId: json['subject_id'] as int?,
-        subject: json['subject'] as String?,
-        languageId: json['language_id'] as int?,
-        language: json['language'] as String?,
-        publisherId: json['publisher_id'] as int?,
-        publisher: json['publisher'] as String?,
-        author: json['author'] as String?,
-        isbn: json['isbn'] as String?,
-      );
+    id: json['id'] as int,
+    category: json['category'] as String,
+    title: json['title'] as String,
+    searchTitle: json['search_title'] as String? ?? '',
+    levelId: json['level_id'] as int?,
+    level: json['level'] as String?,
+    band: json['band'] as String?,
+    subjectId: json['subject_id'] as int?,
+    subject: json['subject'] as String?,
+    languageId: json['language_id'] as int?,
+    language: json['language'] as String?,
+    publisherId: json['publisher_id'] as int?,
+    publisher: json['publisher'] as String?,
+    author: json['author'] as String?,
+    isbn: json['isbn'] as String?,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'category': category,
-        'title': title,
-        'search_title': searchTitle,
-        'level_id': levelId,
-        'level': level,
-        'band': band,
-        'subject_id': subjectId,
-        'subject': subject,
-        'language_id': languageId,
-        'language': language,
-        'publisher_id': publisherId,
-        'publisher': publisher,
-        'author': author,
-        'isbn': isbn,
-      };
+    'id': id,
+    'category': category,
+    'title': title,
+    'search_title': searchTitle,
+    'level_id': levelId,
+    'level': level,
+    'band': band,
+    'subject_id': subjectId,
+    'subject': subject,
+    'language_id': languageId,
+    'language': language,
+    'publisher_id': publisherId,
+    'publisher': publisher,
+    'author': author,
+    'isbn': isbn,
+  };
 }
 
 /// The shop's products linked to a title (from `GET /reference-books?stocked=1`).

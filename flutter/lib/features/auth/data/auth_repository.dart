@@ -5,10 +5,8 @@ import 'package:schoolbook/core/auth_token_store.dart';
 import 'package:schoolbook/features/auth/domain/auth_user.dart';
 
 class AuthRepository {
-  AuthRepository({
-    required ApiClient apiClient,
-    required this._tokenStore,
-  }) : _api = apiClient;
+  AuthRepository({required ApiClient apiClient, required this._tokenStore})
+    : _api = apiClient;
 
   final ApiClient _api;
   final AuthTokenStore _tokenStore;
@@ -20,8 +18,8 @@ class AuthRepository {
     final deviceName = Platform.isAndroid
         ? 'android'
         : Platform.isIOS
-            ? 'ios'
-            : 'mobile';
+        ? 'ios'
+        : 'mobile';
 
     final response = await _api.post<Map<String, dynamic>>(
       '/auth/login',

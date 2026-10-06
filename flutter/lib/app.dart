@@ -125,7 +125,9 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
           create: (context) =>
               SalesRepository(apiClient: context.read<ApiClient>()),
         ),
-        ChangeNotifierProvider<ReferenceCatalog>.value(value: _referenceCatalog),
+        ChangeNotifierProvider<ReferenceCatalog>.value(
+          value: _referenceCatalog,
+        ),
         Provider<PendingSubmissionStore>(
           create: (_) => PendingSubmissionStore(),
         ),

@@ -3,7 +3,12 @@ import 'package:schoolbook/features/reference/domain/reference_book.dart';
 
 /// An approved title in a list, with whether the shop carries it.
 class ReferenceBookTile extends StatelessWidget {
-  const ReferenceBookTile({super.key, required this.book, required this.stock, this.onTap});
+  const ReferenceBookTile({
+    super.key,
+    required this.book,
+    required this.stock,
+    this.onTap,
+  });
 
   final ReferenceBook book;
   final TitleStock? stock;
@@ -16,10 +21,16 @@ class ReferenceBookTile extends StatelessWidget {
     return ListTile(
       key: Key('ref_book_${book.id}'),
       title: Text(book.title),
-      subtitle: Text(book.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        book.subtitle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
       trailing: Chip(
         visualDensity: VisualDensity.compact,
-        label: Text(carried ? 'In stock ${stock!.stockOnHand}' : 'Not in your products'),
+        label: Text(
+          carried ? 'In stock ${stock!.stockOnHand}' : 'Not in your products',
+        ),
         backgroundColor: carried ? theme.colorScheme.secondaryContainer : null,
       ),
       onTap: onTap,

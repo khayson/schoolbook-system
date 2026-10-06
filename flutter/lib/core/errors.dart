@@ -14,7 +14,8 @@ class ApiException implements Exception {
   /// may not have been processed, so a retry must reuse the same idempotency key.
   factory ApiException.network([String? message]) {
     return ApiException(
-      message: message ??
+      message:
+          message ??
           'No connection to the server. Nothing is lost: retrying is safe.',
       code: 'network_error',
       isNetworkError: true,
@@ -49,10 +50,7 @@ class ApiException implements Exception {
             : const {},
       );
     }
-    return ApiException(
-      message: 'Request failed',
-      statusCode: statusCode,
-    );
+    return ApiException(message: 'Request failed', statusCode: statusCode);
   }
 
   final String message;

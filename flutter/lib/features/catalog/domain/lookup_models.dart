@@ -5,10 +5,7 @@ class NamedLookup {
   final String name;
 
   factory NamedLookup.fromJson(Map<String, dynamic> json) {
-    return NamedLookup(
-      id: json['id'] as int,
-      name: json['name'] as String,
-    );
+    return NamedLookup(id: json['id'] as int, name: json['name'] as String);
   }
 }
 

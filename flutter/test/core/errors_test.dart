@@ -6,7 +6,8 @@ void main() {
   group('ApiException.fromDio', () {
     test('maps the envelope: message, code, field errors and details', () {
       final e = ApiException.fromDio({
-        'message': 'This momo reference is already recorded on RCT-2026-000004.',
+        'message':
+            'This momo reference is already recorded on RCT-2026-000004.',
         'code': 'duplicate_reference',
         'errors': <String, dynamic>{},
         'details': {
@@ -39,7 +40,11 @@ void main() {
     });
 
     test('an empty errors list ([] instead of {}) is tolerated', () {
-      final e = ApiException.fromDio({'message': 'x', 'code': 'y', 'errors': []});
+      final e = ApiException.fromDio({
+        'message': 'x',
+        'code': 'y',
+        'errors': [],
+      });
       expect(e.fieldErrors, isEmpty);
     });
 
@@ -57,8 +62,12 @@ void main() {
   });
 
   group('describeApiError', () {
-    ErrorDescription d(String code, [Map<String, dynamic> details = const {}]) =>
-        describeApiError(ApiException(message: 'server says', code: code, details: details));
+    ErrorDescription d(
+      String code, [
+      Map<String, dynamic> details = const {},
+    ]) => describeApiError(
+      ApiException(message: 'server says', code: code, details: details),
+    );
 
     test('duplicate_reference names the existing receipt and amount', () {
       final desc = d('duplicate_reference', {
@@ -74,10 +83,20 @@ void main() {
     });
 
     test('allocation and credit errors show the amounts', () {
-      expect(d('allocation_exceeds_balance', {'invoice_no': 'INV-2026-000001', 'balance_due': 1000}).body,
-          contains('INV-2026-000001 has GHS 10.00'));
-      expect(d('allocation_exceeds_credit', {'requested': 1300, 'credit_balance': 1200}).body,
-          'Requested GHS 13.00, available credit GHS 12.00.');
+      expect(
+        d('allocation_exceeds_balance', {
+          'invoice_no': 'INV-2026-000001',
+          'balance_due': 1000,
+        }).body,
+        contains('INV-2026-000001 has GHS 10.00'),
+      );
+      expect(
+        d('allocation_exceeds_credit', {
+          'requested': 1300,
+          'credit_balance': 1200,
+        }).body,
+        'Requested GHS 13.00, available credit GHS 12.00.',
+      );
       expect(d('no_credit_available').title, 'No credit');
     });
 
@@ -88,13 +107,15 @@ void main() {
     });
 
     test('validation_failed shows the first field message', () {
-      final desc = describeApiError(ApiException(
-        message: 'm',
-        code: 'validation_failed',
-        fieldErrors: const {
-          'amount': ['The amount must be at least 1.'],
-        },
-      ));
+      final desc = describeApiError(
+        ApiException(
+          message: 'm',
+          code: 'validation_failed',
+          fieldErrors: const {
+            'amount': ['The amount must be at least 1.'],
+          },
+        ),
+      );
       expect(desc.body, 'The amount must be at least 1.');
     });
 

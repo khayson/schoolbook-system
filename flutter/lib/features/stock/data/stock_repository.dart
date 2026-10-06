@@ -22,9 +22,7 @@ class StockRepository {
         'notes': notes,
         'items': items,
       },
-      options: Options(
-        headers: {'Idempotency-Key': idempotencyKey},
-      ),
+      options: Options(headers: {'Idempotency-Key': idempotencyKey}),
     );
     return response.data!;
   }

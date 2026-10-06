@@ -27,10 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     final auth = context.read<AuthProvider>();
-    await auth.login(
-      _emailController.text,
-      _passwordController.text,
-    );
+    await auth.login(_emailController.text, _passwordController.text);
   }
 
   @override

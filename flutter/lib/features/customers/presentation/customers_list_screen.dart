@@ -48,7 +48,10 @@ class CustomersListController extends ChangeNotifier {
     loadingMore = true;
     notifyListeners();
     try {
-      final page = await _repository.listCustomers(page: _page + 1, search: search);
+      final page = await _repository.listCustomers(
+        page: _page + 1,
+        search: search,
+      );
       customers = [...customers, ...page.data];
       _page = page.meta.currentPage;
       _lastPage = page.meta.lastPage;
@@ -145,7 +148,10 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
       return ErrorState(message: c.error!, onRetry: c.load);
     }
     if (c.customers.isEmpty) {
-      return const EmptyState(title: 'No customers', subtitle: 'Add a school or reseller.');
+      return const EmptyState(
+        title: 'No customers',
+        subtitle: 'Add a school or reseller.',
+      );
     }
     return RefreshIndicator(
       onRefresh: c.load,
@@ -154,18 +160,25 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
         itemBuilder: (context, i) {
           if (i == c.customers.length) {
             c.loadMore();
-            return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
           final customer = c.customers[i];
           return ListTile(
             key: Key('customer_${customer.id}'),
             title: Text(customer.name),
-            subtitle: Text('${customer.code} | ${customer.region}${customer.isActive ? '' : ' | inactive'}'),
+            subtitle: Text(
+              '${customer.code} | ${customer.region}${customer.isActive ? '' : ' | inactive'}',
+            ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('Owes ${Money.formatPesewas(customer.outstandingBalance)}'),
+                Text(
+                  'Owes ${Money.formatPesewas(customer.outstandingBalance)}',
+                ),
                 if (customer.creditBalance > 0)
                   Text(
                     'Credit ${Money.formatPesewas(customer.creditBalance)}',

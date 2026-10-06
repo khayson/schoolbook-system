@@ -89,9 +89,7 @@ class _ProductsListScreenState extends State<ProductsListScreen> {
                 _FilterChip(
                   label: 'Level',
                   selectedId: provider.levelId,
-                  options: provider.levels
-                      .map((l) => (l.id, l.name))
-                      .toList(),
+                  options: provider.levels.map((l) => (l.id, l.name)).toList(),
                   onSelected: provider.setLevelFilter,
                 ),
                 const SizedBox(width: 8),

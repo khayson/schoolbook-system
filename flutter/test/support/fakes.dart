@@ -18,7 +18,8 @@ import 'package:schoolbook/features/sales/domain/sale.dart';
 
 ApiClient unusedApiClient() => ApiClient(tokenStore: AuthTokenStore());
 
-Customer testCustomer({int id = 1, int owes = 300000, int credit = 0}) => Customer(
+Customer testCustomer({int id = 1, int owes = 300000, int credit = 0}) =>
+    Customer(
       id: id,
       code: 'CUS-0001',
       name: 'Akwaaba Basic School',
@@ -37,30 +38,34 @@ Payment testPayment({
   String? reference = 'MP-1',
   int unallocated = 0,
   String status = 'valid',
-}) =>
-    Payment(
-      id: id,
-      receiptNo: receiptNo,
-      customerId: 1,
-      amount: amount,
-      method: method,
-      reference: reference,
-      paidAt: DateTime(2026, 10, 1, 9, 30),
-      unallocatedAmount: unallocated,
-      status: status,
-    );
+}) => Payment(
+  id: id,
+  receiptNo: receiptNo,
+  customerId: 1,
+  amount: amount,
+  method: method,
+  reference: reference,
+  paidAt: DateTime(2026, 10, 1, 9, 30),
+  unallocatedAmount: unallocated,
+  status: status,
+);
 
 PaginatedResponse<T> page<T>(List<T> items) => PaginatedResponse(
-      data: items,
-      meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: 25, total: items.length),
-    );
+  data: items,
+  meta: PaginatedMeta(
+    currentPage: 1,
+    lastPage: 1,
+    perPage: 25,
+    total: items.length,
+  ),
+);
 
 /// Records every call; [recordResults] are consumed in order (an [ApiException]
 /// is thrown, a [Payment] is returned).
 class FakePaymentsRepository extends PaymentsRepository {
   FakePaymentsRepository({List<Object>? recordResults, this.recent = const []})
-      : recordResults = recordResults ?? [],
-        super(apiClient: unusedApiClient());
+    : recordResults = recordResults ?? [],
+      super(apiClient: unusedApiClient());
 
   final List<Object> recordResults;
   List<Payment> recent;
@@ -77,14 +82,24 @@ class FakePaymentsRepository extends PaymentsRepository {
     listCalls++;
     return PaginatedResponse(
       data: recent,
-      meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: perPage, total: recent.length),
+      meta: PaginatedMeta(
+        currentPage: 1,
+        lastPage: 1,
+        perPage: perPage,
+        total: recent.length,
+      ),
     );
   }
 
   @override
-  Future<Payment> recordPayment({required String idempotencyKey, required Map<String, dynamic> payload}) async {
+  Future<Payment> recordPayment({
+    required String idempotencyKey,
+    required Map<String, dynamic> payload,
+  }) async {
     recordCalls.add((key: idempotencyKey, payload: payload));
-    final next = recordResults.isEmpty ? testPayment() : recordResults.removeAt(0);
+    final next = recordResults.isEmpty
+        ? testPayment()
+        : recordResults.removeAt(0);
     if (next is ApiException) {
       throw next;
     }
@@ -100,8 +115,8 @@ class FakePaymentsRepository extends PaymentsRepository {
 
 class FakeCustomersRepository extends CustomersRepository {
   FakeCustomersRepository({Customer? customer})
-      : customer = customer ?? testCustomer(),
-        super(apiClient: unusedApiClient());
+    : customer = customer ?? testCustomer(),
+      super(apiClient: unusedApiClient());
 
   Customer customer;
 
@@ -113,7 +128,11 @@ class FakePdfSharer implements PdfSharer {
   final List<String> shared = [];
 
   @override
-  Future<void> sharePdf(List<int> bytes, {required String fileName, String? subject}) async {
+  Future<void> sharePdf(
+    List<int> bytes, {
+    required String fileName,
+    String? subject,
+  }) async {
     shared.add(fileName);
   }
 }
@@ -126,26 +145,33 @@ Sale testSale({
   String? invoiceNo,
   int creditBalance = 0,
   List<SaleLine>? items,
-}) =>
-    Sale(
-      id: id,
-      invoiceNo: invoiceNo,
-      customerId: 1,
-      customer: testCustomer(credit: creditBalance),
-      status: status,
-      paymentStatus: 'unpaid',
-      saleDate: DateTime(2026, 10, 2),
-      subtotal: total,
-      discountTotal: 0,
-      total: total,
-      amountPaid: 0,
-      balanceDue: status == 'confirmed' ? total : 0,
-      updatedAt: updatedAt,
-      items: items ??
-          const [
-            SaleLine(productId: 11, productTitle: 'English Reader P4', quantity: 3, basePrice: 1000, unitPrice: 1000, lineTotal: 3000),
-          ],
-    );
+}) => Sale(
+  id: id,
+  invoiceNo: invoiceNo,
+  customerId: 1,
+  customer: testCustomer(credit: creditBalance),
+  status: status,
+  paymentStatus: 'unpaid',
+  saleDate: DateTime(2026, 10, 2),
+  subtotal: total,
+  discountTotal: 0,
+  total: total,
+  amountPaid: 0,
+  balanceDue: status == 'confirmed' ? total : 0,
+  updatedAt: updatedAt,
+  items:
+      items ??
+      const [
+        SaleLine(
+          productId: 11,
+          productTitle: 'English Reader P4',
+          quantity: 3,
+          basePrice: 1000,
+          unitPrice: 1000,
+          lineTotal: 3000,
+        ),
+      ],
+);
 
 /// Scriptable sales API: [confirmResults] / [createResults] are consumed in order.
 class FakeSalesRepository extends SalesRepository {
@@ -154,10 +180,10 @@ class FakeSalesRepository extends SalesRepository {
     List<Object>? createResults,
     Sale? sale,
     this.previewDelay = Duration.zero,
-  })  : confirmResults = confirmResults ?? [],
-        createResults = createResults ?? [],
-        sale = sale ?? testSale(),
-        super(apiClient: unusedApiClient());
+  }) : confirmResults = confirmResults ?? [],
+       createResults = createResults ?? [],
+       sale = sale ?? testSale(),
+       super(apiClient: unusedApiClient());
 
   final List<Object> confirmResults;
   final List<Object> createResults;
@@ -179,9 +205,15 @@ class FakeSalesRepository extends SalesRepository {
   Future<Sale> getSale(int id) async => sale;
 
   @override
-  Future<Sale> confirm(int id, {required String idempotencyKey, required Map<String, dynamic> options}) async {
+  Future<Sale> confirm(
+    int id, {
+    required String idempotencyKey,
+    required Map<String, dynamic> options,
+  }) async {
     confirmCalls.add((key: idempotencyKey, options: options));
-    final next = confirmResults.isEmpty ? testSale(status: 'confirmed', invoiceNo: 'INV-2026-000001') : confirmResults.removeAt(0);
+    final next = confirmResults.isEmpty
+        ? testSale(status: 'confirmed', invoiceNo: 'INV-2026-000001')
+        : confirmResults.removeAt(0);
     if (next is ApiException) {
       throw next;
     }
@@ -197,7 +229,10 @@ class FakeSalesRepository extends SalesRepository {
   }
 
   @override
-  Future<Sale> createDraft({required String idempotencyKey, required Map<String, dynamic> payload}) async {
+  Future<Sale> createDraft({
+    required String idempotencyKey,
+    required Map<String, dynamic> payload,
+  }) async {
     createCalls.add((key: idempotencyKey, payload: payload));
     final next = createResults.isEmpty ? testSale() : createResults.removeAt(0);
     if (next is ApiException) {
@@ -207,7 +242,10 @@ class FakeSalesRepository extends SalesRepository {
   }
 
   @override
-  Future<PricedOrder> preview({int? customerId, required List<Map<String, dynamic>> items}) async {
+  Future<PricedOrder> preview({
+    int? customerId,
+    required List<Map<String, dynamic>> items,
+  }) async {
     previewCalls.add(items);
     if (previewDelay > Duration.zero) {
       await Future<void>.delayed(previewDelay);
@@ -244,10 +282,12 @@ class FakeSalesRepository extends SalesRepository {
   }
 
   @override
-  Future<Sale> cancel(int id, {String? reason}) => _maybeFail(() => testSale(status: 'cancelled'));
+  Future<Sale> cancel(int id, {String? reason}) =>
+      _maybeFail(() => testSale(status: 'cancelled'));
 
   @override
-  Future<Sale> voidSale(int id, String reason) => _maybeFail(() => testSale(status: 'void', invoiceNo: sale.invoiceNo));
+  Future<Sale> voidSale(int id, String reason) =>
+      _maybeFail(() => testSale(status: 'void', invoiceNo: sale.invoiceNo));
 
   @override
   Future<Sale> deliver(int id) => _maybeFail(() => sale);
@@ -256,19 +296,23 @@ class FakeSalesRepository extends SalesRepository {
   Future<List<int>> invoicePdf(int id) async => [37, 80, 68, 70];
 }
 
-Product testProduct({int id = 11, String title = 'English Reader P4', int stock = 50}) => Product.fromJson({
-      'id': id,
-      'sku': 'SKU-$id',
-      'title': title,
-      'level_id': 1,
-      'subject_id': 1,
-      'language_id': 1,
-      'cost_price': 600,
-      'selling_price': 1000,
-      'reorder_level': 0,
-      'stock_on_hand': stock,
-      'is_active': true,
-    });
+Product testProduct({
+  int id = 11,
+  String title = 'English Reader P4',
+  int stock = 50,
+}) => Product.fromJson({
+  'id': id,
+  'sku': 'SKU-$id',
+  'title': title,
+  'level_id': 1,
+  'subject_id': 1,
+  'language_id': 1,
+  'cost_price': 600,
+  'selling_price': 1000,
+  'reorder_level': 0,
+  'stock_on_hand': stock,
+  'is_active': true,
+});
 
 class FakeProductsRepository extends ProductsRepository {
   FakeProductsRepository(this.products) : super(apiClient: unusedApiClient());
@@ -276,10 +320,31 @@ class FakeProductsRepository extends ProductsRepository {
   final List<Product> products;
 
   @override
-  Future<PaginatedResponse<Product>> listProducts({int page = 1, String? search, int? levelId, int? subjectId, int? languageId}) async {
+  Future<PaginatedResponse<Product>> listProducts({
+    int page = 1,
+    String? search,
+    int? levelId,
+    int? subjectId,
+    int? languageId,
+  }) async {
     final q = (search ?? '').toLowerCase();
-    final found = products.where((p) => q.isEmpty || p.title.toLowerCase().contains(q) || p.sku.toLowerCase().contains(q)).toList();
-    return PaginatedResponse(data: found, meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: 25, total: found.length));
+    final found = products
+        .where(
+          (p) =>
+              q.isEmpty ||
+              p.title.toLowerCase().contains(q) ||
+              p.sku.toLowerCase().contains(q),
+        )
+        .toList();
+    return PaginatedResponse(
+      data: found,
+      meta: PaginatedMeta(
+        currentPage: 1,
+        lastPage: 1,
+        perPage: 25,
+        total: found.length,
+      ),
+    );
   }
 }
 
@@ -300,8 +365,13 @@ class PickableCustomersRepository extends FakeCustomersRepository {
   PickableCustomersRepository({super.customer});
 
   @override
-  Future<PaginatedResponse<Customer>> listCustomers({int page = 1, String? search}) async =>
-      PaginatedResponse(data: [customer], meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: 25, total: 1));
+  Future<PaginatedResponse<Customer>> listCustomers({
+    int page = 1,
+    String? search,
+  }) async => PaginatedResponse(
+    data: [customer],
+    meta: PaginatedMeta(currentPage: 1, lastPage: 1, perPage: 25, total: 1),
+  );
 }
 
 // --- Approved list (reference catalog) -----------------------------------------------
@@ -319,30 +389,29 @@ ReferenceBook testBook({
   String? author,
   String? isbn,
   String category = 'textbook',
-}) =>
-    ReferenceBook(
-      id: id,
-      category: category,
-      title: title,
-      searchTitle: title.toLowerCase(),
-      levelId: levelId,
-      level: level,
-      band: band,
-      subjectId: subjectId,
-      subject: subject,
-      languageId: languageId,
-      language: languageId == null ? null : 'English',
-      publisherId: 7,
-      publisher: publisher,
-      author: author,
-      isbn: isbn,
-    );
+}) => ReferenceBook(
+  id: id,
+  category: category,
+  title: title,
+  searchTitle: title.toLowerCase(),
+  levelId: levelId,
+  level: level,
+  band: band,
+  subjectId: subjectId,
+  subject: subject,
+  languageId: languageId,
+  language: languageId == null ? null : 'English',
+  publisherId: 7,
+  publisher: publisher,
+  author: author,
+  isbn: isbn,
+);
 
 /// Serves a snapshot the way the API does: 304 when the ETag matches.
 class FakeReferenceRepository extends ReferenceRepository {
   FakeReferenceRepository({List<ReferenceBook>? books, this.etag = '"v1"'})
-      : books = books ?? [testBook()],
-        super(apiClient: unusedApiClient());
+    : books = books ?? [testBook()],
+      super(apiClient: unusedApiClient());
 
   List<ReferenceBook> books;
   String etag;
@@ -373,7 +442,8 @@ class FakeReferenceRepository extends ReferenceRepository {
 
 /// Products API double for quick-create and scanning.
 class RecordingProductsRepository extends FakeProductsRepository {
-  RecordingProductsRepository([List<Product>? products]) : super(products ?? []);
+  RecordingProductsRepository([List<Product>? products])
+    : super(products ?? []);
 
   final List<(Map<String, dynamic>, String?)> created = [];
   final List<(String, int)> attached = [];
@@ -382,17 +452,29 @@ class RecordingProductsRepository extends FakeProductsRepository {
   ApiException? attachError;
 
   @override
-  Future<Product> createProduct(Map<String, dynamic> payload, {String? idempotencyKey}) async {
+  Future<Product> createProduct(
+    Map<String, dynamic> payload, {
+    String? idempotencyKey,
+  }) async {
     created.add((payload, idempotencyKey));
     if (createError != null) throw createError!;
-    return testProduct(id: 500 + created.length, title: 'Created ${payload['reference_book_id']}', stock: payload['opening_stock'] as int? ?? 0);
+    return testProduct(
+      id: 500 + created.length,
+      title: 'Created ${payload['reference_book_id']}',
+      stock: payload['opening_stock'] as int? ?? 0,
+    );
   }
 
   @override
-  Future<Product> attachCode({required String code, required int productId}) async {
+  Future<Product> attachCode({
+    required String code,
+    required int productId,
+  }) async {
     attached.add((code, productId));
     if (attachError != null) throw attachError!;
-    final product = products.where((p) => p.id == productId).firstOrNull ?? testProduct(id: productId);
+    final product =
+        products.where((p) => p.id == productId).firstOrNull ??
+        testProduct(id: productId);
     codes[code] = product;
     return product;
   }

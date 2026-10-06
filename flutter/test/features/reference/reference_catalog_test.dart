@@ -11,33 +11,43 @@ void main() {
   late InMemoryReferenceCacheStore cache;
 
   ReferenceCatalog catalog() => ReferenceCatalog(
-        repository: api,
-        cache: cache,
-        clock: () => DateTime.utc(2026, 10, 5, 9),
-      );
+    repository: api,
+    cache: cache,
+    clock: () => DateTime.utc(2026, 10, 5, 9),
+  );
 
   setUp(() {
-    api = FakeReferenceRepository(books: [
-      testBook(id: 1),
-      testBook(id: 2, title: 'Discover Science', subject: 'Science', isbn: '9789988012342'),
-    ]);
+    api = FakeReferenceRepository(
+      books: [
+        testBook(id: 1),
+        testBook(
+          id: 2,
+          title: 'Discover Science',
+          subject: 'Science',
+          isbn: '9789988012342',
+        ),
+      ],
+    );
     api.stock = {2: const TitleStock(productsCount: 2, stockOnHand: 15)};
     cache = InMemoryReferenceCacheStore();
   });
 
-  test('first sync downloads the list and the stock, and keeps both on the device', () async {
-    final c = catalog();
-    await c.sync();
+  test(
+    'first sync downloads the list and the stock, and keeps both on the device',
+    () async {
+      final c = catalog();
+      await c.sync();
 
-    expect(api.sentEtags, [null]);
-    expect(c.books.map((b) => b.id), [1, 2]);
-    expect(c.editionLabel, 'NaCCA Test Edition');
-    expect(c.etag, '"v1"');
-    expect(c.stockFor(2)?.stockOnHand, 15);
-    expect(c.stockFor(1), isNull);
-    expect(c.offline, isFalse);
-    expect(cache.value, contains('"etag":"\\"v1\\""'));
-  });
+      expect(api.sentEtags, [null]);
+      expect(c.books.map((b) => b.id), [1, 2]);
+      expect(c.editionLabel, 'NaCCA Test Edition');
+      expect(c.etag, '"v1"');
+      expect(c.stockFor(2)?.stockOnHand, 15);
+      expect(c.stockFor(1), isNull);
+      expect(c.offline, isFalse);
+      expect(cache.value, contains('"etag":"\\"v1\\""'));
+    },
+  );
 
   test('later syncs send the ETag: unchanged lists are not downloaded again, changed ones are', () async {
     await catalog().sync();
@@ -57,19 +67,22 @@ void main() {
     expect(next.search('ocean').single.id, 3);
   });
 
-  test('offline: the stored copy is searched and the screen can say it is offline', () async {
-    await catalog().sync();
-    api.failWith = ApiException.network();
+  test(
+    'offline: the stored copy is searched and the screen can say it is offline',
+    () async {
+      await catalog().sync();
+      api.failWith = ApiException.network();
 
-    final offline = catalog();
-    await offline.sync();
+      final offline = catalog();
+      await offline.sync();
 
-    expect(offline.offline, isTrue);
-    expect(offline.error, isNull);
-    expect(offline.search('discover').single.id, 2);
-    expect(offline.stockFor(2)?.productsCount, 2);
-    expect(offline.syncedAt, DateTime.utc(2026, 10, 5, 9));
-  });
+      expect(offline.offline, isTrue);
+      expect(offline.error, isNull);
+      expect(offline.search('discover').single.id, 2);
+      expect(offline.stockFor(2)?.productsCount, 2);
+      expect(offline.syncedAt, DateTime.utc(2026, 10, 5, 9));
+    },
+  );
 
   test('offline with nothing stored: empty, not an error', () async {
     api.failWith = ApiException.network();
@@ -80,16 +93,19 @@ void main() {
     expect(c.offline, isTrue);
   });
 
-  test('a server error is reported; a corrupt stored copy is ignored', () async {
-    cache.value = '{not json';
-    api.failWith = ApiException(message: 'Server error', statusCode: 500);
-    final c = catalog();
-    await c.sync();
+  test(
+    'a server error is reported; a corrupt stored copy is ignored',
+    () async {
+      cache.value = '{not json';
+      api.failWith = ApiException(message: 'Server error', statusCode: 500);
+      final c = catalog();
+      await c.sync();
 
-    expect(c.isEmpty, isTrue);
-    expect(c.offline, isFalse);
-    expect(c.error, 'Server error');
-  });
+      expect(c.isEmpty, isTrue);
+      expect(c.offline, isFalse);
+      expect(c.error, 'Server error');
+    },
+  );
 
   test('ISBN hint and local stock update after adding a product', () async {
     final c = catalog();

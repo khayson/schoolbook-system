@@ -68,8 +68,11 @@ class PaymentsRepository {
       data: const <String, dynamic>{},
       options: Options(headers: {'Idempotency-Key': idempotencyKey}),
     );
-    return CreditApplication.fromJson(response.data!['data'] as Map<String, dynamic>);
+    return CreditApplication.fromJson(
+      response.data!['data'] as Map<String, dynamic>,
+    );
   }
 
-  Future<List<int>> receiptPdf(int paymentId) => _api.getBytes('/payments/$paymentId/receipt');
+  Future<List<int>> receiptPdf(int paymentId) =>
+      _api.getBytes('/payments/$paymentId/receipt');
 }

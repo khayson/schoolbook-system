@@ -34,8 +34,10 @@ class Payment {
       notes: json['notes'] as String?,
       allocations: allocations is List
           ? allocations
-              .map((e) => PaymentAllocation.fromJson(e as Map<String, dynamic>))
-              .toList()
+                .map(
+                  (e) => PaymentAllocation.fromJson(e as Map<String, dynamic>),
+                )
+                .toList()
           : const [],
     );
   }
@@ -95,12 +97,12 @@ abstract final class PaymentMethods {
   static const all = ['cash', 'momo', 'bank_transfer', 'cheque'];
 
   static String label(String method) => switch (method) {
-        'cash' => 'Cash',
-        'momo' => 'Mobile Money',
-        'bank_transfer' => 'Bank transfer',
-        'cheque' => 'Cheque',
-        _ => method,
-      };
+    'cash' => 'Cash',
+    'momo' => 'Mobile Money',
+    'bank_transfer' => 'Bank transfer',
+    'cheque' => 'Cheque',
+    _ => method,
+  };
 
   static String referenceLabel(String method) =>
       method == 'cash' ? 'Reference (optional)' : 'Reference';

@@ -44,6 +44,7 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
   bool _searching = false;
   bool _submitting = false;
   String? _error;
+
   /// One key per save attempt; reused on retries until success or a new attempt.
   String? _pendingIdempotencyKey;
 
@@ -65,13 +66,17 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
       _searching = true;
       _error = null;
       // Offline-capable: the approved list is on the phone.
-      _listResults = catalog.search(query, limit: 30).where((b) => catalog.stockFor(b.id) == null).take(10).toList();
+      _listResults = catalog
+          .search(query, limit: 30)
+          .where((b) => catalog.stockFor(b.id) == null)
+          .take(10)
+          .toList();
     });
     try {
       final page = await context.read<ProductsRepository>().listProducts(
-            search: query,
-            page: 1,
-          );
+        search: query,
+        page: 1,
+      );
       setState(() {
         _searchResults = page.data;
         _searching = false;
@@ -87,9 +92,14 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
   /// A title the shop does not carry yet: create the product (no opening stock: this
   /// receipt line is the stock), then add it as a line.
   Future<void> _addFromList(ReferenceBook book) async {
-    final product = await context.push<Product>('/products/approved/${book.id}/new?receive=1');
+    final product = await context.push<Product>(
+      '/products/approved/${book.id}/new?receive=1',
+    );
     if (product != null && mounted) {
-      setState(() => _listResults = _listResults.where((b) => b.id != book.id).toList());
+      setState(
+        () =>
+            _listResults = _listResults.where((b) => b.id != book.id).toList(),
+      );
       _addLine(product);
     }
   }
@@ -142,30 +152,29 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
 
     try {
       await context.read<StockRepository>().createReceipt(
-            idempotencyKey: _pendingIdempotencyKey!,
-            supplierReference: _referenceController.text.trim().isEmpty
-                ? null
-                : _referenceController.text.trim(),
-            notes: _notesController.text.trim().isEmpty
-                ? null
-                : _notesController.text.trim(),
-            items: _lines
-                .map(
-                  (l) => {
-                    'product_id': l.product.id,
-                    'quantity': l.quantity,
-                    'unit_cost': l.unitCostPesewas,
-                  },
-                )
-                .toList(),
-          );
+        idempotencyKey: _pendingIdempotencyKey!,
+        supplierReference: _referenceController.text.trim().isEmpty
+            ? null
+            : _referenceController.text.trim(),
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+        items: _lines
+            .map(
+              (l) => {
+                'product_id': l.product.id,
+                'quantity': l.quantity,
+                'unit_cost': l.unitCostPesewas,
+              },
+            )
+            .toList(),
+      );
       if (!mounted) {
         return;
       }
       _pendingIdempotencyKey = null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stock received')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Stock received')));
       context.go('/');
     } on ApiException catch (e) {
       setState(() {
@@ -234,19 +243,21 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
               ),
             )
           else
-            ..._lines.map((line) => _LineEditor(
-                  line: line,
-                  onChanged: () {
+            ..._lines.map(
+              (line) => _LineEditor(
+                line: line,
+                onChanged: () {
+                  _pendingIdempotencyKey = null;
+                  setState(() {});
+                },
+                onRemove: () {
+                  setState(() {
                     _pendingIdempotencyKey = null;
-                    setState(() {});
-                  },
-                  onRemove: () {
-                    setState(() {
-                      _pendingIdempotencyKey = null;
-                      _lines.remove(line);
-                    });
-                  },
-                )),
+                    _lines.remove(line);
+                  });
+                },
+              ),
+            ),
           const SizedBox(height: 16),
           TextField(
             controller: _referenceController,
@@ -274,7 +285,9 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _submitting ? null : _submit,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+            ),
             child: _submitting
                 ? const SizedBox(
                     height: 22,
@@ -311,8 +324,9 @@ class _LineEditorState extends State<_LineEditor> {
   @override
   void initState() {
     super.initState();
-    _qtyController =
-        TextEditingController(text: widget.line.quantity.toString());
+    _qtyController = TextEditingController(
+      text: widget.line.quantity.toString(),
+    );
     _costController = TextEditingController(
       text: (widget.line.unitCostPesewas / 100).toStringAsFixed(2),
     );

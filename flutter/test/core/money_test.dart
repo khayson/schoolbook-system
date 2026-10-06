@@ -32,16 +32,19 @@ void main() {
       expect(Money.parseGhsToPesewas(',100'), isNull);
     });
 
-    test('parseGhsToPesewas rejects invalid input, >2 decimals and the cap', () {
-      expect(Money.parseGhsToPesewas(''), isNull);
-      expect(Money.parseGhsToPesewas('abc'), isNull);
-      expect(Money.parseGhsToPesewas('-1'), isNull);
-      expect(Money.parseGhsToPesewas('1.234'), isNull);
-      expect(Money.parseGhsToPesewas('0.001'), isNull);
-      expect(Money.parseGhsToPesewas('1e3'), isNull);
-      expect(Money.parseGhsToPesewas('1000000000.00'), Money.maxPesewas);
-      expect(Money.parseGhsToPesewas('1000000000.01'), isNull);
-    });
+    test(
+      'parseGhsToPesewas rejects invalid input, >2 decimals and the cap',
+      () {
+        expect(Money.parseGhsToPesewas(''), isNull);
+        expect(Money.parseGhsToPesewas('abc'), isNull);
+        expect(Money.parseGhsToPesewas('-1'), isNull);
+        expect(Money.parseGhsToPesewas('1.234'), isNull);
+        expect(Money.parseGhsToPesewas('0.001'), isNull);
+        expect(Money.parseGhsToPesewas('1e3'), isNull);
+        expect(Money.parseGhsToPesewas('1000000000.00'), Money.maxPesewas);
+        expect(Money.parseGhsToPesewas('1000000000.01'), isNull);
+      },
+    );
 
     test('toGhsInput round-trips through the parser', () {
       for (final p in [0, 5, 29, 110, 1999, 125050, 100000000000]) {

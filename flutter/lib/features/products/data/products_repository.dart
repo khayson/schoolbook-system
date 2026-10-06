@@ -15,10 +15,7 @@ class ProductsRepository {
     int? subjectId,
     int? languageId,
   }) async {
-    final query = <String, dynamic>{
-      'page': page,
-      'per_page': 25,
-    };
+    final query = <String, dynamic>{'page': page, 'per_page': 25};
     if (search != null && search.trim().isNotEmpty) {
       query['search'] = search.trim();
     }
@@ -51,8 +48,9 @@ class ProductsRepository {
 
   Future<Product> getByCode(String code) async {
     final encoded = Uri.encodeComponent(code);
-    final response =
-        await _api.get<Map<String, dynamic>>('/products/by-code/$encoded');
+    final response = await _api.get<Map<String, dynamic>>(
+      '/products/by-code/$encoded',
+    );
     return Product.fromJson(_unwrapResource(response.data!));
   }
 
@@ -75,7 +73,10 @@ class ProductsRepository {
   /// "Scan to learn": attaches an unknown scanned [code] to a product. 409
   /// `duplicate_code` when another product has it, `code_slot_taken` when the product
   /// already has a different code there.
-  Future<Product> attachCode({required String code, required int productId}) async {
+  Future<Product> attachCode({
+    required String code,
+    required int productId,
+  }) async {
     final response = await _api.post<Map<String, dynamic>>(
       '/products/attach-code',
       data: {'code': code, 'product_id': productId},

@@ -8,31 +8,19 @@ class LookupsRepository {
   final ApiClient _api;
 
   Future<List<LevelLookup>> fetchLevels() async {
-    return _fetchAll(
-      '/levels',
-      (json) => LevelLookup.fromJson(json),
-    );
+    return _fetchAll('/levels', (json) => LevelLookup.fromJson(json));
   }
 
   Future<List<NamedLookup>> fetchSubjects() async {
-    return _fetchAll(
-      '/subjects',
-      (json) => NamedLookup.fromJson(json),
-    );
+    return _fetchAll('/subjects', (json) => NamedLookup.fromJson(json));
   }
 
   Future<List<LanguageLookup>> fetchLanguages() async {
-    return _fetchAll(
-      '/languages',
-      (json) => LanguageLookup.fromJson(json),
-    );
+    return _fetchAll('/languages', (json) => LanguageLookup.fromJson(json));
   }
 
   Future<List<NamedLookup>> fetchPublishers() async {
-    return _fetchAll(
-      '/publishers',
-      (json) => NamedLookup.fromJson(json),
-    );
+    return _fetchAll('/publishers', (json) => NamedLookup.fromJson(json));
   }
 
   Future<List<T>> _fetchAll<T>(
@@ -48,12 +36,8 @@ class LookupsRepository {
       );
       final body = response.data!;
       final data = body['data'] as List<dynamic>;
-      items.addAll(
-        data.map((e) => fromJson(e as Map<String, dynamic>)),
-      );
-      final meta = PaginatedMeta.fromJson(
-        body['meta'] as Map<String, dynamic>,
-      );
+      items.addAll(data.map((e) => fromJson(e as Map<String, dynamic>)));
+      final meta = PaginatedMeta.fromJson(body['meta'] as Map<String, dynamic>);
       if (page >= meta.lastPage) {
         break;
       }

@@ -46,7 +46,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       // Started together, awaited in turn: the three requests run in parallel.
       final customerFuture = customers.getCustomer(widget.customerId);
       final salesFuture = customers.recentSales(widget.customerId, perPage: 5);
-      final paymentsFuture = payments.listPayments(customerId: widget.customerId, perPage: 5);
+      final paymentsFuture = payments.listPayments(
+        customerId: widget.customerId,
+        perPage: 5,
+      );
       final customer = await customerFuture;
       final sales = await salesFuture;
       final recentPayments = await paymentsFuture;
@@ -72,10 +75,19 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Apply credit?'),
-        content: Text('Apply ${Money.formatPesewas(customer.creditBalance)} of credit to the oldest unpaid invoices.'),
+        content: Text(
+          'Apply ${Money.formatPesewas(customer.creditBalance)} of credit to the oldest unpaid invoices.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(key: const Key('apply_credit_confirm'), onPressed: () => Navigator.pop(context, true), child: const Text('Apply')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('apply_credit_confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Apply'),
+          ),
         ],
       ),
     );
@@ -90,13 +102,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final intent = 'apply_credit.customer.${customer.id}';
     try {
       final key = await store.keyFor(intent, {'customer_id': customer.id});
-      final result = await repository.applyCredit(customerId: customer.id, idempotencyKey: key);
+      final result = await repository.applyCredit(
+        customerId: customer.id,
+        idempotencyKey: key,
+      );
       await store.complete(intent);
-      messenger.showSnackBar(SnackBar(
-        content: Text(result.appliedTotal == 0
-            ? 'No open invoices: credit unchanged.'
-            : 'Applied ${Money.formatPesewas(result.appliedTotal)}. Credit left ${Money.formatPesewas(result.creditBalance)}.'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.appliedTotal == 0
+                ? 'No open invoices: credit unchanged.'
+                : 'Applied ${Money.formatPesewas(result.appliedTotal)}. Credit left ${Money.formatPesewas(result.creditBalance)}.',
+          ),
+        ),
+      );
       await _load();
     } on ApiException catch (e) {
       if (!e.isOutcomeUnknown) {
@@ -118,7 +137,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year, now.month, now.day),
-      initialDateRange: DateTimeRange(start: DateTime(now.year, now.month), end: DateTime(now.year, now.month, now.day)),
+      initialDateRange: DateTimeRange(
+        start: DateTime(now.year, now.month),
+        end: DateTime(now.year, now.month, now.day),
+      ),
       helpText: 'Statement period',
     );
     if (range == null || !mounted) {
@@ -128,17 +150,26 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   }
 
   /// Fetches and shares the statement for [from]..[to] (inclusive).
-  Future<void> shareStatement(Customer customer, DateTime from, DateTime to) async {
+  Future<void> shareStatement(
+    Customer customer,
+    DateTime from,
+    DateTime to,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     final repository = context.read<CustomersRepository>();
     final sharer = context.read<PdfSharer>();
     final f = DateFormat('yyyy-MM-dd');
     setState(() => _sharingStatement = true);
     try {
-      final bytes = await repository.statementPdf(customer.id, from: f.format(from), to: f.format(to));
+      final bytes = await repository.statementPdf(
+        customer.id,
+        from: f.format(from),
+        to: f.format(to),
+      );
       await sharer.sharePdf(
         bytes,
-        fileName: 'statement-${customer.code}-${f.format(from)}-${f.format(to)}.pdf',
+        fileName:
+            'statement-${customer.code}-${f.format(from)}-${f.format(to)}.pdf',
         subject: 'Statement for ${customer.name}',
       );
     } on ApiException catch (e) {
@@ -173,90 +204,139 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       body: _error != null
           ? ErrorState(message: _error!, onRetry: _load)
           : customer == null
-              ? const LoadingBody()
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
+          ? const LoadingBody()
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(
+                    '${customer.code} | ${CustomerOptions.types[customer.type] ?? customer.type} | ${customer.region}'
+                    '${customer.district == null ? '' : ', ${customer.district}'}',
+                  ),
+                  if (customer.contactPerson != null || customer.phone != null)
+                    Text(
+                      [
+                        customer.contactPerson,
+                        customer.phone,
+                      ].whereType<String>().join(' | '),
+                    ),
+                  if (!customer.isActive)
+                    Text(
+                      'Inactive',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      Text('${customer.code} | ${CustomerOptions.types[customer.type] ?? customer.type} | ${customer.region}'
-                          '${customer.district == null ? '' : ', ${customer.district}'}'),
-                      if (customer.contactPerson != null || customer.phone != null)
-                        Text([customer.contactPerson, customer.phone].whereType<String>().join(' | ')),
-                      if (!customer.isActive)
-                        Text('Inactive', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(child: _Figure(label: 'Owes', value: customer.outstandingBalance)),
-                          Expanded(child: _Figure(label: 'Credit', value: customer.creditBalance)),
-                          Expanded(
-                            child: customer.creditLimit == null
-                                ? const _Text(label: 'Limit', value: 'None')
-                                : _Figure(label: 'Limit', value: customer.creditLimit!),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        key: const Key('customer_record_payment'),
-                        onPressed: () async {
-                          await context.push('/customers/${customer.id}/pay');
-                          _load();
-                        },
-                        icon: const Icon(Icons.payments_outlined),
-                        label: const Text('Record payment'),
-                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        key: const Key('customer_statement'),
-                        onPressed: _sharingStatement ? null : () => _shareStatement(customer),
-                        icon: const Icon(Icons.description_outlined),
-                        label: const Text('Share statement'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                      ),
-                      if (customer.creditBalance > 0) ...[
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          key: const Key('customer_apply_credit'),
-                          onPressed: _applyingCredit ? null : () => _applyCredit(customer),
-                          icon: const Icon(Icons.swap_horiz),
-                          label: const Text('Apply credit to invoices'),
-                          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      Expanded(
+                        child: _Figure(
+                          label: 'Owes',
+                          value: customer.outstandingBalance,
                         ),
-                      ],
-                      const SizedBox(height: 24),
-                      Text('Recent invoices', style: Theme.of(context).textTheme.titleMedium),
-                      if (_sales.isEmpty)
-                        const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No sales yet.'))
-                      else
-                        ..._sales.map(
-                          (s) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(s.label),
-                            subtitle: Text('${s.status} | ${s.paymentStatus}'
-                                '${s.dueDate == null ? '' : ' | due ${DateFormat('d MMM y').format(s.dueDate!)}'}'),
-                            trailing: Text(Money.formatPesewas(s.balanceDue)),
-                          ),
+                      ),
+                      Expanded(
+                        child: _Figure(
+                          label: 'Credit',
+                          value: customer.creditBalance,
                         ),
-                      const SizedBox(height: 16),
-                      Text('Recent payments', style: Theme.of(context).textTheme.titleMedium),
-                      if (_payments.isEmpty)
-                        const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No payments yet.'))
-                      else
-                        ..._payments.map(
-                          (p) => PaymentTile(
-                            payment: p,
-                            onTap: () async {
-                              await context.push('/payments/${p.id}');
-                              _load();
-                            },
-                          ),
-                        ),
+                      ),
+                      Expanded(
+                        child: customer.creditLimit == null
+                            ? const _Text(label: 'Limit', value: 'None')
+                            : _Figure(
+                                label: 'Limit',
+                                value: customer.creditLimit!,
+                              ),
+                      ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    key: const Key('customer_record_payment'),
+                    onPressed: () async {
+                      await context.push('/customers/${customer.id}/pay');
+                      _load();
+                    },
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Record payment'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const Key('customer_statement'),
+                    onPressed: _sharingStatement
+                        ? null
+                        : () => _shareStatement(customer),
+                    icon: const Icon(Icons.description_outlined),
+                    label: const Text('Share statement'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  ),
+                  if (customer.creditBalance > 0) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      key: const Key('customer_apply_credit'),
+                      onPressed: _applyingCredit
+                          ? null
+                          : () => _applyCredit(customer),
+                      icon: const Icon(Icons.swap_horiz),
+                      label: const Text('Apply credit to invoices'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  Text(
+                    'Recent invoices',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (_sales.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No sales yet.'),
+                    )
+                  else
+                    ..._sales.map(
+                      (s) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(s.label),
+                        subtitle: Text(
+                          '${s.status} | ${s.paymentStatus}'
+                          '${s.dueDate == null ? '' : ' | due ${DateFormat('d MMM y').format(s.dueDate!)}'}',
+                        ),
+                        trailing: Text(Money.formatPesewas(s.balanceDue)),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Recent payments',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (_payments.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No payments yet.'),
+                    )
+                  else
+                    ..._payments.map(
+                      (p) => PaymentTile(
+                        payment: p,
+                        onTap: () async {
+                          await context.push('/payments/${p.id}');
+                          _load();
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -268,7 +348,8 @@ class _Figure extends StatelessWidget {
   final int value;
 
   @override
-  Widget build(BuildContext context) => _Text(label: label, value: Money.formatPesewas(value));
+  Widget build(BuildContext context) =>
+      _Text(label: label, value: Money.formatPesewas(value));
 }
 
 class _Text extends StatelessWidget {

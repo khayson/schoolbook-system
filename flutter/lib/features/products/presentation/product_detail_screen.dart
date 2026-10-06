@@ -76,49 +76,49 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       body: _loading
           ? const LoadingBody()
           : _error != null
-              ? ErrorState(message: _error!, onRetry: _load)
-              : product == null
-                  ? const EmptyState(title: 'Product not found')
-                  : RefreshIndicator(
-                      onRefresh: _load,
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          _InfoCard(product: product),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Stock movements',
-                            style: Theme.of(context).textTheme.titleMedium,
+          ? ErrorState(message: _error!, onRetry: _load)
+          : product == null
+          ? const EmptyState(title: 'Product not found')
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _InfoCard(product: product),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Stock movements',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (_movements.isEmpty)
+                    const EmptyState(
+                      title: 'No movements yet',
+                      icon: Icons.swap_vert,
+                    )
+                  else
+                    ..._movements.map(
+                      (m) => Card(
+                        child: ListTile(
+                          title: Text(
+                            '${m.type} · ${m.quantity > 0 ? '+' : ''}${m.quantity}',
                           ),
-                          const SizedBox(height: 8),
-                          if (_movements.isEmpty)
-                            const EmptyState(
-                              title: 'No movements yet',
-                              icon: Icons.swap_vert,
-                            )
-                          else
-                            ..._movements.map(
-                              (m) => Card(
-                                child: ListTile(
-                                  title: Text(
-                                    '${m.type} · ${m.quantity > 0 ? '+' : ''}${m.quantity}',
-                                  ),
-                                  subtitle: Text(
-                                    'Balance ${m.balanceAfter}'
-                                    '${m.unitCost != null ? ' · ${Money.formatPrice(m.unitCost!)}' : ''}',
-                                  ),
-                                  trailing: Text(
-                                    DateFormat.yMMMd().add_jm().format(
-                                          m.occurredAt.toLocal(),
-                                        ),
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ),
-                              ),
+                          subtitle: Text(
+                            'Balance ${m.balanceAfter}'
+                            '${m.unitCost != null ? ' · ${Money.formatPrice(m.unitCost!)}' : ''}',
+                          ),
+                          trailing: Text(
+                            DateFormat.yMMMd().add_jm().format(
+                              m.occurredAt.toLocal(),
                             ),
-                        ],
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
                       ),
                     ),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -163,7 +163,10 @@ class _InfoCard extends StatelessWidget {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
           ),
           Expanded(child: Text(value)),
         ],

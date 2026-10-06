@@ -34,24 +34,38 @@ class Sale {
       id: json['id'] as int,
       invoiceNo: json['invoice_no'] as String?,
       customerId: json['customer_id'] as int,
-      customer: customer is Map<String, dynamic> ? Customer.fromJson(customer) : null,
+      customer: customer is Map<String, dynamic>
+          ? Customer.fromJson(customer)
+          : null,
       status: json['status'] as String,
       paymentStatus: json['payment_status'] as String? ?? 'unpaid',
       saleDate: DateTime.parse(json['sale_date'] as String),
-      dueDate: json['due_date'] == null ? null : DateTime.parse(json['due_date'] as String),
+      dueDate: json['due_date'] == null
+          ? null
+          : DateTime.parse(json['due_date'] as String),
       subtotal: json['subtotal'] as int? ?? 0,
       discountTotal: json['discount_total'] as int? ?? 0,
       total: json['total'] as int? ?? 0,
       amountPaid: json['amount_paid'] as int? ?? 0,
       balanceDue: json['balance_due'] as int? ?? 0,
-      deliveredAt: json['delivered_at'] == null ? null : DateTime.parse(json['delivered_at'] as String).toLocal(),
+      deliveredAt: json['delivered_at'] == null
+          ? null
+          : DateTime.parse(json['delivered_at'] as String).toLocal(),
       notes: json['notes'] as String?,
       cancelReason: json['cancel_reason'] as String?,
       voidReason: json['void_reason'] as String?,
       updatedAt: json['updated_at'] as String?,
-      items: items is List ? items.map((e) => SaleLine.fromJson(e as Map<String, dynamic>)).toList() : const [],
+      items: items is List
+          ? items
+                .map((e) => SaleLine.fromJson(e as Map<String, dynamic>))
+                .toList()
+          : const [],
       allocations: allocations is List
-          ? allocations.map((e) => PaymentAllocation.fromJson(e as Map<String, dynamic>)).toList()
+          ? allocations
+                .map(
+                  (e) => PaymentAllocation.fromJson(e as Map<String, dynamic>),
+                )
+                .toList()
           : const [],
     );
   }
@@ -124,7 +138,12 @@ class SaleLine {
 
 /// `POST /pricing/preview` data, and `details.priced_order` of a 409 price_changed.
 class PricedOrder {
-  const PricedOrder({required this.lines, required this.subtotal, required this.total, this.warnings = const []});
+  const PricedOrder({
+    required this.lines,
+    required this.subtotal,
+    required this.total,
+    this.warnings = const [],
+  });
 
   factory PricedOrder.fromJson(Map<String, dynamic> json) {
     return PricedOrder(
@@ -133,7 +152,9 @@ class PricedOrder {
           .toList(),
       subtotal: json['subtotal'] as int? ?? 0,
       total: json['total'] as int? ?? 0,
-      warnings: (json['warnings'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
+      warnings: (json['warnings'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 
@@ -145,17 +166,17 @@ class PricedOrder {
 
 abstract final class SaleStatuses {
   static String label(String status) => switch (status) {
-        'draft' => 'Draft',
-        'confirmed' => 'Confirmed',
-        'cancelled' => 'Cancelled',
-        'void' => 'Void',
-        'requested' => 'Requested',
-        _ => status,
-      };
+    'draft' => 'Draft',
+    'confirmed' => 'Confirmed',
+    'cancelled' => 'Cancelled',
+    'void' => 'Void',
+    'requested' => 'Requested',
+    _ => status,
+  };
 
   static String paymentLabel(String status) => switch (status) {
-        'paid' => 'Paid',
-        'partial' => 'Part paid',
-        _ => 'Unpaid',
-      };
+    'paid' => 'Paid',
+    'partial' => 'Part paid',
+    _ => 'Unpaid',
+  };
 }

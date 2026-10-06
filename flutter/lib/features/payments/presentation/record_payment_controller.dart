@@ -70,7 +70,10 @@ class RecordPaymentController extends ChangeNotifier {
     recentError = null;
     notifyListeners();
     try {
-      final page = await _payments.listPayments(customerId: customerId, perPage: 5);
+      final page = await _payments.listPayments(
+        customerId: customerId,
+        perPage: 5,
+      );
       recent = page.data;
     } on ApiException catch (e) {
       recentError = e.message;
@@ -92,7 +95,10 @@ class RecordPaymentController extends ChangeNotifier {
 
     try {
       final key = await _pendingStore.keyFor(intent, payload);
-      final payment = await _payments.recordPayment(idempotencyKey: key, payload: payload);
+      final payment = await _payments.recordPayment(
+        idempotencyKey: key,
+        payload: payload,
+      );
       await _pendingStore.complete(intent);
       recorded = payment;
       unfinished = null;

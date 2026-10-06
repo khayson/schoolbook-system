@@ -64,7 +64,8 @@ class ApiClient {
     Options? options,
   }) async {
     return _request(
-      () => _dio.get<T>(path, queryParameters: queryParameters, options: options),
+      () =>
+          _dio.get<T>(path, queryParameters: queryParameters, options: options),
     );
   }
 
@@ -84,10 +85,7 @@ class ApiClient {
     );
   }
 
-  Future<Response<T>> put<T>(
-    String path, {
-    Object? data,
-  }) async {
+  Future<Response<T>> put<T>(String path, {Object? data}) async {
     return _request(() => _dio.put<T>(path, data: data));
   }
 
@@ -96,7 +94,10 @@ class ApiClient {
   }
 
   /// Binary download (PDF invoices and receipts).
-  Future<List<int>> getBytes(String path, {Map<String, dynamic>? queryParameters}) async {
+  Future<List<int>> getBytes(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
     final response = await _request(
       () => _dio.get<List<int>>(
         path,
@@ -110,9 +111,7 @@ class ApiClient {
     return response.data ?? const [];
   }
 
-  Future<Response<T>> _request<T>(
-    Future<Response<T>> Function() call,
-  ) async {
+  Future<Response<T>> _request<T>(Future<Response<T>> Function() call) async {
     try {
       return await call();
     } on DioException catch (e) {

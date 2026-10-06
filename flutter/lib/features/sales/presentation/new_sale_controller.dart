@@ -100,15 +100,16 @@ class NewSaleController extends ChangeNotifier {
     _changed();
   }
 
-  List<Map<String, dynamic>> get _items =>
-      [for (final l in lines) {'product_id': l.product.id, 'quantity': l.quantity}];
+  List<Map<String, dynamic>> get _items => [
+    for (final l in lines) {'product_id': l.product.id, 'quantity': l.quantity},
+  ];
 
   /// Exact `POST /sales` body.
   Map<String, dynamic> draftPayload({String? notes}) => {
-        'customer_id': customer?.id,
-        'notes': (notes?.trim().isEmpty ?? true) ? null : notes!.trim(),
-        'items': _items,
-      };
+    'customer_id': customer?.id,
+    'notes': (notes?.trim().isEmpty ?? true) ? null : notes!.trim(),
+    'items': _items,
+  };
 
   void _changed() {
     saveError = null;
@@ -128,7 +129,10 @@ class NewSaleController extends ChangeNotifier {
     previewLoading = true;
     notifyListeners();
     try {
-      final order = await _sales.preview(customerId: customer?.id, items: _items);
+      final order = await _sales.preview(
+        customerId: customer?.id,
+        items: _items,
+      );
       if (seq == _previewSeq) {
         preview = order;
         previewError = null;
@@ -155,7 +159,10 @@ class NewSaleController extends ChangeNotifier {
     final payload = draftPayload(notes: notes);
     try {
       final key = await _pendingStore.keyFor(intent, payload);
-      final sale = await _sales.createDraft(idempotencyKey: key, payload: payload);
+      final sale = await _sales.createDraft(
+        idempotencyKey: key,
+        payload: payload,
+      );
       await _pendingStore.complete(intent);
       return sale;
     } on ApiException catch (e) {

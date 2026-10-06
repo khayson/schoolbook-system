@@ -36,21 +36,36 @@ class CustomersRepository {
 
   /// [payload] uses API keys; `credit_limit` is pesewas or null.
   Future<Customer> createCustomer(Map<String, dynamic> payload) async {
-    final response = await _api.post<Map<String, dynamic>>('/customers', data: payload);
+    final response = await _api.post<Map<String, dynamic>>(
+      '/customers',
+      data: payload,
+    );
     return Customer.fromJson(response.data!['data'] as Map<String, dynamic>);
   }
 
   Future<Customer> updateCustomer(int id, Map<String, dynamic> payload) async {
-    final response = await _api.put<Map<String, dynamic>>('/customers/$id', data: payload);
+    final response = await _api.put<Map<String, dynamic>>(
+      '/customers/$id',
+      data: payload,
+    );
     return Customer.fromJson(response.data!['data'] as Map<String, dynamic>);
   }
 
   /// Statement PDF for an inclusive date range (`YYYY-MM-DD`, Africa/Accra).
-  Future<List<int>> statementPdf(int customerId, {required String from, required String to}) =>
-      _api.getBytes('/customers/$customerId/statement', queryParameters: {'from': from, 'to': to, 'format': 'pdf'});
+  Future<List<int>> statementPdf(
+    int customerId, {
+    required String from,
+    required String to,
+  }) => _api.getBytes(
+    '/customers/$customerId/statement',
+    queryParameters: {'from': from, 'to': to, 'format': 'pdf'},
+  );
 
   /// Newest first.
-  Future<List<SaleSummary>> recentSales(int customerId, {int perPage = 10}) async {
+  Future<List<SaleSummary>> recentSales(
+    int customerId, {
+    int perPage = 10,
+  }) async {
     final response = await _api.get<Map<String, dynamic>>(
       '/sales',
       queryParameters: {'customer_id': customerId, 'per_page': perPage},

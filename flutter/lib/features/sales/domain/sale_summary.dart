@@ -18,7 +18,9 @@ class SaleSummary {
       status: json['status'] as String,
       paymentStatus: json['payment_status'] as String? ?? 'unpaid',
       saleDate: DateTime.parse(json['sale_date'] as String),
-      dueDate: json['due_date'] == null ? null : DateTime.parse(json['due_date'] as String),
+      dueDate: json['due_date'] == null
+          ? null
+          : DateTime.parse(json['due_date'] as String),
       total: json['total'] as int? ?? 0,
       balanceDue: json['balance_due'] as int? ?? 0,
     );

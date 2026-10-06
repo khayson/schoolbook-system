@@ -14,7 +14,11 @@ import 'package:schoolbook/features/sales/presentation/sale_actions_controller.d
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 
 class SaleDetailScreen extends StatefulWidget {
-  const SaleDetailScreen({super.key, required this.saleId, this.openConfirm = false});
+  const SaleDetailScreen({
+    super.key,
+    required this.saleId,
+    this.openConfirm = false,
+  });
 
   final int saleId;
 
@@ -74,7 +78,8 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     }
   }
 
-  void _snack(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  void _snack(String text) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
   void _showError(ApiException e) {
     final d = describeApiError(e);
@@ -131,9 +136,15 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           }
         }
       case StockShort(:final items):
-        await showDialog<void>(context: context, builder: (_) => InsufficientStockDialog(items: items));
+        await showDialog<void>(
+          context: context,
+          builder: (_) => InsufficientStockDialog(items: items),
+        );
       case CreditWarning():
-        final proceed = await showDialog<bool>(context: context, builder: (_) => CreditWarningDialog(warning: outcome));
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (_) => CreditWarningDialog(warning: outcome),
+        );
         if (proceed == true && mounted) {
           await _confirm(choice.withOverride());
         }
@@ -147,12 +158,20 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   Future<void> _cancel() async {
     final reason = await showDialog<String>(
       context: context,
-      builder: (_) => const ReasonDialog(title: 'Cancel this draft?', action: 'Cancel draft', required: false),
+      builder: (_) => const ReasonDialog(
+        title: 'Cancel this draft?',
+        action: 'Cancel draft',
+        required: false,
+      ),
     );
     if (reason == null) {
       return;
     }
-    await _act(SaleAction.cancel, () => _actions.cancel(_sale!, reason: reason.isEmpty ? null : reason), 'Draft cancelled');
+    await _act(
+      SaleAction.cancel,
+      () => _actions.cancel(_sale!, reason: reason.isEmpty ? null : reason),
+      'Draft cancelled',
+    );
   }
 
   Future<void> _void() async {
@@ -167,7 +186,11 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     if (reason == null) {
       return;
     }
-    await _act(SaleAction.voidSale, () => _actions.voidSale(_sale!, reason), 'Invoice voided');
+    await _act(
+      SaleAction.voidSale,
+      () => _actions.voidSale(_sale!, reason),
+      'Invoice voided',
+    );
   }
 
   Future<void> _deliver() async {
@@ -175,22 +198,39 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Mark as delivered?'),
-        content: const Text('After delivery the invoice can no longer be voided.'),
+        content: const Text(
+          'After delivery the invoice can no longer be voided.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not yet')),
-          FilledButton(key: const Key('deliver_confirm'), onPressed: () => Navigator.pop(context, true), child: const Text('Delivered')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            key: const Key('deliver_confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delivered'),
+          ),
         ],
       ),
     );
     if (ok == true) {
-      await _act(SaleAction.deliver, () => _actions.deliver(_sale!), 'Marked as delivered');
+      await _act(
+        SaleAction.deliver,
+        () => _actions.deliver(_sale!),
+        'Marked as delivered',
+      );
     }
   }
 
   /// Cancel, void and deliver are not key-protected: after a lost connection the retry
   /// may find the sale already changed (409). That is not a failure: refetch and say
   /// what actually happened.
-  Future<void> _act(SaleAction kind, Future<Sale> Function() action, String done) async {
+  Future<void> _act(
+    SaleAction kind,
+    Future<Sale> Function() action,
+    String done,
+  ) async {
     try {
       final sale = await action();
       if (!mounted) {
@@ -221,7 +261,11 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       if (!mounted) {
         return;
       }
-      await context.read<PdfSharer>().sharePdf(bytes, fileName: '${sale.invoiceNo}.pdf', subject: 'Invoice ${sale.invoiceNo}');
+      await context.read<PdfSharer>().sharePdf(
+        bytes,
+        fileName: '${sale.invoiceNo}.pdf',
+        subject: 'Invoice ${sale.invoiceNo}',
+      );
     } on ApiException catch (e) {
       if (mounted) {
         _showError(e);
@@ -239,14 +283,19 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
         title: Text(sale?.label ?? 'Sale'),
         actions: [
           if (sale != null && sale.isConfirmed)
-            IconButton(key: const Key('sale_share_invoice'), tooltip: 'Share invoice', icon: const Icon(Icons.share), onPressed: _shareInvoice),
+            IconButton(
+              key: const Key('sale_share_invoice'),
+              tooltip: 'Share invoice',
+              icon: const Icon(Icons.share),
+              onPressed: _shareInvoice,
+            ),
         ],
       ),
       body: _error != null
           ? ErrorState(message: _error!, onRetry: _load)
           : sale == null
-              ? const LoadingBody()
-              : RefreshIndicator(onRefresh: _load, child: _details(sale)),
+          ? const LoadingBody()
+          : RefreshIndicator(onRefresh: _load, child: _details(sale)),
     );
   }
 
@@ -260,14 +309,24 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           spacing: 8,
           children: [
             Chip(label: Text(SaleStatuses.label(sale.status))),
-            if (sale.isConfirmed) Chip(label: Text(SaleStatuses.paymentLabel(sale.paymentStatus))),
+            if (sale.isConfirmed)
+              Chip(label: Text(SaleStatuses.paymentLabel(sale.paymentStatus))),
             if (sale.deliveredAt != null) const Chip(label: Text('Delivered')),
           ],
         ),
-        Text(sale.customer?.name ?? 'Customer #${sale.customerId}', style: theme.textTheme.titleLarge),
-        Text('Sale date ${DateFormat('d MMM y').format(sale.saleDate)}'
-            '${sale.dueDate == null ? '' : ' | due ${DateFormat('d MMM y').format(sale.dueDate!)}'}'),
-        if (sale.voidReason != null) Text('Void: ${sale.voidReason}', style: TextStyle(color: theme.colorScheme.error)),
+        Text(
+          sale.customer?.name ?? 'Customer #${sale.customerId}',
+          style: theme.textTheme.titleLarge,
+        ),
+        Text(
+          'Sale date ${DateFormat('d MMM y').format(sale.saleDate)}'
+          '${sale.dueDate == null ? '' : ' | due ${DateFormat('d MMM y').format(sale.dueDate!)}'}',
+        ),
+        if (sale.voidReason != null)
+          Text(
+            'Void: ${sale.voidReason}',
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
         if (sale.cancelReason != null) Text('Cancelled: ${sale.cancelReason}'),
         const SizedBox(height: 16),
         Text('Books', style: theme.textTheme.titleMedium),
@@ -275,8 +334,10 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           (line) => ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(line.productTitle),
-            subtitle: Text('${line.quantity} x ${Money.formatPesewas(line.unitPrice)}'
-                '${line.isPriceOverridden ? ' (override: ${line.overrideReason ?? ''})' : ''}'),
+            subtitle: Text(
+              '${line.quantity} x ${Money.formatPesewas(line.unitPrice)}'
+              '${line.isPriceOverridden ? ' (override: ${line.overrideReason ?? ''})' : ''}',
+            ),
             trailing: Text(Money.formatPesewas(line.lineTotal)),
           ),
         ),
@@ -306,10 +367,16 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
             onPressed: busy ? null : _startConfirm,
             icon: const Icon(Icons.check_circle_outline),
             label: const Text('Confirm sale'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+            ),
           ),
           const SizedBox(height: 8),
-          OutlinedButton(key: const Key('sale_cancel'), onPressed: busy ? null : _cancel, child: const Text('Cancel draft')),
+          OutlinedButton(
+            key: const Key('sale_cancel'),
+            onPressed: busy ? null : _cancel,
+            child: const Text('Cancel draft'),
+          ),
         ],
         if (sale.isConfirmed) ...[
           if (sale.balanceDue > 0)
@@ -321,17 +388,26 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
               },
               icon: const Icon(Icons.payments_outlined),
               label: const Text('Record payment'),
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
             ),
           if (sale.deliveredAt == null) ...[
             const SizedBox(height: 8),
-            OutlinedButton.icon(key: const Key('sale_deliver'), onPressed: busy ? null : _deliver, icon: const Icon(Icons.local_shipping_outlined), label: const Text('Mark delivered')),
+            OutlinedButton.icon(
+              key: const Key('sale_deliver'),
+              onPressed: busy ? null : _deliver,
+              icon: const Icon(Icons.local_shipping_outlined),
+              label: const Text('Mark delivered'),
+            ),
           ],
           if (sale.canVoid)
             TextButton(
               key: const Key('sale_void'),
               onPressed: busy ? null : _void,
-              style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
               child: const Text('Void invoice'),
             ),
         ],
@@ -345,7 +421,10 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label, style: style), Text(Money.formatPesewas(pesewas), style: style)],
+        children: [
+          Text(label, style: style),
+          Text(Money.formatPesewas(pesewas), style: style),
+        ],
       ),
     );
   }
@@ -355,7 +434,9 @@ enum SaleAction { cancel, voidSale, deliver }
 
 /// The sale was changed by someone (or an earlier attempt) in the meantime.
 bool isStateConflict(ApiException e) =>
-    e.code == 'sale_not_editable' || e.code == 'sale_state_conflict' || e.code == 'sale_delivered';
+    e.code == 'sale_not_editable' ||
+    e.code == 'sale_state_conflict' ||
+    e.code == 'sale_delivered';
 
 /// Plain message for the sale's real state after a refused [action].
 String alreadyChangedMessage(SaleAction action, Sale? sale) {
@@ -388,13 +469,21 @@ String alreadyChangedMessage(SaleAction action, Sale? sale) {
 }
 
 class _ConfirmChoice {
-  const _ConfirmChoice({this.dueDate, this.applyCredit = false, this.overrideCreditLimit = false});
+  const _ConfirmChoice({
+    this.dueDate,
+    this.applyCredit = false,
+    this.overrideCreditLimit = false,
+  });
 
   final DateTime? dueDate;
   final bool applyCredit;
   final bool overrideCreditLimit;
 
-  _ConfirmChoice withOverride() => _ConfirmChoice(dueDate: dueDate, applyCredit: applyCredit, overrideCreditLimit: true);
+  _ConfirmChoice withOverride() => _ConfirmChoice(
+    dueDate: dueDate,
+    applyCredit: applyCredit,
+    overrideCreditLimit: true,
+  );
 }
 
 class _ConfirmSheet extends StatefulWidget {
@@ -427,13 +516,22 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Confirm ${Money.formatPesewas(widget.sale.total)}', style: Theme.of(context).textTheme.titleLarge),
-            const Text('Issues the invoice number and takes the books out of stock.'),
+            Text(
+              'Confirm ${Money.formatPesewas(widget.sale.total)}',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const Text(
+              'Issues the invoice number and takes the books out of stock.',
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.event),
               title: const Text('Due date'),
-              subtitle: Text(_dueDate == null ? 'From payment terms' : DateFormat('d MMM y').format(_dueDate!)),
+              subtitle: Text(
+                _dueDate == null
+                    ? 'From payment terms'
+                    : DateFormat('d MMM y').format(_dueDate!),
+              ),
               onTap: () async {
                 final now = DateTime.now();
                 final picked = await showDatePicker(
@@ -451,14 +549,21 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
               SwitchListTile(
                 key: const Key('confirm_apply_credit'),
                 contentPadding: EdgeInsets.zero,
-                title: Text('Apply customer credit (${Money.formatPesewas(credit)})'),
+                title: Text(
+                  'Apply customer credit (${Money.formatPesewas(credit)})',
+                ),
                 value: _applyCredit,
                 onChanged: (v) => setState(() => _applyCredit = v),
               ),
             const SizedBox(height: 8),
             FilledButton(
               key: const Key('confirm_submit'),
-              onPressed: () => Navigator.of(context).pop(_ConfirmChoice(dueDate: _dueDate, applyCredit: credit > 0 && _applyCredit)),
+              onPressed: () => Navigator.of(context).pop(
+                _ConfirmChoice(
+                  dueDate: _dueDate,
+                  applyCredit: credit > 0 && _applyCredit,
+                ),
+              ),
               child: const Text('Confirm'),
             ),
           ],
@@ -470,7 +575,11 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
 
 /// 409 price_changed: line-by-line old -> new and the totals.
 class PriceChangedDialog extends StatelessWidget {
-  const PriceChangedDialog({super.key, required this.sale, required this.newOrder});
+  const PriceChangedDialog({
+    super.key,
+    required this.sale,
+    required this.newOrder,
+  });
 
   final Sale sale;
   final PricedOrder newOrder;
@@ -480,11 +589,18 @@ class PriceChangedDialog extends StatelessWidget {
     final changes = <String>[];
     for (var i = 0; i < newOrder.lines.length; i++) {
       final line = newOrder.lines[i];
-      final old = i < sale.items.length && sale.items[i].productId == line.productId ? sale.items[i] : null;
+      final old =
+          i < sale.items.length && sale.items[i].productId == line.productId
+          ? sale.items[i]
+          : null;
       if (old == null) {
-        changes.add('${line.productTitle}: now ${Money.formatPesewas(line.unitPrice)}');
+        changes.add(
+          '${line.productTitle}: now ${Money.formatPesewas(line.unitPrice)}',
+        );
       } else if (old.unitPrice != line.unitPrice) {
-        changes.add('${line.productTitle}: ${Money.formatPesewas(old.unitPrice)} -> ${Money.formatPesewas(line.unitPrice)}');
+        changes.add(
+          '${line.productTitle}: ${Money.formatPesewas(old.unitPrice)} -> ${Money.formatPesewas(line.unitPrice)}',
+        );
       }
     }
     return AlertDialog(
@@ -498,13 +614,22 @@ class PriceChangedDialog extends StatelessWidget {
           const SizedBox(height: 8),
           ...changes.map(Text.new),
           const SizedBox(height: 8),
-          Text('Total: ${Money.formatPesewas(sale.total)} -> ${Money.formatPesewas(newOrder.total)}',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            'Total: ${Money.formatPesewas(sale.total)} -> ${Money.formatPesewas(newOrder.total)}',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
-        FilledButton(key: const Key('accept_new_prices'), onPressed: () => Navigator.pop(context, true), child: const Text('Accept new prices')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          key: const Key('accept_new_prices'),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Accept new prices'),
+        ),
       ],
     );
   }
@@ -524,12 +649,23 @@ class InsufficientStockDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ...items.map((i) => Text('${i.sku} ${i.title}: need ${i.requested}, have ${i.available}')),
+          ...items.map(
+            (i) => Text(
+              '${i.sku} ${i.title}: need ${i.requested}, have ${i.available}',
+            ),
+          ),
           const SizedBox(height: 8),
-          const Text('Nothing was confirmed. Reduce the quantities or receive stock first.'),
+          const Text(
+            'Nothing was confirmed. Reduce the quantities or receive stock first.',
+          ),
         ],
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        ),
+      ],
     );
   }
 }
@@ -551,8 +687,15 @@ class CreditWarningDialog extends StatelessWidget {
         ' = ${Money.formatPesewas(w.projectedBalance)}, over the limit of ${Money.formatPesewas(w.creditLimit)}.',
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')),
-        FilledButton(key: const Key('credit_override'), onPressed: () => Navigator.pop(context, true), child: const Text('Confirm anyway')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Back'),
+        ),
+        FilledButton(
+          key: const Key('credit_override'),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Confirm anyway'),
+        ),
       ],
     );
   }
@@ -560,7 +703,13 @@ class CreditWarningDialog extends StatelessWidget {
 
 /// Asks for a reason; returns it, or null when dismissed.
 class ReasonDialog extends StatefulWidget {
-  const ReasonDialog({super.key, required this.title, required this.action, this.message, this.required = true});
+  const ReasonDialog({
+    super.key,
+    required this.title,
+    required this.action,
+    this.message,
+    this.required = true,
+  });
 
   final String title;
   final String action;
@@ -599,13 +748,18 @@ class _ReasonDialogState extends State<ReasonDialog> {
                 labelText: widget.required ? 'Reason' : 'Reason (optional)',
                 border: const OutlineInputBorder(),
               ),
-              validator: widget.required ? (v) => Validators.required(v, label: 'A reason') : null,
+              validator: widget.required
+                  ? (v) => Validators.required(v, label: 'A reason')
+                  : null,
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Back')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Back'),
+        ),
         FilledButton(
           key: const Key('reason_submit'),
           onPressed: () {

@@ -29,7 +29,10 @@ class SalesListController extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final page = await _repository.listSales(status: status, paymentStatus: paymentStatus);
+      final page = await _repository.listSales(
+        status: status,
+        paymentStatus: paymentStatus,
+      );
       sales = page.data;
       _page = page.meta.currentPage;
       _lastPage = page.meta.lastPage;
@@ -48,7 +51,11 @@ class SalesListController extends ChangeNotifier {
     loadingMore = true;
     notifyListeners();
     try {
-      final page = await _repository.listSales(page: _page + 1, status: status, paymentStatus: paymentStatus);
+      final page = await _repository.listSales(
+        page: _page + 1,
+        status: status,
+        paymentStatus: paymentStatus,
+      );
       sales = [...sales, ...page.data];
       _page = page.meta.currentPage;
       _lastPage = page.meta.lastPage;
@@ -100,9 +107,13 @@ class _SalesListScreenState extends State<SalesListScreen> {
   }
 
   Widget _chip(String label, bool selected, VoidCallback onTap) => Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
-      );
+    padding: const EdgeInsets.only(right: 6),
+    child: ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -126,13 +137,48 @@ class _SalesListScreenState extends State<SalesListScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               children: [
-                _chip('All', c.status == null && c.paymentStatus == null, () => c.setFilters()),
-                _chip('Drafts', c.status == 'draft', () => c.setFilters(status: 'draft')),
-                _chip('Unpaid', c.paymentStatus == 'unpaid', () => c.setFilters(status: 'confirmed', paymentStatus: 'unpaid')),
-                _chip('Part paid', c.paymentStatus == 'partial', () => c.setFilters(status: 'confirmed', paymentStatus: 'partial')),
-                _chip('Paid', c.paymentStatus == 'paid', () => c.setFilters(status: 'confirmed', paymentStatus: 'paid')),
-                _chip('Void', c.status == 'void', () => c.setFilters(status: 'void')),
-                _chip('Cancelled', c.status == 'cancelled', () => c.setFilters(status: 'cancelled')),
+                _chip(
+                  'All',
+                  c.status == null && c.paymentStatus == null,
+                  () => c.setFilters(),
+                ),
+                _chip(
+                  'Drafts',
+                  c.status == 'draft',
+                  () => c.setFilters(status: 'draft'),
+                ),
+                _chip(
+                  'Unpaid',
+                  c.paymentStatus == 'unpaid',
+                  () => c.setFilters(
+                    status: 'confirmed',
+                    paymentStatus: 'unpaid',
+                  ),
+                ),
+                _chip(
+                  'Part paid',
+                  c.paymentStatus == 'partial',
+                  () => c.setFilters(
+                    status: 'confirmed',
+                    paymentStatus: 'partial',
+                  ),
+                ),
+                _chip(
+                  'Paid',
+                  c.paymentStatus == 'paid',
+                  () =>
+                      c.setFilters(status: 'confirmed', paymentStatus: 'paid'),
+                ),
+                _chip(
+                  'Void',
+                  c.status == 'void',
+                  () => c.setFilters(status: 'void'),
+                ),
+                _chip(
+                  'Cancelled',
+                  c.status == 'cancelled',
+                  () => c.setFilters(status: 'cancelled'),
+                ),
               ],
             ),
           ),
@@ -150,7 +196,10 @@ class _SalesListScreenState extends State<SalesListScreen> {
       return ErrorState(message: c.error!, onRetry: c.load);
     }
     if (c.sales.isEmpty) {
-      return const EmptyState(title: 'No sales', subtitle: 'Start one with New sale.');
+      return const EmptyState(
+        title: 'No sales',
+        subtitle: 'Start one with New sale.',
+      );
     }
     return RefreshIndicator(
       onRefresh: c.load,
@@ -159,21 +208,31 @@ class _SalesListScreenState extends State<SalesListScreen> {
         itemBuilder: (context, i) {
           if (i == c.sales.length) {
             c.loadMore();
-            return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
           final s = c.sales[i];
-          final status = s.isConfirmed ? SaleStatuses.paymentLabel(s.paymentStatus) : SaleStatuses.label(s.status);
+          final status = s.isConfirmed
+              ? SaleStatuses.paymentLabel(s.paymentStatus)
+              : SaleStatuses.label(s.status);
           return ListTile(
             key: Key('sale_${s.id}'),
             title: Text('${s.label}  ${s.customer?.name ?? ''}'),
-            subtitle: Text('$status | ${DateFormat('d MMM y').format(s.saleDate)}'),
+            subtitle: Text(
+              '$status | ${DateFormat('d MMM y').format(s.saleDate)}',
+            ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(Money.formatPesewas(s.total)),
                 if (s.isConfirmed && s.balanceDue > 0)
-                  Text('due ${Money.formatPesewas(s.balanceDue)}', style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    'due ${Money.formatPesewas(s.balanceDue)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
               ],
             ),
             onTap: () async {

@@ -11,11 +11,12 @@ abstract interface class ReferenceCacheStore {
 
 class FileReferenceCacheStore implements ReferenceCacheStore {
   FileReferenceCacheStore({Future<Directory> Function()? directory})
-      : _directory = directory ?? getApplicationSupportDirectory;
+    : _directory = directory ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _directory;
 
-  Future<File> _file() async => File('${(await _directory()).path}/approved_list_snapshot.json');
+  Future<File> _file() async =>
+      File('${(await _directory()).path}/approved_list_snapshot.json');
 
   @override
   Future<String?> read() async {

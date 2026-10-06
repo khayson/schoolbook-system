@@ -13,7 +13,7 @@ abstract interface class KeyValueStore {
 
 class SecureKeyValueStore implements KeyValueStore {
   SecureKeyValueStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 
@@ -65,11 +65,11 @@ class PendingSubmission {
   final DateTime startedAt;
 
   Map<String, dynamic> toJson() => {
-        'key': idempotencyKey,
-        'hash': payloadHash,
-        'payload': payload,
-        'started_at': startedAt.toIso8601String(),
-      };
+    'key': idempotencyKey,
+    'hash': payloadHash,
+    'payload': payload,
+    'started_at': startedAt.toIso8601String(),
+  };
 }
 
 /// One idempotency key per user intent (e.g. "record a payment for customer 12"),
@@ -82,8 +82,8 @@ class PendingSubmission {
 /// - Success -> [complete] forgets it.
 class PendingSubmissionStore {
   PendingSubmissionStore({KeyValueStore? store, Random? random})
-      : _store = store ?? SecureKeyValueStore(),
-        _random = random ?? Random.secure();
+    : _store = store ?? SecureKeyValueStore(),
+      _random = random ?? Random.secure();
 
   static const _prefix = 'pending_submission.';
 
@@ -96,7 +96,9 @@ class PendingSubmissionStore {
       return null;
     }
     try {
-      return PendingSubmission.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      return PendingSubmission.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
     } on Object {
       await _store.delete('$_prefix$intent');
       return null;
@@ -104,7 +106,11 @@ class PendingSubmissionStore {
   }
 
   /// Returns the key to send for [payload], persisting it before the request goes out.
-  Future<String> keyFor(String intent, Map<String, dynamic> payload, {DateTime? now}) async {
+  Future<String> keyFor(
+    String intent,
+    Map<String, dynamic> payload, {
+    DateTime? now,
+  }) async {
     final hash = payloadHash(payload);
     final existing = await pending(intent);
     if (existing != null && existing.payloadHash == hash) {

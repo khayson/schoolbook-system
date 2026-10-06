@@ -60,7 +60,10 @@ ErrorDescription describeApiError(ApiException e) {
         'Requested ${ghs(d['requested'])}, available credit ${ghs(d['credit_balance'])}.',
       );
     case 'no_credit_available':
-      return const ErrorDescription('No credit', 'This customer has no credit to apply.');
+      return const ErrorDescription(
+        'No credit',
+        'This customer has no credit to apply.',
+      );
     case 'sale_not_payable':
       return ErrorDescription('Invoice cannot be paid', e.message);
     case 'payment_already_void':
@@ -79,7 +82,10 @@ ErrorDescription describeApiError(ApiException e) {
       final first = e.fieldErrors.values.expand((v) => v).firstOrNull;
       return ErrorDescription('Check the details', first ?? e.message);
     case 'forbidden':
-      return const ErrorDescription('Not allowed', 'Only the owner account can do this.');
+      return const ErrorDescription(
+        'Not allowed',
+        'Only the owner account can do this.',
+      );
     case 'unauthenticated':
       return const ErrorDescription('Signed out', 'Please sign in again.');
     default:
@@ -88,8 +94,8 @@ ErrorDescription describeApiError(ApiException e) {
 }
 
 String _method(Object? method) => switch (method) {
-      'momo' => 'Mobile Money',
-      'bank_transfer' => 'bank transfer',
-      'cheque' => 'cheque',
-      _ => method?.toString() ?? '',
-    };
+  'momo' => 'Mobile Money',
+  'bank_transfer' => 'bank transfer',
+  'cheque' => 'cheque',
+  _ => method?.toString() ?? '',
+};
