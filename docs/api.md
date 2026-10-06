@@ -8,6 +8,8 @@ Auth header: `Authorization: Bearer <token>`.
 
 - Lists: `{ data, meta, links }` with `?page=`, `?per_page=` (default 25, max 100), `?search=`, `?sort=`
 - Errors: `{ message, code, errors, details? }` with HTTP 401 / 403 / 404 / 409 / 422 (see [Errors](#errors))
+- Every response carries `X-Response-Time: <ms>ms`, the server's time from boot to response (requests slower than `SLOW_REQUEST_MS`, default 1000, are logged with route, status and peak memory). Compare it with the time the client measured to tell server time from network time.
+- Money is integers in pesewas; clients display negative amounts as `−GHS 196.00` (U+2212 before the currency).
 - Mutating money endpoints require `Idempotency-Key`: `POST /stock/receipts`, `POST /sales` (create draft), `POST /sales/{id}/confirm`, `POST /payments`, `POST /customers/{id}/apply-credit`. Clients keep one key per user intent until a 2xx (or a definitive 4xx), and reuse it on retries.
 
 ## Errors

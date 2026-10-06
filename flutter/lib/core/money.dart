@@ -11,14 +11,18 @@ abstract final class Money {
     r'^(\d{1,10}|\d{1,3}(,\d{3}){1,3})(\.(\d{1,2}))?$',
   );
 
-  /// Formats [pesewas] as `GHS 12.34`.
+  /// Sign of a displayed negative amount, before the currency (U+2212 minus sign). The
+  /// same style as the server's `Money::formatGhsGrouped`.
+  static const String negativeSign = '−';
+
+  /// Formats [pesewas] as `GHS 12.34`; negative amounts as `−GHS 196.00`.
   static String formatPesewas(int pesewas) {
-    final sign = pesewas < 0 ? '-' : '';
+    final sign = pesewas < 0 ? negativeSign : '';
     final absolute = pesewas.abs();
     final whole = absolute ~/ 100;
     final fraction = absolute % 100;
     final wholeGrouped = _groupThousands(whole);
-    return 'GHS $sign$wholeGrouped.${fraction.toString().padLeft(2, '0')}';
+    return '${sign}GHS $wholeGrouped.${fraction.toString().padLeft(2, '0')}';
   }
 
   /// Formats pesewas as an editable GHS string without the prefix: `1250.50`.

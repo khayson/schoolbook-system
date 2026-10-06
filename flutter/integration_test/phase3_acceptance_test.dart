@@ -209,7 +209,7 @@ void main() {
     final variance = _text(tester, const Key('count_variance_total'));
     step('5b $progress; $variance');
     expect(progress, '5 of 6 counted');
-    expect(variance, 'Variance so far: -6 units, GHS -196.00 at cost');
+    expect(variance, 'Variance so far: -6 units, −GHS 196.00 at cost');
 
     await tester.tap(find.text('Variances'));
     await _settle(tester);

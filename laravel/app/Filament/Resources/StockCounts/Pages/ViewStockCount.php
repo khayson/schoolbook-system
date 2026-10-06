@@ -6,6 +6,7 @@ use App\Actions\Inventory\ApplyStockCount;
 use App\Actions\Inventory\CancelStockCount;
 use App\Actions\Inventory\RenderStockCountSheet;
 use App\Actions\Inventory\StockCountTotals;
+use App\Actions\Inventory\StockMovedSinceCounted;
 use App\Filament\Resources\StockCounts\StockCountResource;
 use App\Filament\Support\DomainErrorNotifier;
 use App\Filament\Support\InteractsWithCurrentUser;
@@ -76,7 +77,23 @@ class ViewStockCount extends ViewRecord
             .str('adjustment')->plural($changes).' of '.($t['variance_units'] > 0 ? '+' : '').$t['variance_units'].' units. '
             .'Net variance at cost '.Money::formatGhsGrouped($t['variance_value'])
             .' (losses '.Money::formatGhsGrouped($t['losses']).', gains '.Money::formatGhsGrouped($t['gains']).'). '
-            .'Each adjustment is the variance measured when the count was entered; sales since then are kept. This cannot be undone.';
+            .'Each adjustment is the variance measured when the count was entered; sales since then are kept. This cannot be undone.'
+            .self::movedSinceCounted($record);
+    }
+
+    /**
+     * Products whose stock moved after they were counted. Right if the movement happened
+     * after the shelf was counted; wrong by that amount if it was a sale made earlier and
+     * keyed in late (rule: record all sales before counting begins).
+     */
+    public static function movedSinceCounted(StockCount $record): string
+    {
+        $moved = app(StockMovedSinceCounted::class)->run($record);
+
+        return $moved === []
+            ? ''
+            : ' Stock moved since counting, check these were not sold before the count: '
+                .implode('; ', array_column($moved, 'summary')).'.';
     }
 
     public static function sheet(StockCount $count): StreamedResponse

@@ -3,6 +3,7 @@
 use App\Exceptions\ApiDomainException;
 use App\Http\Middleware\EnsureIdempotency;
 use App\Http\Middleware\EnsureUserIsOwner;
+use App\Http\Middleware\RecordResponseTime;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Every request: X-Response-Time header, slow ones logged (config app.slow_request_ms).
+        $middleware->prepend(RecordResponseTime::class);
         $middleware->alias([
             'owner' => EnsureUserIsOwner::class,
             'idempotent' => EnsureIdempotency::class,

@@ -10,6 +10,8 @@ void main() {
       expect(Money.formatPesewas(29), 'GHS 0.29');
       expect(Money.formatPesewas(1999), 'GHS 19.99');
       expect(Money.formatPesewas(110), 'GHS 1.10');
+      expect(Money.formatPesewas(-19600), '−GHS 196.00');
+      expect(Money.formatPesewas(-123456789), '−GHS 1,234,567.89');
     });
 
     test('parseGhsToPesewas converts exact decimals without floats', () {

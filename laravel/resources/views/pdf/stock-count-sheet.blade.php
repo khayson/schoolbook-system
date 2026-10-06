@@ -30,6 +30,7 @@
             </td>
         </tr>
     </table>
+    <div style="margin-top: 8px;"><strong>Before counting:</strong> record every sale already made, including handwritten ones. A sale keyed in after its shelf was counted makes that count wrong.</div>
     @if ($count->notes)
         <div style="margin-top: 8px;"><span class="muted">Notes:</span> {{ $count->notes }}</div>
     @endif

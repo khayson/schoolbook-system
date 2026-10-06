@@ -70,21 +70,30 @@ class Money
         return sprintf('%s%d.%02d', $sign, $whole, $fraction);
     }
 
+    /**
+     * Sign of a displayed negative amount, before the currency: "−GHS 196.00" (U+2212
+     * minus sign). The same style as the app's Money.formatPesewas.
+     */
+    public const NEGATIVE_SIGN = '−';
+
+    /** Display without separators: "GHS 1250.50", "−GHS 1250.50". */
     public static function formatGhs(?int $pesewas): string
     {
-        return 'GHS '.self::pesewasToGhs($pesewas);
+        $pesewas ??= 0;
+
+        return ($pesewas < 0 ? self::NEGATIVE_SIGN : '').'GHS '.self::pesewasToGhs(abs($pesewas));
     }
 
     /**
-     * Display only (invoices, receipts): thousands separators, e.g. "GHS 12,345.60".
-     * Integer arithmetic throughout; number_format only ever sees whole cedis.
+     * Display (invoices, receipts, reports): thousands separators, e.g. "GHS 12,345.60",
+     * "−GHS 196.00". Integer arithmetic throughout; number_format only sees whole cedis.
      */
     public static function formatGhsGrouped(?int $pesewas): string
     {
         $pesewas ??= 0;
-        $sign = $pesewas < 0 ? '-' : '';
+        $sign = $pesewas < 0 ? self::NEGATIVE_SIGN : '';
         $absolute = abs($pesewas);
 
-        return sprintf('GHS %s%s.%02d', $sign, number_format(intdiv($absolute, 100)), $absolute % 100);
+        return sprintf('%sGHS %s.%02d', $sign, number_format(intdiv($absolute, 100)), $absolute % 100);
     }
 }

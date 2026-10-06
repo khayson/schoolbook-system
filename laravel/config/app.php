@@ -68,6 +68,13 @@ return [
     'timezone' => 'Africa/Accra',
 
     /*
+    | Requests slower than this (milliseconds, server time from boot) are logged as
+    | warnings by App\Http\Middleware\RecordResponseTime.
+    */
+
+    'slow_request_ms' => (int) env('SLOW_REQUEST_MS', 1000),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

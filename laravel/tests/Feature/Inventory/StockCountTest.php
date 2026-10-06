@@ -5,6 +5,7 @@ use App\Actions\Inventory\CancelStockCount;
 use App\Actions\Inventory\CreateStockCount;
 use App\Actions\Inventory\EnterStockCount;
 use App\Actions\Inventory\StockCountTotals;
+use App\Actions\Inventory\StockMovedSinceCounted;
 use App\Actions\Sales\ConfirmSale;
 use App\Actions\Sales\CreateDraftSale;
 use App\Exceptions\CountConflictException;
@@ -110,6 +111,12 @@ test('K1: count, a sale before apply, a re-entry, apply; then a second apply is 
         ->and($cItem->baseline_movement_id)->toBe($cSaleOut)
         ->and($cItem->counted_at->format('H:i'))->toBe('11:30');
 
+    // Moved since counted: only F (the 11:00 sale); C's re-entry moved its baseline past the sale.
+    expect(app(StockMovedSinceCounted::class)->run($count))->toBe([[
+        'product_id' => $this->p['F']->id, 'sku' => 'RPT-F', 'title' => 'Science JHS1 Workbook',
+        'sold' => 3, 'received' => 0, 'other' => 0, 'summary' => 'RPT-F Science JHS1 Workbook: 3 sold since counted',
+    ]]);
+
     stockTakeAt('17:00');
     $before = StockMovement::query()->count();
     $applied = app(ApplyStockCount::class)->execute($this->owner, $count);
@@ -148,6 +155,8 @@ test('K2 (4): an apply that would make stock negative is refused whole, nothing 
     expect(countItems($count))->toMatchArray(['D' => [20, 22, 2], 'F' => [9, 0, -9]]);
 
     sellAt($this, '11:00', [['F', 1]]);
+
+    expect(array_column(app(StockMovedSinceCounted::class)->run($count), 'summary'))->toBe(['RPT-F Science JHS1 Workbook: 1 sold since counted']);
 
     stockTakeAt('17:00');
     $movements = StockMovement::query()->count();

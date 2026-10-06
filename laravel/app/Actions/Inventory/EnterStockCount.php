@@ -48,16 +48,18 @@ class EnterStockCount
                     continue;
                 }
 
-                // Read the balance under the product lock, so it pairs exactly with the
-                // latest movement id (a sale cannot slip between the two reads).
+                // Both reads are locking reads, so they see the latest commit rather than
+                // this transaction's snapshot (InnoDB REPEATABLE READ): every movement
+                // writer holds this product lock, so balance and latest movement pair up.
                 $product = Product::withTrashed()->whereKey($productId)->lockForUpdate()->firstOrFail();
                 $system = (int) $product->stock_on_hand;
+                $baseline = StockMovement::query()->where('product_id', $productId)->lockForUpdate()->max('id');
 
                 $item->update([
                     'counted_qty' => (int) $counted,
                     'system_qty' => $system,
                     'variance' => (int) $counted - $system,
-                    'baseline_movement_id' => StockMovement::query()->where('product_id', $productId)->max('id'),
+                    'baseline_movement_id' => $baseline,
                     'counted_at' => now(),
                 ]);
             }

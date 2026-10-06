@@ -64,7 +64,9 @@ test('3.2 profit page: June by product, net profit after order discounts', funct
         ->set('filters.to', '2026-06-30')
         ->set('filters.group_by', 'product')
         ->assertSeeInOrder(['Maths P4', '12', 'GHS 600.00', 'GHS 360.00', 'GHS 240.00'])
-        ->assertSeeInOrder(['Gross profit', 'GHS 395.00', 'Order-level discounts', 'GHS -40.00', 'Net profit', 'GHS 355.00'])
+        ->assertSeeInOrder(['Gross profit', 'GHS 395.00', 'Order-level discounts', 'Net profit', 'GHS 355.00'])
+        // assertSeeInOrder searches the JSON payload, where non-ASCII text is \u-escaped.
+        ->assertSeeHtml('data-summary="Order-level discounts">−GHS 40.00</div>')
         ->set('filters.from', '2026-01-01')
         ->set('filters.group_by', 'period')
         ->assertSeeInOrder(['2026-02', 'GHS 120.00', 'GHS 70.00', 'GHS 50.00'])
@@ -160,7 +162,8 @@ test('3.10 K1 through the stock-take resource: inline entry, sale, re-entry, app
 
     expect(ViewStockCount::applySummary($count))
         ->toContain('5 of 6 products counted; 4 stock adjustments of -3 units')
-        ->toContain('Net variance at cost GHS -88.00 (losses GHS 106.00, gains GHS 18.00)');
+        ->toContain('Net variance at cost −GHS 88.00 (losses GHS 106.00, gains GHS 18.00)')
+        ->toContain('Stock moved since counting, check these were not sold before the count: RPT-F Science JHS1 Workbook: 3 sold since counted.');
 
     $at('17:00');
     Livewire::test(ViewStockCount::class, ['record' => $count->getRouteKey()])

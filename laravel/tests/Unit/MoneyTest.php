@@ -33,6 +33,9 @@ test('formatGhsGrouped adds thousands separators using integer maths', function 
     expect(Money::formatGhsGrouped(123456789))->toBe('GHS 1,234,567.89')
         ->and(Money::formatGhsGrouped(1999))->toBe('GHS 19.99')
         ->and(Money::formatGhsGrouped(5))->toBe('GHS 0.05')
-        ->and(Money::formatGhsGrouped(-100050))->toBe('GHS -1,000.50')
+        ->and(Money::formatGhsGrouped(-100050))->toBe('−GHS 1,000.50')
+        ->and(Money::formatGhs(-100050))->toBe('−GHS 1000.50')
+        ->and(Money::formatGhs(-5))->toBe('−GHS 0.05')
+        ->and(Money::formatGhs(null))->toBe('GHS 0.00')
         ->and(Money::formatGhsGrouped(null))->toBe('GHS 0.00');
 });

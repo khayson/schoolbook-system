@@ -458,6 +458,7 @@ Both scenarios start from the end of the dataset (section 1): stock **A 86, B 44
   (1) **F**: counted 8 at 10:00 (variance −1), then 3 sold. Applied: 9 − 3 − 1 = **5**. The sale is preserved; setting stock to the counted 8 would erase it, and applying counted − current (8 − 6 = +2) would invent stock.
   (2) **E** is untouched: still −1, no movement, its item has no system_qty, counted_qty or variance.
   (6) **Variance at cost**: A −2 × 3,000 = −6,000; C −1 × 3,600 = −3,600; D +1 × 1,800 = +1,800; F −1 × 1,000 = −1,000. Units −2 − 1 + 1 − 1 = **−3**; losses 6,000 + 3,600 + 1,000 = **10,600**; gains **1,800**; net **−8,800**. Items counted **5** of **6**.
+- **Moved since counted** (3.5.0, shown in the admin's apply confirmation before 17:00): movements on a counted product after its `baseline_movement_id`. A, B, D: none since 10:00. C: none, because its 11:30 re-entry moved the baseline to the 11:00 sale. **F: the 11:00 sale of 3** (baseline = F's last movement at 10:00, the 02-02 sale) → the confirmation lists exactly one line, **"RPT-F Science JHS1 Workbook: 3 sold since counted"**. This is the case to review: if the 3 had been sold before counting but keyed in afterwards, the variance −1 would be wrong by 3.
 - **17:05** (5) applied again: **409**, code `stock_count_not_open`; still 4 movements, stock unchanged. Entering a count on the applied count is also 409.
 - `stock:reconcile` afterwards: clean.
 
@@ -466,6 +467,7 @@ Both scenarios start from the end of the dataset (section 1): stock **A 86, B 44
 - **09:00** count created (all active, **CNT-2026-000001** in its own test).
 - **10:00** counted: D **22** (system 20, variance **+2**), F **0** (system 9, variance **−9**).
 - **11:00** sale F×1: F **8**.
+- Moved since counted: **"RPT-F Science JHS1 Workbook: 1 sold since counted"** (D: none).
 - **17:00** apply: F would be 8 − 9 = **−1** < 0 with `allow_negative_stock` off. **Refused, 409 `count_conflict`**, `details.items` = [{RPT-F, stock_on_hand **8**, variance **−9**, resulting **−1**}]. **Nothing written**: D still **20** (its valid +2 is not applied either), F still **8**, no `count_adjustment` movement, count still open, `applied_at` null.
 - With `allow_negative_stock` turned on, the same apply succeeds: D **22**, F **−1**, 2 movements; value +2 × 1,800 − 9 × 1,000 = 3,600 − 9,000 = **−5,400**.
 
