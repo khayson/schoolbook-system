@@ -1,0 +1,23 @@
+flutter-core auth UI step complete.
+
+Files created:
+- flutter/lib/shared/widgets/loading_overlay.dart
+- flutter/lib/features/auth/presentation/splash_screen.dart
+- flutter/lib/features/auth/presentation/forgot_password_screen.dart
+- flutter/lib/features/auth/presentation/register_provider.dart
+- flutter/lib/features/auth/presentation/register_screen.dart
+- flutter/lib/features/auth/presentation/waiting_room_screen.dart
+
+Files updated:
+- flutter/lib/features/auth/presentation/login_screen.dart
+  * Back arrow is now a bordered circle (matching reference design)
+  * Removed Apple button; single full-width Google button
+  * Forgot Password wired to /forgot-password route
+  * Sign Up wired to /register route
+  * Success bottom sheet drawer added on login
+- flutter/lib/features/auth/data/auth_repository.dart
+  * Added register() method (POST /auth/register)
+  * Added checkAccountStatus() method (GET /auth/account-status)
+- flutter/lib/core/router.dart
+  * Added /splash, /register, /forgot-password, /waiting-room routes
+  * Redirect shows /splash during AuthStatus.unknown bootstrap

@@ -60,4 +60,35 @@ class AuthRepository {
   }
 
   Future<void> clearLocalSession() => _tokenStore.clearToken();
+
+  /// Register a new user (pending admin approval).
+  Future<void> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    await _api.post<void>(
+      '/auth/register',
+      data: {
+        'name': name.trim(),
+        'email': email.trim(),
+        'password': password,
+        'password_confirmation': password,
+      },
+    );
+  }
+
+  /// Check account approval status for [email].
+  /// Returns a map with at least `status` (pending | active | rejected)
+  /// and optionally `registered_at`.
+  Future<Map<String, dynamic>> checkAccountStatus(String email) async {
+    final response = await _api.get<Map<String, dynamic>>(
+      '/auth/account-status',
+      queryParameters: {'email': email.trim()},
+    );
+    final body = response.data ?? {};
+    final data = body['data'];
+    if (data is Map<String, dynamic>) return data;
+    return body;
+  }
 }

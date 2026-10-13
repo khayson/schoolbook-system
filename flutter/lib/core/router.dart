@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
+import 'package:schoolbook/features/auth/presentation/forgot_password_screen.dart';
 import 'package:schoolbook/features/auth/presentation/login_screen.dart';
+import 'package:schoolbook/features/auth/presentation/register_screen.dart';
+import 'package:schoolbook/features/auth/presentation/splash_screen.dart';
+import 'package:schoolbook/features/auth/presentation/waiting_room_screen.dart';
 import 'package:schoolbook/features/customers/presentation/customer_detail_screen.dart';
 import 'package:schoolbook/features/customers/presentation/customer_form_screen.dart';
 import 'package:schoolbook/features/customers/presentation/customers_list_screen.dart';
@@ -23,7 +27,6 @@ import 'package:schoolbook/features/reports/presentation/light_reports_screens.d
 import 'package:schoolbook/features/stock/presentation/receive_stock_screen.dart';
 import 'package:schoolbook/features/stock/presentation/stock_count_screen.dart';
 import 'package:schoolbook/features/stock/presentation/stock_counts_screen.dart';
-import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 
 GoRouter createAppRouter(AuthProvider authProvider) {
   return GoRouter(
@@ -31,15 +34,22 @@ GoRouter createAppRouter(AuthProvider authProvider) {
     refreshListenable: authProvider,
     redirect: (context, state) {
       final status = authProvider.status;
+      // Show splash while bootstrapping
       if (status == AuthStatus.unknown) {
-        return null;
+        return '/splash';
       }
-      final loggingIn = state.matchedLocation == '/login';
+      final loc = state.matchedLocation;
       final authed = authProvider.isAuthenticated;
-      if (!authed && !loggingIn) {
+      // Auth-only routes that don't need a redirect guard
+      final isAuthOnlyRoute = loc == '/login' ||
+          loc == '/register' ||
+          loc == '/forgot-password' ||
+          loc.startsWith('/waiting-room') ||
+          loc == '/splash';
+      if (!authed && !isAuthOnlyRoute) {
         return '/login';
       }
-      if (authed && loggingIn) {
+      if (authed && isAuthOnlyRoute) {
         return '/';
       }
       return null;
@@ -47,11 +57,24 @@ GoRouter createAppRouter(AuthProvider authProvider) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
+          path: '/splash', builder: (context, state) => const SplashScreen()),
+      GoRoute(
+          path: '/register',
+          builder: (context, state) => const RegisterScreen()),
+      GoRoute(
+          path: '/forgot-password',
+          builder: (context, state) => const ForgotPasswordScreen()),
+      GoRoute(
+        path: '/waiting-room',
+        builder: (context, state) {
+          final email =
+              state.uri.queryParameters['email'] ?? '';
+          return WaitingRoomScreen(email: email);
+        },
+      ),
+      GoRoute(
         path: '/',
         builder: (context, state) {
-          if (authProvider.status == AuthStatus.unknown) {
-            return const Scaffold(body: LoadingBody(message: 'Starting…'));
-          }
           return const DashboardScreen();
         },
       ),
