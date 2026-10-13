@@ -50,19 +50,19 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _submit() async {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
-    final ok = await auth.login(
-      _emailController.text.trim(),
-      _passwordController.text,
-    );
-    if (ok && mounted) {
-      _showSuccessSheet();
-    }
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final ok = await auth.login(email, password);
+    if (!mounted) return;
+    // ignore: use_build_context_synchronously
+    if (ok) _showSuccessSheet();
   }
 
   void _showSuccessSheet() {
+    final router = GoRouter.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen>
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (ctx.mounted) {
             Navigator.of(ctx).pop();
-            if (ctx.mounted) ctx.go('/dashboard');
+            router.go('/');
           }
         });
         return Padding(
@@ -88,24 +88,18 @@ class _LoginScreenState extends State<LoginScreen>
                   color: Color(0xFF22C55E),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: 36,
-                ),
+                child: const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 36),
               ),
               const SizedBox(height: 20),
               const Text(
-                'Welcome Back!',
-                style: TextStyle(
-                    fontSize: 24, fontWeight: FontWeight.w700),
+                'Successful!',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               Text(
-                'You have successfully signed in.',
-                style: TextStyle(
-                    fontSize: 14, color: Colors.grey.shade500),
-                textAlign: TextAlign.center,
+                "You're signed in and ready to go.",
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -113,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen>
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.of(ctx).pop();
-                    if (ctx.mounted) ctx.go('/dashboard');
+                    router.go('/');
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
@@ -121,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen>
                     shape: const StadiumBorder(),
                     minimumSize: const Size(double.infinity, 52),
                   ),
-                  child: const Text('Go to Dashboard'),
+                  child: const Text('Browse Home'),
                 ),
               ),
             ],
@@ -149,95 +143,97 @@ class _LoginScreenState extends State<LoginScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 16),
-                      // Back arrow — bordered circle
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: GestureDetector(
-                          onTap: () {
-                            if (context.canPop()) context.pop();
-                          },
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                  color: const Color(0xFFE8E8E8)),
-                              borderRadius: BorderRadius.circular(50),
-                            ),
-                            child: const Icon(
-                              Icons.arrow_back_ios_new,
-                              size: 15,
-                              color: Colors.black,
+                      // Back arrow — only shown when the screen can be popped
+                      if (context.canPop())
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: GestureDetector(
+                            onTap: () => context.pop(),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                    color: const Color(0xFFE8E8E8)),
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                              child: const Icon(
+                                Icons.arrow_back_ios_new,
+                                size: 15,
+                                color: Colors.black,
+                              ),
                             ),
                           ),
                         ),
-                      ),
                       const SizedBox(height: 32),
                       const Text(
                         'Welcome Back',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 32,
+                          fontSize: 28,
                           fontWeight: FontWeight.w700,
                           color: Colors.black,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
                         'Stay connected by signing in with your email and password to access your account.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          height: 1.5,
+                          fontSize: 13,
+                          color: Colors.grey.shade500,
                         ),
                       ),
                       const SizedBox(height: 28),
-                      // Google button (full-width, only provider)
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
-                              color: Color(0xFFE8E8E8)),
-                          shape: const StadiumBorder(),
-                          backgroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 52),
-                        ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content:
-                                  Text('Google Sign-In coming soon'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(
-                              Icons.g_mobiledata,
-                              color: Colors.red,
-                              size: 26,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Continue with Google',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
+                      // Google-only social button
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                                color: Color(0xFFE8E8E8)),
+                            shape: const StadiumBorder(),
+                            backgroundColor: Colors.white,
+                            minimumSize:
+                                const Size(double.infinity, 52),
+                          ),
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text('Google Sign-In coming soon'),
+                                behavior: SnackBarBehavior.floating,
                               ),
-                            ),
-                          ],
+                            );
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment:
+                                MainAxisAlignment.center,
+                            children: const [
+                              Icon(
+                                Icons.g_mobiledata,
+                                color: Colors.red,
+                                size: 26,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Continue with Google',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
                       Row(
                         children: [
                           const Expanded(
-                              child: Divider(
-                                  color: Color(0xFFE0E0E0))),
+                              child: Divider(color: Color(0xFFE0E0E0))),
                           Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12),
@@ -250,11 +246,10 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                           ),
                           const Expanded(
-                              child: Divider(
-                                  color: Color(0xFFE0E0E0))),
+                              child: Divider(color: Color(0xFFE0E0E0))),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       Form(
                         key: _formKey,
                         child: Column(
@@ -318,7 +313,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                                 contentPadding:
                                     const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 14),
+                                        horizontal: 16,
+                                        vertical: 14),
                               ),
                             ),
                             const SizedBox(height: 14),
@@ -340,8 +336,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       ? 'Password required'
                                       : null,
                               decoration: InputDecoration(
-                                hintText:
-                                    '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022',
+                                hintText: '••••••••',
                                 hintStyle: TextStyle(
                                   color: Colors.grey.shade400,
                                   fontSize: 14,
@@ -378,7 +373,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                                 contentPadding:
                                     const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 14),
+                                        horizontal: 16,
+                                        vertical: 14),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword
@@ -413,7 +409,6 @@ class _LoginScreenState extends State<LoginScreen>
                                   activeThumbColor: Colors.black,
                                 ),
                               ),
-                              const SizedBox(width: 2),
                               Text(
                                 'Remember me',
                                 style: TextStyle(
@@ -424,8 +419,17 @@ class _LoginScreenState extends State<LoginScreen>
                             ],
                           ),
                           TextButton(
-                            onPressed: () =>
-                                context.push('/forgot-password'),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Password reset coming soon — we\'ll add WhatsApp delivery shortly 🔜',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.black,
                               padding: EdgeInsets.zero,
@@ -485,7 +489,8 @@ class _LoginScreenState extends State<LoginScreen>
                               Container(
                                 padding:
                                     const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 10),
+                                        horizontal: 14,
+                                        vertical: 10),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context)
                                       .colorScheme
@@ -536,7 +541,7 @@ class _LoginScreenState extends State<LoginScreen>
                               WidgetSpan(
                                 child: GestureDetector(
                                   onTap: () =>
-                                      context.push('/register'),
+                                      context.go('/register'),
                                   child: const Text(
                                     'Sign Up',
                                     style: TextStyle(
