@@ -54,4 +54,19 @@ class AuthController extends Controller
     {
         return new UserResource($request->user());
     }
+
+    public function status(Request $request): JsonResponse
+    {
+        $email = $request->string('email')->toString();
+        $user = User::query()->where('email', $email)->first();
+        if (! $user) {
+            return response()->json(['status' => 'not_found'], 404);
+        }
+
+        return response()->json([
+            'status' => $user->is_active ? 'active' : 'pending',
+            'name' => $user->name,
+            'registered_at' => $user->registered_at?->toIso8601String(),
+        ]);
+    }
 }

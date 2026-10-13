@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerCreditController;
 use App\Http\Controllers\Api\V1\CustomerStatementController;
 use App\Http\Controllers\Api\V1\DirectorySchoolController;
+use App\Http\Controllers\Api\V1\ForgotPasswordController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\LanguageController;
 use App\Http\Controllers\Api\V1\LevelController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\PublisherController;
 use App\Http\Controllers\Api\V1\ReferenceBookController;
 use App\Http\Controllers\Api\V1\ReferenceEditionController;
+use App\Http\Controllers\Api\V1\RegisterController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
@@ -28,6 +30,10 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/login', [AuthController::class, 'login'])
 
         ->middleware('throttle:5,1');
+
+    Route::post('auth/register', [RegisterController::class, 'store'])->middleware('throttle:5,1');
+    Route::post('auth/forgot-password', [ForgotPasswordController::class, 'store'])->middleware('throttle:3,1');
+    Route::get('auth/status', [AuthController::class, 'status'])->middleware('throttle:10,1');
 
     Route::middleware(['auth:sanctum', 'owner'])->group(function () {
 
