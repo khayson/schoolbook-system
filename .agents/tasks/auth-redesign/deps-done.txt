@@ -1,0 +1,8 @@
+deps-done: OK
+
+Added packages:
+  google_fonts ^6.2.1  → resolved 6.3.3
+  hugeicons    ^0.0.9  → resolved 0.0.11
+
+app_theme.dart updated to use GoogleFonts.interTextTheme for both light and dark themes.
+flutter pub get exited 0 with no errors.
