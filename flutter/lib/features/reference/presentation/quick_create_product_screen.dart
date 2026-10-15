@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:schoolbook/core/error_messages.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/money.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/core/validators.dart';
 import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
 import 'package:schoolbook/features/catalog/domain/lookup_models.dart';
@@ -11,7 +12,12 @@ import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/reference/domain/reference_book.dart';
 import 'package:schoolbook/features/reference/presentation/quick_create_controller.dart';
 import 'package:schoolbook/features/reference/presentation/reference_catalog.dart';
+import 'package:schoolbook/shared/widgets/app_chrome.dart';
+import 'package:schoolbook/shared/widgets/app_icons.dart';
+import 'package:schoolbook/shared/widgets/app_toast.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
+import 'package:schoolbook/shared/widgets/loading_overlay.dart';
+import 'package:schoolbook/shared/widgets/option_picker.dart';
 
 /// Add a product from an approved title: only what the list does not say is asked
 /// (variant, cost, price, opening stock, code; a class for band-only titles). Pops
@@ -37,9 +43,9 @@ class QuickCreateProductScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final book = context.watch<ReferenceCatalog>().byId(bookId);
     if (book == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Add from approved list')),
-        body: const EmptyState(
+      return const AppPage(
+        title: 'Add from approved list',
+        body: EmptyState(
           title: 'Title not found',
           subtitle: 'Refresh the approved list and try again.',
         ),
@@ -88,6 +94,9 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
   int? _levelId;
   int? _subjectId;
   int? _languageId;
+  String? _levelError;
+  String? _subjectError;
+  String? _languageError;
 
   static const _bandLevels = {
     'kg': {'Creche', 'KG 1', 'KG 2'},
@@ -135,7 +144,22 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
   }
 
   Future<void> _save() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _levelError =
+          widget.book.needsLevel && _levelId == null ? 'Choose the class' : null;
+      _subjectError = widget.book.subjectId == null && _subjectId == null
+          ? 'Choose the subject'
+          : null;
+      _languageError = widget.book.languageId == null && _languageId == null
+          ? 'Choose the language'
+          : null;
+    });
+    if (!(_formKey.currentState?.validate() ?? false) ||
+        _levelError != null ||
+        _subjectError != null ||
+        _languageError != null) {
+      return;
+    }
     final controller = context.read<QuickCreateController>();
     final opening = widget.forReceive
         ? 0
@@ -154,14 +178,13 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
     if (product == null || !mounted) return;
 
     context.read<ReferenceCatalog>().noteProductAdded(widget.book.id, opening);
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          controller.codeWarning ?? 'Added ${product.title} (${product.sku})',
-        ),
-        duration: Duration(seconds: controller.codeWarning == null ? 3 : 8),
-      ),
+    AppToast.show(
+      context,
+      controller.codeWarning ?? 'Added ${product.title} (${product.sku})',
+      type: controller.codeWarning == null
+          ? ToastType.success
+          : ToastType.warning,
+      duration: Duration(seconds: controller.codeWarning == null ? 3 : 8),
     );
     if (context.canPop()) {
       context.pop(product);
@@ -175,185 +198,259 @@ class _QuickCreateFormState extends State<_QuickCreateForm> {
     final controller = context.watch<QuickCreateController>();
     final book = widget.book;
     final error = controller.error;
-    final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add from approved list')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              book.title,
-              style: theme.textTheme.titleLarge,
-              key: const Key('qc_title'),
-            ),
-            const SizedBox(height: 4),
-            Text(book.subtitle, style: theme.textTheme.bodyMedium),
-            if (book.author != null)
-              Text(book.author!, style: theme.textTheme.bodySmall),
-            const SizedBox(height: 16),
-            TextFormField(
-              key: const Key('qc_variant'),
-              controller: _variant,
-              decoration: const InputDecoration(
-                labelText: 'Variant (optional)',
-                hintText: "Learner's Book, Teacher's Guide, Workbook…",
-                border: OutlineInputBorder(),
-              ),
-              maxLength: 100,
-            ),
-            if (book.needsLevel) ...[
-              const SizedBox(height: 4),
-              DropdownButtonFormField<int>(
-                key: const Key('qc_level'),
-                initialValue: _levelId,
-                decoration: InputDecoration(
-                  labelText: 'Class',
-                  helperText: book.level == null
-                      ? null
-                      : 'Listed for ${book.level}: choose the class.',
-                  border: const OutlineInputBorder(),
-                  errorText: error?.fieldError('level_id'),
+    return LoadingOverlay(
+      isLoading: controller.saving,
+      message: 'Adding product…',
+      child: AppPage(
+        title: 'Add from list',
+        subtitle: 'Approved title → your catalog',
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppColors.ink,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                items: [
-                  for (final l in _levels)
-                    DropdownMenuItem(value: l.id, child: Text(l.name)),
-                ],
-                onChanged: (v) => setState(() => _levelId = v),
-                validator: (v) => v == null ? 'Choose the class' : null,
-              ),
-            ],
-            if (book.subjectId == null) ...[
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                key: const Key('qc_subject'),
-                initialValue: _subjectId,
-                decoration: InputDecoration(
-                  labelText: 'Subject',
-                  border: const OutlineInputBorder(),
-                  errorText: error?.fieldError('subject_id'),
-                ),
-                items: [
-                  for (final s in _subjects)
-                    DropdownMenuItem(value: s.id, child: Text(s.name)),
-                ],
-                onChanged: (v) => setState(() => _subjectId = v),
-                validator: (v) => v == null ? 'Choose the subject' : null,
-              ),
-            ],
-            if (book.languageId == null) ...[
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                key: const Key('qc_language'),
-                initialValue: _languageId,
-                decoration: InputDecoration(
-                  labelText: 'Language',
-                  border: const OutlineInputBorder(),
-                  errorText: error?.fieldError('language_id'),
-                ),
-                items: [
-                  for (final l in _languages)
-                    DropdownMenuItem(value: l.id, child: Text(l.name)),
-                ],
-                onChanged: (v) => setState(() => _languageId = v),
-                validator: (v) => v == null ? 'Choose the language' : null,
-              ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    key: const Key('qc_cost'),
-                    controller: _cost,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      book.title,
+                      key: const Key('qc_title'),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        height: 1.25,
+                      ),
                     ),
-                    decoration: InputDecoration(
-                      labelText: 'Cost price',
-                      prefixText: 'GHS ',
-                      border: const OutlineInputBorder(),
-                      errorText: error?.fieldError('cost_price'),
+                    const SizedBox(height: 6),
+                    Text(
+                      book.subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.65),
+                        height: 1.35,
+                      ),
                     ),
-                    validator: (v) => Validators.ghsAmount(v, allowZero: true),
+                    if (book.author != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        book.author!,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.lime.withValues(alpha: 0.9),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                key: const Key('qc_variant'),
+                controller: _variant,
+                decoration: const InputDecoration(
+                  labelText: 'Variant (optional)',
+                  hintText: "Learner's Book, Teacher's Guide…",
+                ),
+                maxLength: 100,
+              ),
+              if (book.needsLevel) ...[
+                const SizedBox(height: 4),
+                OptionPicker<int>(
+                  key: const Key('qc_level'),
+                  label: 'Class',
+                  value: _levelId,
+                  allowClear: false,
+                  clearLabel: 'Choose class',
+                  options: _levels.map((l) => (l.id, l.name)).toList(),
+                  onChanged: (v) => setState(() {
+                    _levelId = v;
+                    _levelError = null;
+                  }),
+                ),
+                if (book.level != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Listed for ${book.level}: choose the class.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.mute,
+                      ),
+                    ),
+                  ),
+                if (_levelError != null || error?.fieldError('level_id') != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      _levelError ?? error!.fieldError('level_id')!,
+                      style: const TextStyle(
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+              ],
+              if (book.subjectId == null) ...[
+                const SizedBox(height: 14),
+                OptionPicker<int>(
+                  key: const Key('qc_subject'),
+                  label: 'Subject',
+                  value: _subjectId,
+                  allowClear: false,
+                  clearLabel: 'Choose subject',
+                  options: _subjects.map((s) => (s.id, s.name)).toList(),
+                  onChanged: (v) => setState(() {
+                    _subjectId = v;
+                    _subjectError = null;
+                  }),
+                ),
+                if (_subjectError != null ||
+                    error?.fieldError('subject_id') != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      _subjectError ?? error!.fieldError('subject_id')!,
+                      style: const TextStyle(
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+              ],
+              if (book.languageId == null) ...[
+                const SizedBox(height: 14),
+                OptionPicker<int>(
+                  key: const Key('qc_language'),
+                  label: 'Language',
+                  value: _languageId,
+                  allowClear: false,
+                  clearLabel: 'Choose language',
+                  options: _languages.map((l) => (l.id, l.name)).toList(),
+                  onChanged: (v) => setState(() {
+                    _languageId = v;
+                    _languageError = null;
+                  }),
+                ),
+                if (_languageError != null ||
+                    error?.fieldError('language_id') != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      _languageError ?? error!.fieldError('language_id')!,
+                      style: const TextStyle(
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      key: const Key('qc_cost'),
+                      controller: _cost,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Cost price',
+                        prefixText: 'GHS ',
+                        errorText: error?.fieldError('cost_price'),
+                      ),
+                      validator: (v) => Validators.ghsAmount(v, allowZero: true),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      key: const Key('qc_price'),
+                      controller: _price,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Selling price',
+                        prefixText: 'GHS ',
+                        errorText: error?.fieldError('selling_price'),
+                      ),
+                      validator: (v) => Validators.ghsAmount(v, allowZero: true),
+                    ),
+                  ),
+                ],
+              ),
+              if (!widget.forReceive) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const Key('qc_opening'),
+                  controller: _opening,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Opening stock (optional)',
+                    helperText: 'Received into stock at the cost price.',
+                    errorText: error?.fieldError('opening_stock'),
+                  ),
+                  validator: Validators.optionalQuantity,
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const Key('qc_code'),
+                controller: _code,
+                decoration: InputDecoration(
+                  labelText: 'Barcode or ISBN (optional)',
+                  suffixIcon: IconButton(
+                    key: const Key('qc_scan'),
+                    tooltip: 'Scan',
+                    icon: const AppIcon(AppIcons.scan, size: 20),
+                    onPressed: () async {
+                      final scanned = await context.push<String>(
+                        '/products/scan?capture=1',
+                      );
+                      if (scanned != null) _code.text = scanned;
+                    },
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    key: const Key('qc_price'),
-                    controller: _price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Selling price',
-                      prefixText: 'GHS ',
-                      border: const OutlineInputBorder(),
-                      errorText: error?.fieldError('selling_price'),
-                    ),
-                    validator: (v) => Validators.ghsAmount(v, allowZero: true),
+                validator: Validators.optionalCode,
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  '${describeApiError(error).title}: ${describeApiError(error).body}',
+                  key: const Key('qc_error'),
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
-            ),
-            if (!widget.forReceive) ...[
-              const SizedBox(height: 12),
-              TextFormField(
-                key: const Key('qc_opening'),
-                controller: _opening,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Opening stock (optional)',
-                  helperText: 'Received into stock at the cost price.',
-                  border: const OutlineInputBorder(),
-                  errorText: error?.fieldError('opening_stock'),
-                ),
-                validator: Validators.optionalQuantity,
-              ),
-            ],
-            const SizedBox(height: 12),
-            TextFormField(
-              key: const Key('qc_code'),
-              controller: _code,
-              decoration: InputDecoration(
-                labelText: 'Barcode or ISBN (optional)',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  key: const Key('qc_scan'),
-                  tooltip: 'Scan',
-                  icon: const Icon(Icons.qr_code_scanner),
-                  onPressed: () async {
-                    final scanned = await context.push<String>(
-                      '/products/scan?capture=1',
-                    );
-                    if (scanned != null) _code.text = scanned;
-                  },
+              const SizedBox(height: 20),
+              FilledButton(
+                key: const Key('qc_save'),
+                onPressed: controller.saving ? null : _save,
+                child: Text(
+                  controller.saving ? 'Saving…' : 'Add to my products',
                 ),
               ),
-              validator: Validators.optionalCode,
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                '${describeApiError(error).title}: ${describeApiError(error).body}',
-                key: const Key('qc_error'),
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
             ],
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const Key('qc_save'),
-              onPressed: controller.saving ? null : _save,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-              ),
-              child: Text(controller.saving ? 'Saving…' : 'Add to my products'),
-            ),
-          ],
+          ),
         ),
       ),
     );

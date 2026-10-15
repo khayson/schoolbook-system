@@ -18,17 +18,22 @@ import 'package:schoolbook/features/sales/domain/sale.dart';
 
 ApiClient unusedApiClient() => ApiClient(tokenStore: AuthTokenStore());
 
-Customer testCustomer({int id = 1, int owes = 300000, int credit = 0}) =>
-    Customer(
-      id: id,
-      code: 'CUS-0001',
-      name: 'Akwaaba Basic School',
-      type: 'school',
-      region: 'Ashanti',
-      creditBalance: credit,
-      outstandingBalance: owes,
-      isActive: true,
-    );
+Customer testCustomer({
+  int id = 1,
+  int owes = 300000,
+  int credit = 0,
+  String name = 'Akwaaba Basic School',
+  String region = 'Ashanti',
+}) => Customer(
+  id: id,
+  code: 'CUS-${id.toString().padLeft(4, '0')}',
+  name: name,
+  type: 'school',
+  region: region,
+  creditBalance: credit,
+  outstandingBalance: owes,
+  isActive: true,
+);
 
 Payment testPayment({
   int id = 7,
@@ -114,14 +119,52 @@ class FakePaymentsRepository extends PaymentsRepository {
 }
 
 class FakeCustomersRepository extends CustomersRepository {
-  FakeCustomersRepository({Customer? customer})
+  FakeCustomersRepository({Customer? customer, List<Customer>? customers})
     : customer = customer ?? testCustomer(),
+      customers = customers ?? [customer ?? testCustomer()],
       super(apiClient: unusedApiClient());
 
   Customer customer;
+  List<Customer> customers;
+  final List<Map<String, dynamic>> created = [];
 
   @override
   Future<Customer> getCustomer(int id) async => customer;
+
+  @override
+  Future<PaginatedResponse<Customer>> listCustomers({
+    int page = 1,
+    String? search,
+  }) async {
+    final q = search?.trim().toLowerCase() ?? '';
+    final data = q.isEmpty
+        ? customers
+        : customers
+              .where((c) => c.name.toLowerCase().contains(q))
+              .toList();
+    return PaginatedResponse(
+      data: data,
+      meta: PaginatedMeta(
+        currentPage: 1,
+        lastPage: 1,
+        perPage: 25,
+        total: data.length,
+      ),
+    );
+  }
+
+  @override
+  Future<Customer> createCustomer(Map<String, dynamic> payload) async {
+    created.add(payload);
+    final next = testCustomer(
+      id: customers.length + 10,
+      name: payload['name'] as String? ?? 'New school',
+      region: payload['region'] as String? ?? 'Greater Accra',
+    );
+    customers = [...customers, next];
+    customer = next;
+    return next;
+  }
 }
 
 class FakePdfSharer implements PdfSharer {
@@ -352,13 +395,20 @@ class FakeLookupsRepository extends LookupsRepository {
   FakeLookupsRepository() : super(apiClient: unusedApiClient());
 
   @override
-  Future<List<LevelLookup>> fetchLevels() async => const [];
+  Future<List<LevelLookup>> fetchLevels({bool force = false}) async =>
+      const [];
 
   @override
-  Future<List<NamedLookup>> fetchSubjects() async => const [];
+  Future<List<NamedLookup>> fetchSubjects({bool force = false}) async =>
+      const [];
 
   @override
-  Future<List<LanguageLookup>> fetchLanguages() async => const [];
+  Future<List<LanguageLookup>> fetchLanguages({bool force = false}) async =>
+      const [];
+
+  @override
+  Future<List<NamedLookup>> fetchPublishers({bool force = false}) async =>
+      const [];
 }
 
 class PickableCustomersRepository extends FakeCustomersRepository {

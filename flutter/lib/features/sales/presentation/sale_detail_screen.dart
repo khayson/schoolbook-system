@@ -7,10 +7,13 @@ import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/money.dart';
 import 'package:schoolbook/core/pdf_sharer.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/core/validators.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/sales/domain/sale.dart';
 import 'package:schoolbook/features/sales/presentation/sale_actions_controller.dart';
+import 'package:schoolbook/shared/widgets/app_icons.dart';
+import 'package:schoolbook/shared/widgets/app_toast.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 
 class SaleDetailScreen extends StatefulWidget {
@@ -54,53 +57,45 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   }
 
   void _onChanged() {
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
     setState(() => _error = null);
     try {
       final sale = await context.read<SalesRepository>().getSale(widget.saleId);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _sale = sale);
       if (widget.openConfirm && !_confirmOpened && sale.isDraft) {
         _confirmOpened = true;
         WidgetsBinding.instance.addPostFrameCallback((_) => _startConfirm());
       }
     } on ApiException catch (e) {
-      if (mounted) {
-        setState(() => _error = e.message);
-      }
+      if (mounted) setState(() => _error = e.message);
     }
   }
 
-  void _snack(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  void _snack(String text, {ToastType type = ToastType.info}) =>
+      AppToast.show(context, text, type: type);
 
   void _showError(ApiException e) {
     final d = describeApiError(e);
-    _snack('${d.title}: ${d.body}');
+    AppToast.show(context, d.body, title: d.title, type: ToastType.error);
   }
-
-  // --- Confirm ------------------------------------------------------------------------
 
   Future<void> _startConfirm() async {
     final sale = _sale;
-    if (sale == null) {
-      return;
-    }
+    if (sale == null) return;
     final choice = await showModalBottomSheet<_ConfirmChoice>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (_) => _ConfirmSheet(sale: sale),
     );
-    if (choice != null) {
-      await _confirm(choice);
-    }
+    if (choice != null) await _confirm(choice);
   }
 
   Future<void> _confirm(_ConfirmChoice choice) async {
@@ -111,14 +106,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       applyCredit: choice.applyCredit,
       overrideCreditLimit: choice.overrideCreditLimit,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     switch (outcome) {
       case Confirmed(:final sale):
         setState(() => _sale = sale);
-        _snack('Invoice ${sale.invoiceNo} issued');
+        _snack('Invoice ${sale.invoiceNo} issued', type: ToastType.success);
         await _load();
       case PricesChanged(:final newOrder):
         final accept = await showDialog<bool>(
@@ -129,7 +122,6 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           try {
             final repriced = await _actions.acceptNewPrices(sale);
             setState(() => _sale = repriced);
-            // Re-priced draft: new updated_at and total, so the confirm gets a new key.
             await _confirm(choice);
           } on ApiException catch (e) {
             _showError(e);
@@ -153,20 +145,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     }
   }
 
-  // --- Other actions --------------------------------------------------------------------
-
   Future<void> _cancel() async {
     final reason = await showDialog<String>(
       context: context,
-      builder: (_) => const ReasonDialog(
-        title: 'Cancel this draft?',
-        action: 'Cancel draft',
-        required: false,
-      ),
+      builder: (_) => const CancelDraftDialog(),
     );
-    if (reason == null) {
-      return;
-    }
+    if (reason == null) return;
     await _act(
       SaleAction.cancel,
       () => _actions.cancel(_sale!, reason: reason.isEmpty ? null : reason),
@@ -179,13 +163,12 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       context: context,
       builder: (_) => const ReasonDialog(
         title: 'Void this invoice?',
-        message: 'The books go back into stock and any payments on it become customer credit. This cannot be undone.',
+        message:
+            'The books go back into stock and any payments on it become customer credit. This cannot be undone.',
         action: 'Void invoice',
       ),
     );
-    if (reason == null) {
-      return;
-    }
+    if (reason == null) return;
     await _act(
       SaleAction.voidSale,
       () => _actions.voidSale(_sale!, reason),
@@ -194,25 +177,69 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   }
 
   Future<void> _deliver() async {
-    final ok = await showDialog<bool>(
+    final ok = await showModalBottomSheet<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mark as delivered?'),
-        content: const Text(
-          'After delivery the invoice can no longer be voided.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Not yet'),
-          ),
-          FilledButton(
-            key: const Key('deliver_confirm'),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delivered'),
-          ),
-        ],
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (context) {
+        final bottom = MediaQuery.paddingOf(context).bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, bottom + 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Mark as delivered?',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'After delivery the invoice can no longer be voided.',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.mute,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Not yet'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      key: const Key('deliver_confirm'),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Delivered'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
     if (ok == true) {
       await _act(
@@ -223,9 +250,6 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     }
   }
 
-  /// Cancel, void and deliver are not key-protected: after a lost connection the retry
-  /// may find the sale already changed (409). That is not a failure: refetch and say
-  /// what actually happened.
   Future<void> _act(
     SaleAction kind,
     Future<Sale> Function() action,
@@ -233,20 +257,16 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   ) async {
     try {
       final sale = await action();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _sale = sale);
-      _snack(done);
+      _snack(done, type: ToastType.success);
       await _load();
     } on ApiException catch (e) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       if (isStateConflict(e)) {
         await _load();
         if (mounted) {
-          _snack(alreadyChangedMessage(kind, _sale));
+          _snack(alreadyChangedMessage(kind, _sale), type: ToastType.warning);
         }
         return;
       }
@@ -258,173 +278,704 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
     final sale = _sale!;
     try {
       final bytes = await context.read<SalesRepository>().invoicePdf(sale.id);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       await context.read<PdfSharer>().sharePdf(
         bytes,
         fileName: '${sale.invoiceNo}.pdf',
         subject: 'Invoice ${sale.invoiceNo}',
       );
     } on ApiException catch (e) {
-      if (mounted) {
-        _showError(e);
-      }
+      if (mounted) _showError(e);
     }
   }
-
-  // --- Build ----------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final sale = _sale;
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(sale?.label ?? 'Sale'),
-        actions: [
-          if (sale != null && sale.isConfirmed)
-            IconButton(
-              key: const Key('sale_share_invoice'),
-              tooltip: 'Share invoice',
-              icon: const Icon(Icons.share),
-              onPressed: _shareInvoice,
-            ),
-        ],
-      ),
+      backgroundColor: AppColors.surface,
       body: _error != null
           ? ErrorState(message: _error!, onRetry: _load)
           : sale == null
           ? const LoadingBody()
-          : RefreshIndicator(onRefresh: _load, child: _details(sale)),
+          : Column(
+              children: [
+                Expanded(
+                  child: RefreshIndicator(
+                    color: AppColors.ink,
+                    backgroundColor: AppColors.lime,
+                    onRefresh: _load,
+                    child: _details(sale, top),
+                  ),
+                ),
+                if (sale.isDraft || sale.isConfirmed)
+                  _ActionBar(
+                    sale: sale,
+                    busy: _actions.busy,
+                    bottom: bottom,
+                    onConfirm: _startConfirm,
+                    onCancel: _cancel,
+                    onPay: () async {
+                      await context.push('/customers/${sale.customerId}/pay');
+                      _load();
+                    },
+                    onDeliver: _deliver,
+                    onVoid: _void,
+                  ),
+              ],
+            ),
     );
   }
 
-  Widget _details(Sale sale) {
-    final theme = Theme.of(context);
-    final busy = _actions.busy;
+  Widget _details(Sale sale, double top) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(20, top + 4, 20, 24),
       children: [
+        Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const AppIcon(AppIcons.back),
+            ),
+            Expanded(
+              child: Text(
+                sale.label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            if (sale.isDraft)
+              IconButton(
+                key: const Key('sale_edit_draft'),
+                tooltip: 'Edit draft',
+                onPressed: () async {
+                  await context.push('/sales/${sale.id}/edit');
+                  if (mounted) _load();
+                },
+                icon: const AppIcon(AppIcons.edit),
+              )
+            else if (sale.isConfirmed)
+              IconButton(
+                key: const Key('sale_share_invoice'),
+                tooltip: 'Share invoice',
+                onPressed: _shareInvoice,
+                icon: const AppIcon(AppIcons.share),
+              )
+            else
+              const SizedBox(width: 48),
+          ],
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
+          runSpacing: 8,
           children: [
-            Chip(label: Text(SaleStatuses.label(sale.status))),
+            _StatusChip(
+              label: SaleStatuses.label(sale.status),
+              filled: sale.isDraft,
+            ),
             if (sale.isConfirmed)
-              Chip(label: Text(SaleStatuses.paymentLabel(sale.paymentStatus))),
-            if (sale.deliveredAt != null) const Chip(label: Text('Delivered')),
+              _StatusChip(
+                label: SaleStatuses.paymentLabel(sale.paymentStatus),
+              ),
+            if (sale.deliveredAt != null)
+              const _StatusChip(label: 'Delivered', accent: true),
           ],
         ),
+        const SizedBox(height: 18),
         Text(
           sale.customer?.name ?? 'Customer #${sale.customerId}',
-          style: theme.textTheme.titleLarge,
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+            height: 1.15,
+          ),
         ),
+        const SizedBox(height: 8),
         Text(
           'Sale date ${DateFormat('d MMM y').format(sale.saleDate)}'
-          '${sale.dueDate == null ? '' : ' | due ${DateFormat('d MMM y').format(sale.dueDate!)}'}',
-        ),
-        if (sale.voidReason != null)
-          Text(
-            'Void: ${sale.voidReason}',
-            style: TextStyle(color: theme.colorScheme.error),
-          ),
-        if (sale.cancelReason != null) Text('Cancelled: ${sale.cancelReason}'),
-        const SizedBox(height: 16),
-        Text('Books', style: theme.textTheme.titleMedium),
-        ...sale.items.map(
-          (line) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(line.productTitle),
-            subtitle: Text(
-              '${line.quantity} x ${Money.formatPesewas(line.unitPrice)}'
-              '${line.isPriceOverridden ? ' (override: ${line.overrideReason ?? ''})' : ''}',
-            ),
-            trailing: Text(Money.formatPesewas(line.lineTotal)),
+          '${sale.dueDate == null ? '' : ' · due ${DateFormat('d MMM y').format(sale.dueDate!)}'}',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.mute,
           ),
         ),
-        const Divider(),
-        _amountRow('Total', sale.total, bold: true),
-        if (!sale.isDraft) ...[
-          _amountRow('Paid', sale.amountPaid),
-          _amountRow('Balance due', sale.balanceDue, bold: true),
+        if (sale.voidReason != null) ...[
+          const SizedBox(height: 10),
+          _NoteBanner(
+            text: 'Void: ${sale.voidReason}',
+            danger: true,
+          ),
         ],
-        if (sale.allocations.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text('Payments applied', style: theme.textTheme.titleMedium),
-          ...sale.allocations.map(
-            (a) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Text(a.receiptNo ?? 'Payment #${a.id}'),
-              subtitle: a.isReversal ? const Text('Reversal') : null,
-              trailing: Text(Money.formatPesewas(a.amount)),
-            ),
-          ),
+        if (sale.cancelReason != null) ...[
+          const SizedBox(height: 10),
+          _NoteBanner(text: 'Cancelled: ${sale.cancelReason}'),
         ],
         const SizedBox(height: 24),
-        if (sale.isDraft) ...[
-          FilledButton.icon(
-            key: const Key('sale_confirm'),
-            onPressed: busy ? null : _startConfirm,
-            icon: const Icon(Icons.check_circle_outline),
-            label: const Text('Confirm sale'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-            ),
+        const _SectionTitle('Books'),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.wash,
+            borderRadius: BorderRadius.circular(22),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            key: const Key('sale_cancel'),
-            onPressed: busy ? null : _cancel,
-            child: const Text('Cancel draft'),
+          child: Column(
+            children: [
+              for (var i = 0; i < sale.items.length; i++) ...[
+                if (i > 0)
+                  const Divider(height: 1, color: AppColors.line),
+                _BookLine(line: sale.items[i]),
+              ],
+            ],
           ),
-        ],
-        if (sale.isConfirmed) ...[
-          if (sale.balanceDue > 0)
-            FilledButton.icon(
-              key: const Key('sale_record_payment'),
-              onPressed: () async {
-                await context.push('/customers/${sale.customerId}/pay');
-                _load();
-              },
-              icon: const Icon(Icons.payments_outlined),
-              label: const Text('Record payment'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+          decoration: BoxDecoration(
+            color: AppColors.ink,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Column(
+            children: [
+              _InkAmountRow(label: 'Total', value: sale.total, emphasize: true),
+              if (!sale.isDraft) ...[
+                const SizedBox(height: 10),
+                _InkAmountRow(label: 'Paid', value: sale.amountPaid),
+                const SizedBox(height: 10),
+                _InkAmountRow(
+                  label: 'Balance due',
+                  value: sale.balanceDue,
+                  emphasize: true,
+                  lime: sale.balanceDue > 0,
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (sale.allocations.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          const _SectionTitle('Payments applied'),
+          const SizedBox(height: 10),
+          ...sale.allocations.map(
+            (a) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: AppColors.wash,
+                borderRadius: BorderRadius.circular(18),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  title: Text(
+                    a.receiptNo ?? 'Payment #${a.id}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: a.isReversal
+                      ? const Text(
+                          'Reversal',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.mute,
+                          ),
+                        )
+                      : null,
+                  trailing: Text(
+                    Money.formatPesewas(a.amount),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
               ),
             ),
-          if (sale.deliveredAt == null) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              key: const Key('sale_deliver'),
-              onPressed: busy ? null : _deliver,
-              icon: const Icon(Icons.local_shipping_outlined),
-              label: const Text('Mark delivered'),
-            ),
-          ],
-          if (sale.canVoid)
-            TextButton(
-              key: const Key('sale_void'),
-              onPressed: busy ? null : _void,
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.error,
-              ),
-              child: const Text('Void invoice'),
-            ),
+          ),
         ],
       ],
     );
   }
+}
 
-  Widget _amountRow(String label, int pesewas, {bool bold = false}) {
-    final style = bold ? const TextStyle(fontWeight: FontWeight.w600) : null;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({
+    required this.sale,
+    required this.busy,
+    required this.bottom,
+    required this.onConfirm,
+    required this.onCancel,
+    required this.onPay,
+    required this.onDeliver,
+    required this.onVoid,
+  });
+
+  final Sale sale;
+  final bool busy;
+  final double bottom;
+  final VoidCallback onConfirm;
+  final VoidCallback onCancel;
+  final VoidCallback onPay;
+  final VoidCallback onDeliver;
+  final VoidCallback onVoid;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(20, 12, 20, bottom + 16),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.line)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: style),
-          Text(Money.formatPesewas(pesewas), style: style),
+          if (sale.isDraft)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    key: const Key('sale_cancel'),
+                    onPressed: busy ? null : onCancel,
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton.icon(
+                    key: const Key('sale_confirm'),
+                    onPressed: busy ? null : onConfirm,
+                    icon: const AppIcon(
+                      AppIcons.check,
+                      size: 20,
+                      color: Colors.white,
+                    ),
+                    label: const Text('Confirm'),
+                  ),
+                ),
+              ],
+            ),
+          if (sale.isConfirmed) _ConfirmedActions(
+            sale: sale,
+            busy: busy,
+            onPay: onPay,
+            onDeliver: onDeliver,
+            onVoid: onVoid,
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _ConfirmedActions extends StatelessWidget {
+  const _ConfirmedActions({
+    required this.sale,
+    required this.busy,
+    required this.onPay,
+    required this.onDeliver,
+    required this.onVoid,
+  });
+
+  final Sale sale;
+  final bool busy;
+  final VoidCallback onPay;
+  final VoidCallback onDeliver;
+  final VoidCallback onVoid;
+
+  @override
+  Widget build(BuildContext context) {
+    final showPay = sale.balanceDue > 0;
+    final showDeliver = sale.deliveredAt == null;
+    final showVoid = sale.canVoid;
+    final showMore = showDeliver || showVoid;
+
+    if (!showPay && !showMore) return const SizedBox.shrink();
+
+    return Row(
+      children: [
+        if (showPay)
+          Expanded(
+            child: FilledButton.icon(
+              key: const Key('sale_record_payment'),
+              onPressed: busy ? null : onPay,
+              icon: const AppIcon(
+                AppIcons.payment,
+                size: 20,
+                color: Colors.white,
+              ),
+              label: const Text('Pay'),
+            ),
+          ),
+        if (showPay && showMore) const SizedBox(width: 10),
+        if (!showPay && showMore) const Spacer(),
+        if (showMore)
+          _MoreActionsCircle(
+            busy: busy,
+            showDeliver: showDeliver,
+            showVoid: showVoid,
+            onDeliver: onDeliver,
+            onVoid: onVoid,
+          ),
+      ],
+    );
+  }
+}
+
+enum _MorePick { deliver, voidInvoice }
+
+class _MoreActionsCircle extends StatelessWidget {
+  const _MoreActionsCircle({
+    required this.busy,
+    required this.showDeliver,
+    required this.showVoid,
+    required this.onDeliver,
+    required this.onVoid,
+  });
+
+  final bool busy;
+  final bool showDeliver;
+  final bool showVoid;
+  final VoidCallback onDeliver;
+  final VoidCallback onVoid;
+
+  Future<void> _open(BuildContext context) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay =
+        Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+
+    final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final size = box.size;
+    final screen = overlay.size;
+    const menuWidth = 228.0;
+    final right = (screen.width - origin.dx - size.width).clamp(
+      12.0,
+      screen.width - menuWidth - 12,
+    );
+    final bottom = screen.height - origin.dy + 10;
+
+    final pick = await showGeneralDialog<_MorePick>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.22),
+      transitionDuration: const Duration(milliseconds: 160),
+      pageBuilder: (ctx, anim, _) {
+        return Stack(
+          children: [
+            Positioned(
+              right: right,
+              bottom: bottom,
+              width: menuWidth,
+              child: Material(
+                color: AppColors.surface,
+                elevation: 10,
+                shadowColor: Colors.black26,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (showDeliver)
+                        _MoreMenuTile(
+                          key: const Key('sale_deliver'),
+                          icon: AppIcons.delivery,
+                          label: 'Mark delivered',
+                          onTap: () =>
+                              Navigator.pop(ctx, _MorePick.deliver),
+                        ),
+                      if (showDeliver && showVoid) const SizedBox(height: 4),
+                      if (showVoid)
+                        _MoreMenuTile(
+                          key: const Key('sale_void'),
+                          icon: AppIcons.delete,
+                          label: 'Void invoice',
+                          danger: true,
+                          onTap: () =>
+                              Navigator.pop(ctx, _MorePick.voidInvoice),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      transitionBuilder: (context, anim, _, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+          child: child,
+        );
+      },
+    );
+
+    if (pick == _MorePick.deliver) onDeliver();
+    if (pick == _MorePick.voidInvoice) onVoid();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.wash,
+      shape: const CircleBorder(),
+      child: InkWell(
+        key: const Key('sale_more_actions'),
+        customBorder: const CircleBorder(),
+        onTap: busy ? null : () => _open(context),
+        child: const SizedBox(
+          width: 52,
+          height: 52,
+          child: Center(
+            child: AppIcon(AppIcons.moreVertical, size: 22),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreMenuTile extends StatelessWidget {
+  const _MoreMenuTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? AppColors.danger : AppColors.ink;
+    return Material(
+      color: AppColors.wash,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              AppIcon(icon, size: 20, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookLine extends StatelessWidget {
+  const _BookLine({required this.line});
+
+  final SaleLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  line.productTitle,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${line.quantity} × ${Money.formatPesewas(line.unitPrice)}'
+                  '${line.isPriceOverridden ? ' · override' : ''}',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.mute,
+                  ),
+                ),
+                if (line.isPriceOverridden && line.overrideReason != null)
+                  Text(
+                    line.overrideReason!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.warn,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            Money.formatPesewas(line.lineTotal),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InkAmountRow extends StatelessWidget {
+  const _InkAmountRow({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+    this.lime = false,
+  });
+
+  final String label;
+  final int value;
+  final bool emphasize;
+  final bool lime;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = lime ? AppColors.lime : Colors.white;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: emphasize ? 15 : 13,
+            fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: emphasize ? 0.9 : 0.55),
+          ),
+        ),
+        Text(
+          Money.formatPesewas(value),
+          style: TextStyle(
+            fontSize: emphasize ? 20 : 14,
+            fontWeight: FontWeight.w900,
+            color: color,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({
+    required this.label,
+    this.filled = false,
+    this.accent = false,
+  });
+
+  final String label;
+  final bool filled;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = accent
+        ? AppColors.lime
+        : filled
+            ? AppColors.ink
+            : AppColors.wash;
+    final fg = accent
+        ? AppColors.ink
+        : filled
+            ? AppColors.lime
+            : AppColors.mute;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
+        color: AppColors.mute,
+      ),
+    );
+  }
+}
+
+class _NoteBanner extends StatelessWidget {
+  const _NoteBanner({required this.text, this.danger = false});
+
+  final String text;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: danger ? const Color(0xFFFFE4E6) : AppColors.wash,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: danger ? AppColors.danger : AppColors.mute,
+        ),
       ),
     );
   }
@@ -432,13 +983,11 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
 
 enum SaleAction { cancel, voidSale, deliver }
 
-/// The sale was changed by someone (or an earlier attempt) in the meantime.
 bool isStateConflict(ApiException e) =>
     e.code == 'sale_not_editable' ||
     e.code == 'sale_state_conflict' ||
     e.code == 'sale_delivered';
 
-/// Plain message for the sale's real state after a refused [action].
 String alreadyChangedMessage(SaleAction action, Sale? sale) {
   if (sale != null) {
     switch (action) {
@@ -509,71 +1058,186 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
   @override
   Widget build(BuildContext context) {
     final credit = widget.sale.customer?.creditBalance ?? 0;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Confirm ${Money.formatPesewas(widget.sale.total)}',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const Text(
-              'Issues the invoice number and takes the books out of stock.',
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event),
-              title: const Text('Due date'),
-              subtitle: Text(
-                _dueDate == null
-                    ? 'From payment terms'
-                    : DateFormat('d MMM y').format(_dueDate!),
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, bottom + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.line,
+                borderRadius: BorderRadius.circular(999),
               ),
-              onTap: () async {
-                final now = DateTime.now();
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _dueDate ?? now.add(const Duration(days: 30)),
-                  firstDate: DateTime(now.year - 1),
-                  lastDate: DateTime(now.year + 2),
-                );
-                if (picked != null) {
-                  setState(() => _dueDate = picked);
-                }
-              },
             ),
-            if (credit > 0)
-              SwitchListTile(
-                key: const Key('confirm_apply_credit'),
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Apply customer credit (${Money.formatPesewas(credit)})',
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Confirm ${Money.formatPesewas(widget.sale.total)}',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Issues the invoice number and takes the books out of stock.',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.mute,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'WHEN SHOULD THEY PAY?',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: AppColors.mute,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'This is the payment due date on the invoice — when the school is expected to settle the balance.',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.mute,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            decoration: BoxDecoration(
+              color: AppColors.wash,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Payment due by',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.mute,
+                  ),
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  _dueDate == null
+                      ? 'Your usual payment terms'
+                      : DateFormat('EEEE, d MMM y').format(_dueDate!),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                if (_dueDate == null) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Set on the web admin. Leave this if that is fine.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.mute,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final picked = await showDatePicker(
+                      context: context,
+                      helpText: 'Payment due by',
+                      initialDate: _dueDate ?? now.add(const Duration(days: 30)),
+                      firstDate: DateTime(now.year - 1),
+                      lastDate: DateTime(now.year + 2),
+                    );
+                    if (picked != null) setState(() => _dueDate = picked);
+                  },
+                  icon: const AppIcon(AppIcons.edit, size: 18),
+                  label: Text(
+                    _dueDate == null ? 'Pick a due date' : 'Change due date',
+                  ),
+                ),
+                if (_dueDate != null) ...[
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => setState(() => _dueDate = null),
+                    child: const Text(
+                      'Use usual payment terms instead',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (credit > 0) ...[
+            const SizedBox(height: 10),
+            Material(
+              color: AppColors.wash,
+              borderRadius: BorderRadius.circular(18),
+              child: SwitchListTile(
+                key: const Key('confirm_apply_credit'),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                title: Text(
+                  'Use school credit (${Money.formatPesewas(credit)})',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                    'This school already has prepaid credit on account. '
+                    'Turn on to put that credit toward this invoice so they '
+                    'owe less (or nothing) when it is confirmed.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.mute,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                activeThumbColor: AppColors.ink,
+                activeTrackColor: AppColors.lime,
                 value: _applyCredit,
                 onChanged: (v) => setState(() => _applyCredit = v),
               ),
-            const SizedBox(height: 8),
-            FilledButton(
-              key: const Key('confirm_submit'),
-              onPressed: () => Navigator.of(context).pop(
-                _ConfirmChoice(
-                  dueDate: _dueDate,
-                  applyCredit: credit > 0 && _applyCredit,
-                ),
-              ),
-              child: const Text('Confirm'),
             ),
           ],
-        ),
+          const SizedBox(height: 16),
+          FilledButton(
+            key: const Key('confirm_submit'),
+            onPressed: () => Navigator.of(context).pop(
+              _ConfirmChoice(
+                dueDate: _dueDate,
+                applyCredit: credit > 0 && _applyCredit,
+              ),
+            ),
+            child: const Text('Confirm'),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// 409 price_changed: line-by-line old -> new and the totals.
 class PriceChangedDialog extends StatelessWidget {
   const PriceChangedDialog({
     super.key,
@@ -605,25 +1269,47 @@ class PriceChangedDialog extends StatelessWidget {
     }
     return AlertDialog(
       key: const Key('price_changed_dialog'),
-      title: const Text('Prices changed'),
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: const Text(
+        'Prices changed',
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Nothing was confirmed. Since this draft was saved:'),
+          const Text(
+            'Nothing was confirmed. Since this draft was saved:',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.mute,
+            ),
+          ),
           const SizedBox(height: 8),
-          ...changes.map(Text.new),
+          ...changes.map(
+            (c) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                c,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           Text(
             'Total: ${Money.formatPesewas(sale.total)} -> ${Money.formatPesewas(newOrder.total)}',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: const TextStyle(fontWeight: FontWeight.w900),
           ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Not now'),
+          child: const Text(
+            'Not now',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
         ),
         FilledButton(
           key: const Key('accept_new_prices'),
@@ -644,28 +1330,158 @@ class InsufficientStockDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       key: const Key('insufficient_stock_dialog'),
-      title: const Text('Not enough stock'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      title: Column(
         children: [
-          ...items.map(
-            (i) => Text(
-              '${i.sku} ${i.title}: need ${i.requested}, have ${i.available}',
+          Container(
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFE4E6),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: AppIcon(
+                AppIcons.alert,
+                size: 24,
+                color: AppColors.danger,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           const Text(
-            'Nothing was confirmed. Reduce the quantities or receive stock first.',
+            'Not enough stock',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Nothing was confirmed. Fix the short books below, then try again.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.mute,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          ...items.map(
+            (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.wash,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      i.title,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      i.sku,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.mute,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _StockStat(
+                          label: 'Need',
+                          value: '${i.requested}',
+                          warn: true,
+                        ),
+                        const SizedBox(width: 8),
+                        _StockStat(
+                          label: 'Have',
+                          value: '${i.available}',
+                        ),
+                        const SizedBox(width: 8),
+                        _StockStat(
+                          label: 'Short',
+                          value: '${i.requested - i.available}',
+                          warn: true,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('OK'),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _StockStat extends StatelessWidget {
+  const _StockStat({
+    required this.label,
+    required this.value,
+    this.warn = false,
+  });
+
+  final String label;
+  final String value;
+  final bool warn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: warn ? const Color(0xFFFFE4E6) : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: warn ? AppColors.danger : AppColors.mute,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: warn ? AppColors.danger : AppColors.ink,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -680,21 +1496,129 @@ class CreditWarningDialog extends StatelessWidget {
     final w = warning;
     return AlertDialog(
       key: const Key('credit_warning_dialog'),
-      title: const Text('Over credit limit'),
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: const Text(
+        'Over credit limit',
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
       content: Text(
         'Owes ${Money.formatPesewas(w.outstanding)} + this sale ${Money.formatPesewas(w.saleTotal)}'
-        '${w.creditApplied > 0 ? ' - credit ${Money.formatPesewas(w.creditApplied)}' : ''}'
+        '${w.creditApplied > 0 ? ' − credit ${Money.formatPesewas(w.creditApplied)}' : ''}'
         ' = ${Money.formatPesewas(w.projectedBalance)}, over the limit of ${Money.formatPesewas(w.creditLimit)}.',
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: AppColors.mute,
+          height: 1.4,
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Back'),
+          child: const Text(
+            'Back',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
         ),
         FilledButton(
           key: const Key('credit_override'),
           onPressed: () => Navigator.pop(context, true),
           child: const Text('Confirm anyway'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Cancel a draft — optional note. Returns '' when confirmed with no note, null if dismissed.
+class CancelDraftDialog extends StatefulWidget {
+  const CancelDraftDialog({super.key});
+
+  @override
+  State<CancelDraftDialog> createState() => _CancelDraftDialogState();
+}
+
+class _CancelDraftDialogState extends State<CancelDraftDialog> {
+  final _reason = TextEditingController();
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      title: Column(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              color: AppColors.wash,
+              shape: BoxShape.circle,
+            ),
+            child: const Center(child: AppIcon(AppIcons.delete, size: 24)),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Cancel this draft?',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'The draft will be discarded. Stock is unchanged — nothing was reserved.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.mute,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            key: const Key('reason_field'),
+            controller: _reason,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Note (optional)',
+              hintText: 'e.g. Wrong school, will redo',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Keep draft'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                key: const Key('reason_submit'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                onPressed: () => Navigator.pop(context, _reason.text.trim()),
+                child: const Text('Cancel draft'),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -733,20 +1657,38 @@ class _ReasonDialogState extends State<ReasonDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.title),
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      title: Text(
+        widget.title,
+        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+      ),
       content: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.message != null) Text(widget.message!),
-            const SizedBox(height: 12),
+            if (widget.message != null) ...[
+              Text(
+                widget.message!,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.mute,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             TextFormField(
               key: const Key('reason_field'),
               controller: _reason,
+              maxLines: 2,
               decoration: InputDecoration(
                 labelText: widget.required ? 'Reason' : 'Reason (optional)',
-                border: const OutlineInputBorder(),
               ),
               validator: widget.required
                   ? (v) => Validators.required(v, label: 'A reason')
@@ -756,18 +1698,27 @@ class _ReasonDialogState extends State<ReasonDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Back'),
-        ),
-        FilledButton(
-          key: const Key('reason_submit'),
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              Navigator.pop(context, _reason.text.trim());
-            }
-          },
-          child: Text(widget.action),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Back'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                key: const Key('reason_submit'),
+                onPressed: () {
+                  if (_formKey.currentState!.validate()) {
+                    Navigator.pop(context, _reason.text.trim());
+                  }
+                },
+                child: Text(widget.action),
+              ),
+            ),
+          ],
         ),
       ],
     );

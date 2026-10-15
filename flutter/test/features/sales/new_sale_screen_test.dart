@@ -86,7 +86,7 @@ void main() {
       await tester.tap(find.byKey(Key('pick_product_${b.id}')));
       await tester.pump();
     }
-    await tester.tap(find.text('Done'));
+    await tester.tap(find.byKey(const Key('product_picker_done')));
     await tester.pumpAndSettle();
   }
 
@@ -147,7 +147,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('pick_product_101')));
     await tester.pump();
-    await tester.tap(find.text('Done'));
+    await tester.tap(find.byKey(const Key('product_picker_done')));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -194,6 +194,67 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('sale 42 confirm=null'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'empty schools list offers Add school; quick add returns into the sale',
+    (tester) async {
+      final emptyCustomers = FakeCustomersRepository(customers: const []);
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.625;
+      addTearDown(tester.view.reset);
+
+      final router = GoRouter(
+        initialLocation: '/sales/new',
+        routes: [
+          GoRoute(
+            path: '/sales/new',
+            builder: (_, _) => const NewSaleScreen(
+              previewDebounce: Duration(milliseconds: 10),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<SalesRepository>.value(value: sales),
+            Provider<PendingSubmissionStore>.value(
+              value: PendingSubmissionStore(store: InMemoryKeyValueStore()),
+            ),
+            Provider<CustomersRepository>.value(value: emptyCustomers),
+            Provider<ProductsRepository>.value(
+              value: FakeProductsRepository(books),
+            ),
+            Provider<LookupsRepository>.value(value: FakeLookupsRepository()),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('new_sale_customer')));
+      await tester.pumpAndSettle();
+      expect(find.text('No schools yet'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('customer_picker_add')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('customer_quick_name')),
+        'Sunrise Primary',
+      );
+      await tester.tap(find.byKey(const Key('customer_quick_region')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Greater Accra').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('customer_quick_save')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sunrise Primary'), findsOneWidget);
+      expect(emptyCustomers.created.single['name'], 'Sunrise Primary');
+      expect(emptyCustomers.created.single['region'], 'Greater Accra');
+      expect(emptyCustomers.created.single['type'], 'school');
     },
   );
 }

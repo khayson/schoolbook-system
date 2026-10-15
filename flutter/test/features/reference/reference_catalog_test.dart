@@ -33,7 +33,7 @@ void main() {
   });
 
   test(
-    'first sync downloads the list and the stock, and keeps both on the device',
+    'first sync downloads the list; stock only when requested',
     () async {
       final c = catalog();
       await c.sync();
@@ -42,9 +42,12 @@ void main() {
       expect(c.books.map((b) => b.id), [1, 2]);
       expect(c.editionLabel, 'NaCCA Test Edition');
       expect(c.etag, '"v1"');
+      expect(c.stockFor(2), isNull);
+      expect(c.offline, isFalse);
+
+      await c.sync(includeStock: true);
       expect(c.stockFor(2)?.stockOnHand, 15);
       expect(c.stockFor(1), isNull);
-      expect(c.offline, isFalse);
       expect(cache.value, contains('"etag":"\\"v1\\""'));
     },
   );
@@ -53,7 +56,7 @@ void main() {
     await catalog().sync();
 
     final next = catalog(); // e.g. after an app restart
-    await next.sync();
+    await next.sync(force: true);
     expect(api.sentEtags, [null, '"v1"']);
     expect(api.downloads, 1);
     expect(next.books, hasLength(2)); // from the stored copy
@@ -61,7 +64,7 @@ void main() {
     api
       ..books = [...api.books, testBook(id: 3, title: 'Ocean Science')]
       ..etag = '"v2"';
-    await next.sync();
+    await next.sync(force: true);
     expect(api.downloads, 2);
     expect(next.etag, '"v2"');
     expect(next.search('ocean').single.id, 3);
@@ -70,11 +73,11 @@ void main() {
   test(
     'offline: the stored copy is searched and the screen can say it is offline',
     () async {
-      await catalog().sync();
+      await catalog().sync(includeStock: true);
       api.failWith = ApiException.network();
 
       final offline = catalog();
-      await offline.sync();
+      await offline.sync(force: true);
 
       expect(offline.offline, isTrue);
       expect(offline.error, isNull);
@@ -109,7 +112,7 @@ void main() {
 
   test('ISBN hint and local stock update after adding a product', () async {
     final c = catalog();
-    await c.sync();
+    await c.sync(includeStock: true);
 
     expect(c.byIsbn('978-9988-0-1234-2')?.id, 2);
     expect(c.byIsbn('0000'), isNull);
@@ -117,5 +120,14 @@ void main() {
     c.noteProductAdded(1, 12);
     expect(c.stockFor(1)?.productsCount, 1);
     expect(c.stockFor(1)?.stockOnHand, 12);
+  });
+
+  test('fresh cache skips network within TTL', () async {
+    final c = catalog();
+    await c.sync();
+    expect(api.sentEtags, [null]);
+
+    await c.sync();
+    expect(api.sentEtags, [null]); // no second call
   });
 }

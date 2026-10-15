@@ -68,3 +68,43 @@ test('me and logout require auth', function () {
 test('unauthenticated access is rejected', function () {
     $this->postJson('/api/v1/auth/logout')->assertUnauthorized();
 });
+
+test('account status returns pending or active with a clear message', function () {
+    $pending = User::factory()->owner()->inactive()->create([
+        'email' => 'pending-status@schoolbook.test',
+        'registered_at' => now()->subDay(),
+    ]);
+
+    $this->getJson('/api/v1/auth/status?email='.$pending->email)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'pending')
+        ->assertJsonPath('data.name', $pending->name)
+        ->assertJsonPath('data.message', 'Your account is still under review. An admin needs to activate it — usually within 1–2 business days.')
+        ->assertJsonStructure(['data' => ['status', 'message', 'name', 'registered_at']]);
+
+    expect($this->getJson('/api/v1/auth/status?email='.$pending->email)->json('data.registered_at'))
+        ->toBeString()
+        ->not->toBeEmpty();
+
+    $active = User::factory()->owner()->create([
+        'email' => 'active-status@schoolbook.test',
+        'registered_at' => now()->subDays(2),
+    ]);
+
+    $this->getJson('/api/v1/auth/status?email='.$active->email)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'active')
+        ->assertJsonFragment(['message' => 'Your account is active. You can sign in now.']);
+});
+
+test('account status reports unknown email clearly', function () {
+    $this->getJson('/api/v1/auth/status?email=nobody@schoolbook.test')
+        ->assertNotFound()
+        ->assertJsonPath('code', 'account_not_found')
+        ->assertJsonPath('message', 'No account was found for this email.');
+});
+
+test('account status requires a valid email', function () {
+    $this->getJson('/api/v1/auth/status')
+        ->assertUnprocessable();
+});

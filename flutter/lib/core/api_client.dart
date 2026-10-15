@@ -54,6 +54,16 @@ class ApiClient {
 
   Dio get dio => _dio;
 
+  String get baseUrl => _dio.options.baseUrl;
+
+  /// Swap the API host at runtime (developer server override).
+  void setBaseUrl(String url) {
+    final normalized = ApiConfig.normalizeBaseUrl(url) ?? url.trim();
+    _dio.options.baseUrl = normalized.endsWith('/')
+        ? normalized.substring(0, normalized.length - 1)
+        : normalized;
+  }
+
   set onUnauthorized(UnauthorizedHandler? handler) {
     _onUnauthorized = handler;
   }

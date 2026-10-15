@@ -57,16 +57,31 @@ class AuthController extends Controller
 
     public function status(Request $request): JsonResponse
     {
-        $email = $request->string('email')->toString();
-        $user = User::query()->where('email', $email)->first();
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $user = User::query()->where('email', $validated['email'])->first();
         if (! $user) {
-            return response()->json(['status' => 'not_found'], 404);
+            return response()->json([
+                'message' => 'No account was found for this email.',
+                'code' => 'account_not_found',
+                'data' => ['status' => 'not_found'],
+            ], 404);
         }
 
+        $status = $user->is_active ? 'active' : 'pending';
+        $message = $user->is_active
+            ? 'Your account is active. You can sign in now.'
+            : 'Your account is still under review. An admin needs to activate it — usually within 1–2 business days.';
+
         return response()->json([
-            'status' => $user->is_active ? 'active' : 'pending',
-            'name' => $user->name,
-            'registered_at' => $user->registered_at?->toIso8601String(),
+            'data' => [
+                'status' => $status,
+                'message' => $message,
+                'name' => $user->name,
+                'registered_at' => $user->registered_at?->toIso8601String(),
+            ],
         ]);
     }
 }

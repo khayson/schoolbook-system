@@ -18,7 +18,9 @@ class StockCountController extends ChangeNotifier {
   String? loadError;
   bool loading = false;
   String query = '';
-  CountFilter filter = CountFilter.all;
+
+  /// Phone flow focuses on what is left to count first.
+  CountFilter filter = CountFilter.uncounted;
   int? savingProductId;
 
   Future<void> load() async {
@@ -27,6 +29,10 @@ class StockCountController extends ChangeNotifier {
     notifyListeners();
     try {
       count = await _repository.get(countId);
+      // Closed counts: show everything; open counts stay on "To count".
+      if (count != null && !count!.isOpen) {
+        filter = CountFilter.all;
+      }
     } on ApiException catch (e) {
       loadError = describeApiError(e).body;
     } finally {
@@ -39,7 +45,19 @@ class StockCountController extends ChangeNotifier {
 
   int get totalItems => count?.items.length ?? 0;
 
+  int get remainingToCount => totalItems - countedItems;
+
   double get progress => totalItems == 0 ? 0 : countedItems / totalItems;
+
+  /// First product still without a shelf quantity (list order).
+  StockCountItem? get nextUncounted {
+    for (final item in count?.items ?? const <StockCountItem>[]) {
+      if (!item.isCounted) {
+        return item;
+      }
+    }
+    return null;
+  }
 
   List<StockCountItem> get visibleItems {
     final q = query.trim().toLowerCase();

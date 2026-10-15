@@ -151,4 +151,35 @@ void main() {
     expect(controller.canSave, isTrue);
     controller.dispose();
   });
+
+  test('editing a draft saves via updateDraft, not createDraft', () async {
+    sales.sale = testSale(id: 42);
+    controller = make(debounce: const Duration(hours: 1))
+      ..loadExistingDraft(
+        saleId: 42,
+        customer: testCustomer(),
+        draftLines: [DraftLine(product: testProduct(id: 11), quantity: 2)],
+      );
+
+    expect(controller.isEditing, isTrue);
+    expect(controller.isDirty(), isFalse);
+    expect(await controller.saveDraft(), isNull);
+    expect(sales.updateCalls, isEmpty);
+
+    controller.step(11, 1);
+    expect(controller.isDirty(), isTrue);
+    final sale = await controller.saveDraft(notes: 'Updated');
+    expect(sale!.id, 42);
+    expect(sales.createCalls, isEmpty);
+    expect(sales.updateCalls, [
+      {
+        'customer_id': 1,
+        'notes': 'Updated',
+        'items': [
+          {'product_id': 11, 'quantity': 3},
+        ],
+      },
+    ]);
+    controller.dispose();
+  });
 }

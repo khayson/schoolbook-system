@@ -109,6 +109,25 @@ Requires Bearer token. Revokes current token. `200` `{ "message": "Logged out." 
 
 Requires Bearer token + owner. Returns `{ "data": { ...user } }`.
 
+### `GET /auth/status`
+
+Public (throttle 10/min). Query: `?email=`. Used by the waiting room after registration.
+
+Response `200`:
+
+```json
+{
+  "data": {
+    "status": "pending",
+    "message": "Your account is still under review. An admin needs to activate it — usually within 1–2 business days.",
+    "name": "Ama Mensah",
+    "registered_at": "2026-10-14T12:00:00+00:00"
+  }
+}
+```
+
+`status` is `pending` or `active`. `404` `{ "message", "code": "account_not_found", "data": { "status": "not_found" } }` when the email is unknown. `422` if `email` is missing or invalid.
+
 ## Lookups
 
 All lookup routes require Bearer token + owner. Lists support `?page=`, `?per_page=` (default 25, max 100), and `?search=`. Responses use `{ data, meta, links }`. `DELETE` soft-deletes records where applicable.

@@ -66,6 +66,11 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('pay_submit')));
     await tester.tap(find.byKey(const Key('pay_submit')));
     await tester.pumpAndSettle();
+    final confirm = find.byKey(const Key('pay_confirm_submit'));
+    if (confirm.evaluate().isNotEmpty) {
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+    }
   }
 
   setUp(() {
@@ -85,7 +90,7 @@ void main() {
 
       expect(find.text('Akwaaba Basic School'), findsOneWidget);
       expect(find.textContaining('Owes GHS 3,000.00'), findsOneWidget);
-      expect(find.text('Recent payments from this customer'), findsOneWidget);
+      expect(find.text('RECENT FROM THIS SCHOOL'), findsOneWidget);
       expect(find.byKey(const Key('recent_3')), findsOneWidget);
       expect(find.textContaining('MP-OLD'), findsOneWidget);
     },

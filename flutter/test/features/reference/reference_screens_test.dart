@@ -21,7 +21,7 @@ import '../../support/fakes.dart';
 
 class _Lookups extends FakeLookupsRepository {
   @override
-  Future<List<LevelLookup>> fetchLevels() async => const [
+  Future<List<LevelLookup>> fetchLevels({bool force = false}) async => const [
     LevelLookup(id: 6, name: 'Primary 1'),
     LevelLookup(id: 7, name: 'Primary 2'),
     LevelLookup(id: 9, name: 'Primary 4'),
@@ -62,7 +62,7 @@ void main() {
       repository: referenceApi,
       cache: InMemoryReferenceCacheStore(),
     );
-    await catalog.sync();
+    await catalog.sync(includeStock: true);
     scannedResult = null;
   });
 
@@ -189,7 +189,7 @@ void main() {
     tester,
   ) async {
     referenceApi.failWith = ApiException.network();
-    await catalog.sync();
+    await catalog.sync(force: true);
     await pump(tester, '/products/approved');
 
     expect(
@@ -293,10 +293,9 @@ void main() {
 
       scan('9789988012342');
       await tester.pumpAndSettle();
-      expect(
-        find.text('On the approved list: ${discover.subtitle}'),
-        findsOneWidget,
-      );
+      expect(find.text('On the approved list'), findsOneWidget);
+      expect(find.text(discover.title), findsOneWidget);
+      expect(find.text(discover.subtitle), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('scan_add_hinted')));
       await tester.pumpAndSettle();
@@ -329,14 +328,11 @@ void main() {
     (tester) async {
       await pump(tester, '/stock/receive');
 
-      await tester.enterText(find.byType(SearchBar), 'sunrise');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.enterText(find.byKey(const Key('receive_search')), 'sunrise');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('On the approved list, not in your products yet'),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('ref_book_1')), findsOneWidget);
       await tester.tap(find.byKey(const Key('ref_book_1')));
       await tester.pumpAndSettle();
 
@@ -354,13 +350,13 @@ void main() {
         'cost_price': 2750,
         'selling_price': 4000,
       });
-      expect(find.text('Receipt lines'), findsOneWidget);
+      expect(find.textContaining('RECEIPT LINES'), findsOneWidget);
       expect(
         find.text('Created 1'),
         findsOneWidget,
       ); // the new product is now a line
       expect(
-        find.text('On the approved list, not in your products yet'),
+        find.byKey(const Key('ref_book_1')),
         findsNothing,
       );
     },

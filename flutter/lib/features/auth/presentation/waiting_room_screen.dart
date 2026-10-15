@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:schoolbook/core/errors.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/features/auth/data/auth_repository.dart';
+import 'package:schoolbook/features/auth/presentation/auth_chrome.dart';
+import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
+import 'package:schoolbook/shared/widgets/app_icons.dart';
+import 'package:schoolbook/shared/widgets/app_toast.dart';
+import 'package:schoolbook/shared/widgets/loading_overlay.dart';
 
 class WaitingRoomScreen extends StatefulWidget {
   const WaitingRoomScreen({super.key, required this.email});
@@ -12,385 +19,346 @@ class WaitingRoomScreen extends StatefulWidget {
   State<WaitingRoomScreen> createState() => _WaitingRoomScreenState();
 }
 
-class _WaitingRoomScreenState extends State<WaitingRoomScreen> {
+class _WaitingRoomScreenState extends State<WaitingRoomScreen>
+    with SingleTickerProviderStateMixin {
   String _status = 'pending';
   bool _isBusy = false;
-  String? _registeredAt;
+  late final AnimationController _anim;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _fade = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.03),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
+    _anim.forward();
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  Future<void> _leaveWaitingRoom() async {
+    final auth = context.read<AuthProvider>();
+    await auth.clearPendingRegistration();
+    if (mounted) context.go('/login');
+  }
+
+  void _showBackendToast(
+    String message, {
+    required ToastType type,
+  }) {
+    final text = message.trim();
+    if (text.isEmpty) return;
+    // Backend `message` is the primary text — no Flutter wrapper copy.
+    AppToast.show(context, '', title: text, type: type);
+  }
 
   Future<void> _checkStatus() async {
-    if (widget.email.isEmpty) return;
+    if (widget.email.isEmpty) {
+      AppToast.show(
+        context,
+        'Sign in again so we know which account to check.',
+        title: 'No email on file',
+        type: ToastType.warning,
+      );
+      return;
+    }
     setState(() => _isBusy = true);
     try {
       final repo = context.read<AuthRepository>();
       final result = await repo.checkAccountStatus(widget.email);
       final s = result['status'] as String? ?? 'pending';
-      setState(() {
-        _status = s;
-        _registeredAt = result['registered_at'] as String?;
-      });
-      if (s == 'active' && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Your account is now active! Please sign in.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        await Future.delayed(const Duration(milliseconds: 1500));
+      final message = (result['message'] as String?)?.trim() ?? '';
+      setState(() => _status = s);
+
+      if (!mounted) return;
+      if (s == 'active') {
+        final authProvider = context.read<AuthProvider>();
+        await authProvider.clearPendingRegistration();
+        if (!mounted) return;
+        _showBackendToast(message, type: ToastType.success);
+        await Future.delayed(const Duration(milliseconds: 1200));
         if (mounted) context.go('/login');
+      } else if (s == 'rejected') {
+        _showBackendToast(message, type: ToastType.error);
+      } else {
+        _showBackendToast(message, type: ToastType.info);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not check status: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      // API error envelope: `{ message, code, ... }` — show server message as-is.
+      _showBackendToast(e.message, type: ToastType.error);
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
   }
 
-  Widget _statusStep({
-    required String label,
-    required bool done,
-    required String number,
-  }) {
-    return Column(
+  @override
+  Widget build(BuildContext context) {
+    final isActive = _status == 'active';
+    final isRejected = _status == 'rejected';
+
+    final title = isRejected
+        ? 'Not approved'
+        : isActive
+            ? 'You are approved'
+            : 'Almost there';
+
+    final body = isRejected
+        ? 'This registration was not activated. Contact support if that looks wrong.'
+        : isActive
+            ? 'Your account is ready. Sign in with your email and password.'
+            : 'An admin still needs to activate your account. This usually takes 1–2 business days.';
+
+    final icon = isRejected
+        ? AppIcons.close
+        : isActive
+            ? AppIcons.check
+            : AppIcons.hourglass;
+    final badgeColor = isRejected
+        ? AppColors.danger.withValues(alpha: 0.1)
+        : isActive
+            ? AppColors.lime
+            : AppColors.limeSoft;
+    final iconColor = isRejected ? AppColors.danger : AppColors.ink;
+    final statusLabel = isRejected
+        ? 'Not approved'
+        : isActive
+            ? 'Active'
+            : 'Pending review';
+
+    return LoadingOverlay(
+      isLoading: _isBusy,
+      message: 'Checking status…',
+      child: AuthScaffold(
+        child: FadeTransition(
+          opacity: _fade,
+          child: SlideTransition(
+            position: _slide,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 48),
+                        Center(
+                          child: Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: badgeColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: AppIcon(icon, size: 36, color: iconColor),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          body,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            height: 1.45,
+                            color: AppColors.mute,
+                          ),
+                        ),
+                        if (widget.email.isNotEmpty) ...[
+                          const SizedBox(height: 28),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                            decoration: BoxDecoration(
+                              color: AppColors.wash,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Column(
+                              children: [
+                                const Text(
+                                  'SIGNED UP AS',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                    color: AppColors.mute,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  widget.email,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isRejected
+                                        ? AppColors.danger.withValues(alpha: 0.1)
+                                        : isActive
+                                            ? AppColors.lime
+                                            : AppColors.surface,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    statusLabel,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: isRejected
+                                          ? AppColors.danger
+                                          : AppColors.ink,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (!isActive && !isRejected) ...[
+                          const SizedBox(height: 24),
+                          const _NextStep(
+                            step: '1',
+                            label: 'We received your registration',
+                            done: true,
+                          ),
+                          const SizedBox(height: 10),
+                          const _NextStep(
+                            step: '2',
+                            label: 'An admin reviews and activates you',
+                            done: false,
+                          ),
+                          const SizedBox(height: 10),
+                          const _NextStep(
+                            step: '3',
+                            label: 'You sign in and start selling',
+                            done: false,
+                          ),
+                        ],
+                        const SizedBox(height: 40),
+                        if (isActive)
+                          FilledButton(
+                            key: const Key('waiting_room_leave'),
+                            onPressed: _isBusy ? null : _leaveWaitingRoom,
+                            child: const Text('Go to Sign In'),
+                          )
+                        else if (isRejected)
+                          FilledButton(
+                            key: const Key('waiting_room_leave'),
+                            onPressed: _isBusy ? null : _leaveWaitingRoom,
+                            child: const Text('Back to Sign In'),
+                          )
+                        else ...[
+                          FilledButton(
+                            key: const Key('waiting_room_check'),
+                            onPressed: _isBusy ? null : _checkStatus,
+                            child: const Text('Check status'),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            key: const Key('waiting_room_leave'),
+                            onPressed: _isBusy ? null : _leaveWaitingRoom,
+                            child: const Text(
+                              'Back to Sign In',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 28),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NextStep extends StatelessWidget {
+  const _NextStep({
+    required this.step,
+    required this.label,
+    required this.done,
+  });
+
+  final String step;
+  final String label;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
         Container(
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: done
-                ? const Color(0xFF22C55E)
-                : const Color(0xFFF3F4F6),
+            color: done ? AppColors.ink : AppColors.wash,
             shape: BoxShape.circle,
-            border: Border.all(
-                color: done
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFE5E7EB)),
           ),
           child: Center(
             child: done
-                ? const Icon(Icons.check_rounded,
-                    color: Colors.white, size: 16)
+                ? const AppIcon(AppIcons.check, size: 16, color: AppColors.lime)
                 : Text(
-                    number,
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade500),
+                    step,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.mute,
+                    ),
                   ),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-              fontSize: 10,
-              color: done
-                  ? const Color(0xFF22C55E)
-                  : Colors.grey.shade400),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: done ? AppColors.ink : AppColors.mute,
+            ),
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _infoCard({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8E8E8)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F8F8),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87)),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.grey.shade500)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: () => context.go('/login'),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                              color: const Color(0xFFE8E8E8)),
-                          borderRadius: BorderRadius.circular(50),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new,
-                          size: 15,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 48),
-                  // Status illustration
-                  Center(
-                    child: SizedBox(
-                      width: 140,
-                      height: 140,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(
-                            width: 140,
-                            height: 140,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF0FDF4),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          Container(
-                            width: 96,
-                            height: 96,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFDCFCE7),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const Icon(
-                            Icons.hourglass_bottom_rounded,
-                            size: 40,
-                            color: Color(0xFF16A34A),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Status steps row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _statusStep(
-                          label: 'Registered',
-                          done: true,
-                          number: '1'),
-                      Expanded(
-                        child: Container(
-                          height: 1,
-                          margin: const EdgeInsets.only(bottom: 20),
-                          color: const Color(0xFFE5E7EB),
-                        ),
-                      ),
-                      _statusStep(
-                          label: 'Under Review',
-                          done: _status == 'active',
-                          number: '2'),
-                      Expanded(
-                        child: Container(
-                          height: 1,
-                          margin: const EdgeInsets.only(bottom: 20),
-                          color: const Color(0xFFE5E7EB),
-                        ),
-                      ),
-                      _statusStep(
-                          label: 'Access Granted',
-                          done: _status == 'active',
-                          number: '3'),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  const Text(
-                    'Account Under Review',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Your account has been created and is currently being reviewed by our team. This usually takes 1–2 business days.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                        height: 1.6),
-                  ),
-                  const SizedBox(height: 28),
-                  _infoCard(
-                    icon: Icons.verified_user_outlined,
-                    iconColor: const Color(0xFF0B6E4F),
-                    title: 'Identity Verified',
-                    subtitle:
-                        'Your email and details have been recorded',
-                  ),
-                  _infoCard(
-                    icon: Icons.shield_outlined,
-                    iconColor: const Color(0xFF3B82F6),
-                    title: 'Security Review',
-                    subtitle:
-                        'Our team verifies each account manually',
-                  ),
-                  _infoCard(
-                    icon: Icons.notifications_outlined,
-                    iconColor: const Color(0xFFF59E0B),
-                    title: "You'll Be Notified",
-                    subtitle:
-                        "We'll contact you once your account is approved",
-                  ),
-                  const SizedBox(height: 24),
-                  // Status banner
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: const Color(0xFFBBF7D0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF22C55E),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Status: ${_status == 'active' ? 'Active' : 'Pending Approval'}',
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87),
-                            ),
-                            const Spacer(),
-                            if (_registeredAt != null)
-                              Text(
-                                'Registered',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade500),
-                              ),
-                          ],
-                        ),
-                        if (widget.email.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.email,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade400),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  OutlinedButton(
-                    onPressed: _isBusy ? null : _checkStatus,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(
-                          color: Colors.black, width: 1.5),
-                      shape: const StadiumBorder(),
-                      minimumSize: const Size(double.infinity, 52),
-                      foregroundColor: Colors.black,
-                    ),
-                    child: _isBusy
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.black),
-                          )
-                        : const Text(
-                            'Check Status',
-                            style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600),
-                          ),
-                  ),
-                  const SizedBox(height: 16),
-                  Center(
-                    child: TextButton(
-                      onPressed: () => context.go('/login'),
-                      style: TextButton.styleFrom(
-                          foregroundColor: Colors.black),
-                      child: const Text(
-                        'Back to Sign In',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Center(
-                    child: Text(
-                      'Powered by Schoolbook Supply',
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.grey.shade400),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

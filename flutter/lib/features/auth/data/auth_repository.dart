@@ -78,12 +78,12 @@ class AuthRepository {
     );
   }
 
-  /// Check account approval status for [email].
-  /// Returns a map with at least `status` (pending | active | rejected)
-  /// and optionally `registered_at`.
+  /// Check account approval status for [email] via `GET /auth/status`.
+  /// Returns `data`: `status` (pending | active), `message`, and optionally
+  /// `name` / `registered_at`.
   Future<Map<String, dynamic>> checkAccountStatus(String email) async {
     final response = await _api.get<Map<String, dynamic>>(
-      '/auth/account-status',
+      '/auth/status',
       queryParameters: {'email': email.trim()},
     );
     final body = response.data ?? {};

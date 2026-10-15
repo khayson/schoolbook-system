@@ -190,6 +190,9 @@ void main() {
 
       expect(repo.enterCalls.single, (productId: 1, qty: 84));
       expect(find.text('1 of 6 counted'), findsOneWidget);
+      // Default "To count" hides finished rows — switch to All for variance.
+      await tester.tap(find.byKey(const Key('count_filter')));
+      await tester.pumpAndSettle();
       expect(
         find.descendant(
           of: find.byKey(const Key('count_item_1')),
@@ -200,12 +203,14 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const Key('count_item_1')),
-          matching: find.text('RPT-A | system 86'),
+          matching: find.text('RPT-A · system 86'),
         ),
         findsOneWidget,
       );
 
-      // Invalid input is refused in the dialog, nothing is sent.
+      // Invalid input is refused in the drawer, nothing is sent.
+      await tester.tap(find.byKey(const Key('count_filter_uncounted')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('count_item_2')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('count_qty_save')));

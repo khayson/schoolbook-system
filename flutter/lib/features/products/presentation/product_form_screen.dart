@@ -3,11 +3,17 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/money.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
 import 'package:schoolbook/features/catalog/domain/lookup_models.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
+import 'package:schoolbook/shared/widgets/app_chrome.dart';
+import 'package:schoolbook/shared/widgets/app_icons.dart';
+import 'package:schoolbook/shared/widgets/app_toast.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
+import 'package:schoolbook/shared/widgets/loading_overlay.dart';
+import 'package:schoolbook/shared/widgets/option_picker.dart';
 
 class ProductFormScreen extends StatefulWidget {
   const ProductFormScreen({super.key, this.productId});
@@ -44,6 +50,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  String? _levelError;
+  String? _subjectError;
+  String? _languageError;
 
   @override
   void initState() {
@@ -78,9 +87,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         else
           Future<Product?>.value(null),
       ]);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       _levels = results[0] as List<LevelLookup>;
       _subjects = results[1] as List<NamedLookup>;
       _languages = results[2] as List<LanguageLookup>;
@@ -101,13 +108,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _publisherId = product.publisherId;
         _isActive = product.isActive;
       }
-      setState(() {
-        _loading = false;
-      });
+      setState(() => _loading = false);
     } on ApiException catch (e) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _error = e.message;
         _loading = false;
@@ -116,7 +119,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) {
+    setState(() {
+      _levelError = _levelId == null ? 'Required' : null;
+      _subjectError = _subjectId == null ? 'Required' : null;
+      _languageError = _languageId == null ? 'Required' : null;
+    });
+    if (!_formKey.currentState!.validate() ||
+        _levelId == null ||
+        _subjectId == null ||
+        _languageId == null) {
       return;
     }
     final cost = Money.parseGhsToPesewas(_costController.text);
@@ -156,9 +167,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       } else {
         saved = await repo.createProduct(payload);
       }
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
+      AppToast.show(
+        context,
+        widget.isEditing ? 'Product updated.' : 'Product created.',
+        type: ToastType.success,
+      );
       context.go('/products/${saved.id}');
     } on ApiException catch (e) {
       setState(() {
@@ -173,205 +187,360 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  InputDecoration _field(String label, {Widget? suffixIcon}) {
+    const r = 12.0;
+    return InputDecoration(
+      labelText: label,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: AppColors.surface,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(r),
+        borderSide: const BorderSide(color: AppColors.line),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(r),
+        borderSide: const BorderSide(color: AppColors.ink, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(r),
+        borderSide: const BorderSide(color: AppColors.danger),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(r),
+        borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit product' : 'Add product'),
+    const r = 12.0;
+    return LoadingOverlay(
+      isLoading: _saving,
+      message: widget.isEditing ? 'Saving…' : 'Creating…',
+      child: AppPage(
+        title: widget.isEditing ? 'Edit product' : 'Add product',
+        subtitle: widget.isEditing ? 'Update catalog details' : 'Manual entry',
+        body: _loading
+            ? const LoadingBody()
+            : _error != null && _levels.isEmpty
+                ? ErrorState(message: _error!, onRetry: _load)
+                : Form(
+                    key: _formKey,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.limeSoft,
+                            border: Border.all(color: AppColors.lime, width: 1.5),
+                            borderRadius: BorderRadius.circular(r),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: AppColors.lime,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Center(
+                                  child: AppIcon(AppIcons.products, size: 18),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  widget.isEditing
+                                      ? 'Change prices, codes, or classification. Stock still moves through receive / adjust.'
+                                      : 'Manual catalog entry. Prefer the approved list when the title is on NaCCA.',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const _FormSection('Identity'),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _skuController,
+                          decoration: _field('SKU'),
+                          validator: (v) =>
+                              v == null || v.trim().isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _titleController,
+                          decoration: _field('Title'),
+                          validator: (v) =>
+                              v == null || v.trim().isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 18),
+                        const _FormSection('Classification'),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.line),
+                            borderRadius: BorderRadius.circular(r),
+                          ),
+                          child: Column(
+                            children: [
+                              OptionPicker<int>(
+                                label: 'Level',
+                                value: _levelId,
+                                allowClear: false,
+                                clearLabel: 'Choose level',
+                                options:
+                                    _levels.map((l) => (l.id, l.name)).toList(),
+                                onChanged: (v) => setState(() {
+                                  _levelId = v;
+                                  _levelError = null;
+                                }),
+                              ),
+                              if (_levelError != null) ...[
+                                const SizedBox(height: 6),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    _levelError!,
+                                    style: const TextStyle(
+                                      color: AppColors.danger,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 14),
+                              OptionPicker<int>(
+                                label: 'Subject',
+                                value: _subjectId,
+                                allowClear: false,
+                                clearLabel: 'Choose subject',
+                                options: _subjects
+                                    .map((s) => (s.id, s.name))
+                                    .toList(),
+                                onChanged: (v) => setState(() {
+                                  _subjectId = v;
+                                  _subjectError = null;
+                                }),
+                              ),
+                              if (_subjectError != null) ...[
+                                const SizedBox(height: 6),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    _subjectError!,
+                                    style: const TextStyle(
+                                      color: AppColors.danger,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 14),
+                              OptionPicker<int>(
+                                label: 'Language',
+                                value: _languageId,
+                                allowClear: false,
+                                clearLabel: 'Choose language',
+                                options: _languages
+                                    .map((l) => (l.id, l.name))
+                                    .toList(),
+                                onChanged: (v) => setState(() {
+                                  _languageId = v;
+                                  _languageError = null;
+                                }),
+                              ),
+                              if (_languageError != null) ...[
+                                const SizedBox(height: 6),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    _languageError!,
+                                    style: const TextStyle(
+                                      color: AppColors.danger,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 14),
+                              OptionPicker<int>(
+                                label: 'Publisher',
+                                value: _publisherId,
+                                clearLabel: 'None',
+                                options: _publishers
+                                    .map((p) => (p.id, p.name))
+                                    .toList(),
+                                onChanged: (v) =>
+                                    setState(() => _publisherId = v),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const _FormSection('Codes'),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _isbnController,
+                          decoration: _field('ISBN'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _barcodeController,
+                          decoration: _field(
+                            'Barcode',
+                            suffixIcon: IconButton(
+                              tooltip: 'Scan',
+                              onPressed: () async {
+                                final code = await context.push<String>(
+                                  '/products/scan?capture=1',
+                                );
+                                if (code != null) {
+                                  _barcodeController.text = code;
+                                }
+                              },
+                              icon: const AppIcon(AppIcons.scan, size: 20),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _editionController,
+                          decoration: _field('Edition'),
+                        ),
+                        const SizedBox(height: 18),
+                        const _FormSection('Pricing & stock'),
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _costController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: _field('Cost (GHS)'),
+                                validator: (v) =>
+                                    Money.parseGhsToPesewas(v ?? '') == null
+                                        ? 'Invalid'
+                                        : null,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _priceController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                decoration: _field('Selling (GHS)'),
+                                validator: (v) =>
+                                    Money.parseGhsToPesewas(v ?? '') == null
+                                        ? 'Invalid'
+                                        : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _reorderController,
+                          keyboardType: TextInputType.number,
+                          decoration: _field('Reorder level'),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border.all(color: AppColors.line),
+                            borderRadius: BorderRadius.circular(r),
+                          ),
+                          child: SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                            ),
+                            title: const Text(
+                              'Active',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            subtitle: const Text(
+                              'Inactive products stay out of new sales',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.mute,
+                              ),
+                            ),
+                            value: _isActive,
+                            activeThumbColor: AppColors.ink,
+                            activeTrackColor: AppColors.lime,
+                            onChanged: (v) => setState(() => _isActive = v),
+                          ),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 14),
+                          Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: AppColors.danger,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _saving ? null : _save,
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(r),
+                            ),
+                          ),
+                          child: Text(
+                            widget.isEditing
+                                ? 'Save changes'
+                                : 'Create product',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
       ),
-      body: _loading
-          ? const LoadingBody()
-          : _error != null && _levels.isEmpty
-          ? ErrorState(message: _error!, onRetry: _load)
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  TextFormField(
-                    controller: _skuController,
-                    decoration: const InputDecoration(
-                      labelText: 'SKU',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Title',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: _levelId,
-                    decoration: const InputDecoration(
-                      labelText: 'Level',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _levels
-                        .map(
-                          (l) => DropdownMenuItem(
-                            value: l.id,
-                            child: Text(l.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _levelId = v),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: _subjectId,
-                    decoration: const InputDecoration(
-                      labelText: 'Subject',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _subjects
-                        .map(
-                          (s) => DropdownMenuItem(
-                            value: s.id,
-                            child: Text(s.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _subjectId = v),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: _languageId,
-                    decoration: const InputDecoration(
-                      labelText: 'Language',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _languages
-                        .map(
-                          (l) => DropdownMenuItem(
-                            value: l.id,
-                            child: Text(l.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _languageId = v),
-                    validator: (v) => v == null ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int?>(
-                    initialValue: _publisherId,
-                    decoration: const InputDecoration(
-                      labelText: 'Publisher (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      const DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text('None'),
-                      ),
-                      ..._publishers.map(
-                        (p) =>
-                            DropdownMenuItem(value: p.id, child: Text(p.name)),
-                      ),
-                    ],
-                    onChanged: (v) => setState(() => _publisherId = v),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _isbnController,
-                    decoration: const InputDecoration(
-                      labelText: 'ISBN',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _barcodeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Barcode',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _editionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Edition',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _costController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Cost price (GHS)',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) => Money.parseGhsToPesewas(v ?? '') == null
-                        ? 'Invalid amount'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _priceController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Selling price (GHS)',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) => Money.parseGhsToPesewas(v ?? '') == null
-                        ? 'Invalid amount'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _reorderController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Reorder level',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Active'),
-                    value: _isActive,
-                    onChanged: (v) => setState(() => _isActive = v),
-                  ),
-                  if (_error != null) ...[
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(widget.isEditing ? 'Save changes' : 'Create'),
-                  ),
-                ],
-              ),
-            ),
+    );
+  }
+}
+
+class _FormSection extends StatelessWidget {
+  const _FormSection(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
+        color: AppColors.mute,
+      ),
     );
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
 import 'package:schoolbook/features/reports/presentation/dashboard_cards.dart';
+import 'package:schoolbook/shared/widgets/app_icons.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -14,97 +16,118 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final _cards = GlobalKey<DashboardCardsState>();
 
-  /// Opens [location] and refreshes the figures when the user comes back.
-  Future<void> _open(String location) async {
-    await context.push(location);
-    _cards.currentState?.reload();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final auth = context.watch<AuthProvider>();
     final name = auth.user?.name ?? 'Owner';
+    final first = name.split(' ').first;
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Schoolbook Supply'),
-        actions: [
-          IconButton(
-            tooltip: 'Sign out',
-            onPressed: auth.isBusy ? null : () => auth.logout(),
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
+      backgroundColor: AppColors.surface,
       body: RefreshIndicator(
+        color: AppColors.ink,
+        backgroundColor: AppColors.lime,
         onRefresh: () async => _cards.currentState?.reload(),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(20, top + 12, 20, bottom + 12),
           children: [
-            Text(
-              'Hello, $name',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w600,
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Schoolbook',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.6,
+                          height: 1,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Hello, $first',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.mute,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _SquareIconButton(
+                  icon: AppIcons.scan,
+                  onTap: () => context.push('/products/scan'),
+                ),
+                const SizedBox(width: 8),
+                _SquareIconButton(
+                  icon: AppIcons.logout,
+                  onTap: auth.isBusy ? null : () => auth.logout(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _NavChip(label: 'Today', active: true, onTap: () {}),
+                  const SizedBox(width: 8),
+                  _NavChip(label: 'Sales', onTap: () => context.go('/sales')),
+                  const SizedBox(width: 8),
+                  _NavChip(
+                    label: 'Schools',
+                    onTap: () => context.go('/customers'),
+                  ),
+                  const SizedBox(width: 8),
+                  _NavChip(label: 'Stock', onTap: () => context.go('/stock')),
+                  const SizedBox(width: 8),
+                  _NavChip(
+                    label: 'Reports',
+                    onTap: () => context.push('/reports'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
             DashboardCards(key: _cards),
-            const SizedBox(height: 16),
-            Text(
-              'Quick actions',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            const SizedBox(height: 18),
+            const Text(
+              'QUICK ACTIONS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+                color: AppColors.mute,
               ),
             ),
-            const SizedBox(height: 16),
-            _ActionTile(
-              icon: Icons.add_shopping_cart,
-              title: 'New sale',
-              subtitle: 'Draft an order and confirm the invoice',
-              onTap: () => _open('/sales/new'),
-            ),
-            _ActionTile(
-              icon: Icons.receipt_long_outlined,
-              title: 'Sales',
-              subtitle: 'Drafts, invoices, balances',
-              onTap: () => _open('/sales'),
-            ),
-            _ActionTile(
-              icon: Icons.school_outlined,
-              title: 'Customers',
-              subtitle: 'Schools, balances, record payments',
-              onTap: () => _open('/customers'),
-            ),
-            _ActionTile(
-              icon: Icons.payments_outlined,
-              title: 'Payments',
-              subtitle: 'Receipts, voids, share PDFs',
-              onTap: () => _open('/payments'),
-            ),
-            _ActionTile(
-              icon: Icons.inventory_2_outlined,
-              title: 'Products',
-              subtitle: 'Browse, search, and edit catalog',
-              onTap: () => _open('/products'),
-            ),
-            _ActionTile(
-              icon: Icons.move_to_inbox_outlined,
+            const SizedBox(height: 10),
+            _QuickCard(
               title: 'Receive stock',
-              subtitle: 'Record incoming goods and costs',
-              onTap: () => _open('/stock/receive'),
+              subtitle: 'Incoming goods and unit cost',
+              icon: AppIcons.receive,
+              lime: true,
+              onTap: () => context.push('/stock/receive'),
             ),
-            _ActionTile(
-              icon: Icons.qr_code_scanner,
-              title: 'Scan',
-              subtitle: 'Look up a product by barcode',
-              onTap: () => _open('/products/scan'),
+            const SizedBox(height: 8),
+            _QuickCard(
+              title: 'Record payment',
+              subtitle: 'Against a school’s invoices',
+              icon: AppIcons.payment,
+              onTap: () => context.push('/customers'),
             ),
-            _ActionTile(
-              icon: Icons.fact_check_outlined,
-              title: 'Stock-take',
-              subtitle: 'Count the shelves; the owner applies it on the web',
-              onTap: () => _open('/stock/counts'),
+            const SizedBox(height: 8),
+            _QuickCard(
+              title: 'Products',
+              subtitle: 'Catalog, approved list, barcodes',
+              icon: AppIcons.products,
+              onTap: () => context.push('/products'),
             ),
           ],
         ),
@@ -113,34 +136,159 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+class _SquareIconButton extends StatelessWidget {
+  const _SquareIconButton({required this.icon, this.onTap});
 
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.wash,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(child: AppIcon(icon, size: 20, color: AppColors.ink)),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavChip extends StatelessWidget {
+  const _NavChip({
+    required this.label,
+    required this.onTap,
+    this.active = false,
+  });
+
+  final String label;
+  final bool active;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
-        minVerticalPadding: 12,
-        leading: Icon(icon, size: 32),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+    return Material(
+      color: active ? AppColors.ink : AppColors.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: active ? AppColors.ink : AppColors.line,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: active ? AppColors.lime : AppColors.ink,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickCard extends StatelessWidget {
+  const _QuickCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+    this.lime = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool lime;
+
+  static const _r = 12.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: lime ? AppColors.limeSoft : AppColors.surface,
+      borderRadius: BorderRadius.circular(_r),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(_r),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: lime ? AppColors.lime : AppColors.line,
+              width: lime ? 1.5 : 1,
+            ),
+            borderRadius: BorderRadius.circular(_r),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: lime ? AppColors.lime : AppColors.wash,
+                  border: Border.all(
+                    color: lime
+                        ? AppColors.ink.withValues(alpha: 0.08)
+                        : AppColors.line,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: AppIcon(icon, color: AppColors.ink, size: 18),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.mute,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const AppIcon(
+                AppIcons.chevronRight,
+                size: 18,
+                color: AppColors.mute,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

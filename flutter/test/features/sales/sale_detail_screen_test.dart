@@ -62,6 +62,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// AppToast auto-dismisses; catch the message while it is still on screen.
+  Future<void> expectToast(WidgetTester tester, Finder message) async {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(message, findsOneWidget);
+    await tester.pumpAndSettle();
+  }
+
   setUp(() {
     sales = FakeSalesRepository();
     sharer = FakePdfSharer();
@@ -71,11 +79,16 @@ void main() {
     await pumpDetail(tester);
     expect(find.text('English Reader P4'), findsOneWidget);
 
-    await confirmFromSheet(tester);
+    await tester.tap(find.byKey(const Key('sale_confirm')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm_submit')));
+    await expectToast(
+      tester,
+      find.text('Invoice INV-2026-000001 issued'),
+    );
 
-    expect(find.text('Invoice INV-2026-000001 issued'), findsOneWidget);
     expect(find.byKey(const Key('sale_confirm')), findsNothing);
-    expect(find.byKey(const Key('sale_void')), findsOneWidget);
+    expect(find.byKey(const Key('sale_more_actions')), findsOneWidget);
   });
 
   testWidgets(
@@ -98,12 +111,14 @@ void main() {
       expect(find.text('Total: GHS 30.00 -> GHS 36.00'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('accept_new_prices')));
-      await tester.pumpAndSettle();
+      await expectToast(
+        tester,
+        find.text('Invoice INV-2026-000001 issued'),
+      );
 
       expect(sales.updateCalls.single, isEmpty);
       expect(sales.confirmCalls, hasLength(2));
       expect(sales.confirmCalls[1].key, isNot(sales.confirmCalls[0].key));
-      expect(find.text('Invoice INV-2026-000001 issued'), findsOneWidget);
     },
   );
 
@@ -129,10 +144,40 @@ void main() {
 
     expect(find.byKey(const Key('insufficient_stock_dialog')), findsOneWidget);
     expect(
-      find.text('ENG-P4 English Reader P4: need 3, have 1'),
+      find.descendant(
+        of: find.byKey(const Key('insufficient_stock_dialog')),
+        matching: find.text('English Reader P4'),
+      ),
       findsOneWidget,
     );
-    expect(find.text('MTH-P4 Maths P4: need 2, have 0'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('insufficient_stock_dialog')),
+        matching: find.text('ENG-P4'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('insufficient_stock_dialog')),
+        matching: find.text('Maths P4'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('insufficient_stock_dialog')),
+        matching: find.text('MTH-P4'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('insufficient_stock_dialog')),
+        matching: find.text('Need'),
+      ),
+      findsNWidgets(2),
+    );
   });
 
   testWidgets('credit warning: "Confirm anyway" retries with the override', (
@@ -149,10 +194,12 @@ void main() {
     );
 
     await tester.tap(find.byKey(const Key('credit_override')));
-    await tester.pumpAndSettle();
+    await expectToast(
+      tester,
+      find.text('Invoice INV-2026-000001 issued'),
+    );
 
     expect(sales.confirmCalls[1].options['override_credit_limit'], isTrue);
-    expect(find.text('Invoice INV-2026-000001 issued'), findsOneWidget);
   });
 
   testWidgets('apply credit toggle appears only when the customer has credit', (
@@ -180,9 +227,13 @@ void main() {
   testWidgets('a lost connection says retrying is safe', (tester) async {
     sales.confirmResults.add(ApiException.network());
     await pumpDetail(tester);
-    await confirmFromSheet(tester);
-
-    expect(find.textContaining('will not be recorded twice'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('sale_confirm')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm_submit')));
+    await expectToast(
+      tester,
+      find.textContaining('will not be recorded twice'),
+    );
   });
 
   testWidgets(
@@ -195,6 +246,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(sharer.shared, ['INV-2026-000003.pdf']);
 
+      await tester.tap(find.byKey(const Key('sale_more_actions')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('sale_void')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('reason_submit')));
@@ -206,8 +259,7 @@ void main() {
         'Wrong school',
       );
       await tester.tap(find.byKey(const Key('reason_submit')));
-      await tester.pumpAndSettle();
-      expect(find.text('Invoice voided'), findsOneWidget);
+      await expectToast(tester, find.text('Invoice voided'));
       expect(find.text('Void'), findsOneWidget);
     },
   );
@@ -238,6 +290,8 @@ void main() {
         ..afterError = testSale(status: 'void', invoiceNo: 'INV-2026-000003');
       await pumpDetail(tester);
 
+      await tester.tap(find.byKey(const Key('sale_more_actions')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('sale_void')));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -245,16 +299,17 @@ void main() {
         'Retry after lost connection',
       );
       await tester.tap(find.byKey(const Key('reason_submit')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('This invoice was already voided.'), findsOneWidget);
+      await expectToast(
+        tester,
+        find.text('This invoice was already voided.'),
+      );
       expect(find.textContaining('Something went wrong'), findsNothing);
       expect(
         find.text('Void'),
         findsOneWidget,
         reason: 'status chip shows the refetched state',
       );
-      expect(find.byKey(const Key('sale_void')), findsNothing);
+      expect(find.byKey(const Key('sale_more_actions')), findsNothing);
     });
 
     testWidgets('cancel after the draft was already cancelled', (tester) async {
@@ -266,9 +321,10 @@ void main() {
       await tester.tap(find.byKey(const Key('sale_cancel')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('reason_submit')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('This draft was already cancelled.'), findsOneWidget);
+      await expectToast(
+        tester,
+        find.text('This draft was already cancelled.'),
+      );
       expect(find.text('Cancelled'), findsOneWidget);
       expect(find.byKey(const Key('sale_confirm')), findsNothing);
     });
@@ -282,14 +338,14 @@ void main() {
         ..afterError = testSale(status: 'void', invoiceNo: 'INV-2026-000004');
       await pumpDetail(tester);
 
+      await tester.tap(find.byKey(const Key('sale_more_actions')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('sale_deliver')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('deliver_confirm')));
-      await tester.pumpAndSettle();
-
-      expect(
+      await expectToast(
+        tester,
         find.text('This invoice was voided, so it cannot be delivered.'),
-        findsOneWidget,
       );
     });
 
@@ -306,12 +362,15 @@ void main() {
         );
         await pumpDetail(tester);
 
+        await tester.tap(find.byKey(const Key('sale_more_actions')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('sale_deliver')));
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('deliver_confirm')));
-        await tester.pumpAndSettle();
-
-        expect(find.textContaining('Something went wrong'), findsOneWidget);
+        await expectToast(
+          tester,
+          find.textContaining('Something went wrong'),
+        );
       },
     );
   });

@@ -189,10 +189,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('opened /reports/owing'), findsOneWidget);
 
-      // Coming back refreshes the figures.
+      // Figures stay cached until pull-to-refresh — no auto-reload on return.
       tester.state<NavigatorState>(find.byType(Navigator).last).pop();
       await tester.pumpAndSettle();
-      expect(reports.dashboardCalls, 2);
+      expect(reports.dashboardCalls, 1);
 
       await tester.tap(find.byKey(const Key('card_low_stock')));
       await tester.pumpAndSettle();
@@ -205,7 +205,8 @@ void main() {
   ) async {
     reports.fail = true;
     await pump(tester, const DashboardCards());
-    expect(find.text('Figures unavailable'), findsOneWidget);
+    expect(find.text('Could not load'), findsOneWidget);
+    expect(find.text('Only the owner account can do this.'), findsOneWidget);
 
     reports.fail = false;
     await tester.tap(find.text('Retry'));
@@ -225,10 +226,7 @@ void main() {
       final beta = tester.getTopLeft(find.byKey(const Key('owing_2')));
       final alpha = tester.getTopLeft(find.byKey(const Key('owing_1')));
       expect(beta.dy < alpha.dy, isTrue);
-      expect(
-        find.text('Overdue GHS 320.00 (over 90 days GHS 120.00)'),
-        findsOneWidget,
-      );
+      expect(find.text('Overdue GHS 320.00'), findsOneWidget);
       expect(find.text('Nothing overdue'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('owing_2')));
@@ -241,8 +239,6 @@ void main() {
     await pump(tester, const SizedBox(), initial: '/low');
 
     expect(find.text('34 left'), findsOneWidget);
-    expect(find.text('Short 6'), findsOneWidget);
-    expect(find.text('-1 left'), findsOneWidget);
-    expect(find.text('Out of stock'), findsOneWidget);
+    expect(find.text('Out'), findsOneWidget);
   });
 }

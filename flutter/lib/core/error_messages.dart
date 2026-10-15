@@ -64,6 +64,8 @@ ErrorDescription describeApiError(ApiException e) {
         'No credit',
         'This customer has no credit to apply.',
       );
+    case 'account_not_found':
+      return ErrorDescription('Account not found', e.message);
     case 'already_customer':
       return ErrorDescription('Already a customer', e.message);
     case 'customer_name_exists':

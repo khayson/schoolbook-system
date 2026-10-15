@@ -98,7 +98,7 @@ void main() {
       );
 
       // A second sync is a 304: nothing downloaded again.
-      await catalog.sync();
+      await catalog.sync(force: true);
       expect(catalog.etag, etag);
       step('2b re-sync: ETag unchanged ($etag), list kept');
 
@@ -107,7 +107,7 @@ void main() {
       await _until(
         tester,
         () async {
-          await catalog.sync();
+          await catalog.sync(force: true);
           return catalog.offline;
         },
         'phone offline (airplane mode)',
@@ -126,7 +126,7 @@ void main() {
         ),
         cache: FileReferenceCacheStore(),
       );
-      await cold.sync();
+      await cold.sync(force: true);
       expect(cold.offline, isTrue);
       expect(cold.books.length, catalog.books.length);
       final offlineHits = cold.search('maths p4');
@@ -150,7 +150,7 @@ void main() {
       await _until(
         tester,
         () async {
-          await catalog.sync();
+          await catalog.sync(force: true);
           return !catalog.offline;
         },
         'server back',

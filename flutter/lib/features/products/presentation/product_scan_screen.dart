@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:schoolbook/core/error_messages.dart';
 import 'package:schoolbook/core/errors.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
 import 'package:schoolbook/features/reference/domain/reference_book.dart';
 import 'package:schoolbook/features/reference/presentation/reference_catalog.dart';
+import 'package:schoolbook/shared/widgets/app_icons.dart';
+import 'package:schoolbook/shared/widgets/app_toast.dart';
 
 /// Scan (or type) a code.
 ///
@@ -101,6 +105,7 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
     final picked = await showModalBottomSheet<Product>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (_) => const _ProductPickerSheet(),
     );
     if (picked == null || !mounted) return;
@@ -111,8 +116,10 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
         productId: picked.id,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Code $code saved on ${product.title}')),
+      AppToast.show(
+        context,
+        'Code $code saved on ${product.title}',
+        type: ToastType.success,
       );
       _done(product);
     } on ApiException catch (e) {
@@ -140,82 +147,174 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
   @override
   Widget build(BuildContext context) {
     final onCode = _lookup;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.captureMode ? 'Scan a code' : 'Scan product'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                widget.scannerBuilder?.call(onCode) ??
-                    MobileScanner(
-                      controller: _camera,
-                      onDetect: (capture) {
-                        final raw = capture.barcodes.isEmpty
-                            ? null
-                            : capture.barcodes.first.rawValue;
-                        if (raw != null) onCode(raw);
-                      },
+    final top = MediaQuery.paddingOf(context).top;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppColors.ink,
+        body: Column(
+          children: [
+            Expanded(
+              flex: 5,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  widget.scannerBuilder?.call(onCode) ??
+                      MobileScanner(
+                        controller: _camera,
+                        onDetect: (capture) {
+                          final raw = capture.barcodes.isEmpty
+                              ? null
+                              : capture.barcodes.first.rawValue;
+                          if (raw != null) onCode(raw);
+                        },
+                      ),
+                  const _ScanFrameOverlay(),
+                  Positioned(
+                    top: top + 8,
+                    left: 12,
+                    right: 12,
+                    child: Row(
+                      children: [
+                        _CircleAction(
+                          icon: AppIcons.back,
+                          onTap: () => Navigator.of(context).maybePop(),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            widget.captureMode ? 'Scan a code' : 'Scan product',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        const SizedBox(width: 44),
+                      ],
                     ),
-                if (_handling)
-                  const ColoredBox(
-                    color: Colors.black38,
-                    child: Center(child: CircularProgressIndicator()),
                   ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (_unknownCode != null)
-                  _unknownPanel(context)
-                else
-                  ..._manualEntry(context),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    key: const Key('scan_error'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                  if (_handling)
+                    ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: AppColors.lime,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              flex: 6,
+              child: Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.line,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (_unknownCode != null)
+                      _unknownPanel(context)
+                    else
+                      ..._manualEntry(context),
+                    if (_error != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        key: const Key('scan_error'),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFE4E6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   List<Widget> _manualEntry(BuildContext context) => [
-    Text(
-      'Or enter SKU / ISBN / barcode',
-      style: Theme.of(context).textTheme.titleSmall,
+    const Text(
+      'Point at a barcode',
+      style: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.w900,
+        letterSpacing: -0.3,
+      ),
     ),
-    const SizedBox(height: 8),
+    const SizedBox(height: 6),
+    const Text(
+      'Or type a SKU, ISBN, or barcode below.',
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: AppColors.mute,
+        height: 1.35,
+      ),
+    ),
+    const SizedBox(height: 18),
     TextField(
       key: const Key('scan_manual'),
       controller: _manualController,
+      textInputAction: TextInputAction.search,
       decoration: const InputDecoration(
-        border: OutlineInputBorder(),
-        hintText: 'Code',
+        hintText: 'Enter code',
+        prefixIcon: Padding(
+          padding: EdgeInsets.only(left: 14, right: 8),
+          child: AppIcon(AppIcons.scan, size: 20),
+        ),
+        prefixIconConstraints: BoxConstraints(minWidth: 44, minHeight: 44),
       ),
       onSubmitted: _lookup,
     ),
-    const SizedBox(height: 12),
+    const SizedBox(height: 14),
     FilledButton(
       key: const Key('scan_lookup'),
       onPressed: _handling ? null : () => _lookup(_manualController.text),
-      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
       child: Text(widget.captureMode ? 'Use this code' : 'Look up'),
     ),
   ];
@@ -223,47 +322,274 @@ class _ProductScanScreenState extends State<ProductScanScreen> {
   Widget _unknownPanel(BuildContext context) {
     final code = _unknownCode!;
     final hint = context.read<ReferenceCatalog>().byIsbn(code);
-    final theme = Theme.of(context);
     return Column(
       key: const Key('scan_unknown'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Unknown code $code', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 4),
-        const Text('Attach it once and the next scan finds the book directly.'),
-        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.lime,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Unknown code',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                code,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.3,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Attach it once and the next scan finds the book directly.',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         if (hint != null) ...[
-          Card(
-            child: ListTile(
-              title: Text(hint.title),
-              subtitle: Text('On the approved list: ${hint.subtitle}'),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.wash,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'On the approved list',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.mute,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  hint.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hint.subtitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.mute,
+                  ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 12),
           FilledButton(
             key: const Key('scan_add_hinted'),
             onPressed: _handling ? null : () => _addFromList(hint),
-            child: const Text('Add as a new product (choose the variant)'),
+            child: const Text('Add as a new product'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
         ],
-        OutlinedButton(
+        _ActionTile(
           key: const Key('scan_attach_product'),
-          onPressed: _handling ? null : _attachToProduct,
-          child: const Text('Attach to one of my products'),
+          icon: AppIcons.products,
+          title: 'Attach to one of my products',
+          subtitle: 'Link this code to a book you already sell',
+          onTap: _handling ? null : _attachToProduct,
         ),
-        const SizedBox(height: 8),
-        OutlinedButton(
+        const SizedBox(height: 10),
+        _ActionTile(
           key: const Key('scan_find_on_list'),
-          onPressed: _handling ? null : () => _addFromList(null),
-          child: const Text('Find it on the approved list'),
+          icon: AppIcons.approvedList,
+          title: 'Find on the approved list',
+          subtitle: 'Create a product from a NaCCA title',
+          onTap: _handling ? null : () => _addFromList(null),
         ),
         const SizedBox(height: 8),
         TextButton(
           key: const Key('scan_again'),
-          onPressed: () => setState(() => _unknownCode = null),
-          child: const Text('Scan another code'),
+          onPressed: () => setState(() {
+            _unknownCode = null;
+            _error = null;
+          }),
+          child: const Text(
+            'Scan another code',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _ScanFrameOverlay extends StatelessWidget {
+  const _ScanFrameOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: CustomPaint(
+        painter: _ScanFramePainter(),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class _ScanFramePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dim = Paint()..color = const Color(0x66000000);
+    final hole = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(size.width / 2, size.height * 0.48),
+        width: size.width * 0.72,
+        height: size.width * 0.72,
+      ),
+      const Radius.circular(28),
+    );
+    final path = Path()
+      ..addRect(Offset.zero & size)
+      ..addRRect(hole)
+      ..fillType = PathFillType.evenOdd;
+    canvas.drawPath(path, dim);
+
+    final stroke = Paint()
+      ..color = AppColors.lime
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5
+      ..strokeCap = StrokeCap.round;
+    const corner = 28.0;
+    final r = hole.outerRect;
+    // Top-left
+    canvas.drawLine(Offset(r.left, r.top + corner), Offset(r.left, r.top), stroke);
+    canvas.drawLine(Offset(r.left, r.top), Offset(r.left + corner, r.top), stroke);
+    // Top-right
+    canvas.drawLine(Offset(r.right - corner, r.top), Offset(r.right, r.top), stroke);
+    canvas.drawLine(Offset(r.right, r.top), Offset(r.right, r.top + corner), stroke);
+    // Bottom-left
+    canvas.drawLine(Offset(r.left, r.bottom - corner), Offset(r.left, r.bottom), stroke);
+    canvas.drawLine(Offset(r.left, r.bottom), Offset(r.left + corner, r.bottom), stroke);
+    // Bottom-right
+    canvas.drawLine(Offset(r.right - corner, r.bottom), Offset(r.right, r.bottom), stroke);
+    canvas.drawLine(Offset(r.right, r.bottom), Offset(r.right, r.bottom - corner), stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CircleAction extends StatelessWidget {
+  const _CircleAction({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(child: AppIcon(icon, size: 20, color: Colors.white)),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.wash,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(child: AppIcon(icon, size: 22)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.mute,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const AppIcon(AppIcons.chevronRight, size: 18, color: AppColors.mute),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -298,37 +624,101 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height * 0.7,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.72,
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
           child: Column(
             children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Attach to a product',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const AppIcon(AppIcons.close),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: TextField(
                   key: const Key('picker_search'),
                   autofocus: true,
                   decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
+                    prefixIcon: Padding(
+                      padding: EdgeInsets.only(left: 14, right: 8),
+                      child: AppIcon(AppIcons.search, size: 20),
+                    ),
+                    prefixIconConstraints:
+                        BoxConstraints(minWidth: 44, minHeight: 44),
                     hintText: 'Search my products',
-                    border: OutlineInputBorder(),
                   ),
                   onChanged: _search,
                 ),
               ),
               if (_error != null)
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               Expanded(
                 child: ListView(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
                   children: [
                     for (final p in _results)
-                      ListTile(
-                        key: Key('picker_product_${p.id}'),
-                        title: Text(p.title),
-                        subtitle: Text(p.sku),
-                        onTap: () => Navigator.of(context).pop(p),
+                      Material(
+                        color: AppColors.surface,
+                        child: ListTile(
+                          key: Key('picker_product_${p.id}'),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: Text(
+                            p.title,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: Text(
+                            p.sku,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.mute,
+                            ),
+                          ),
+                          trailing: const AppIcon(
+                            AppIcons.chevronRight,
+                            size: 18,
+                            color: AppColors.mute,
+                          ),
+                          onTap: () => Navigator.of(context).pop(p),
+                        ),
                       ),
                   ],
                 ),

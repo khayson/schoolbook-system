@@ -3,9 +3,13 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:schoolbook/core/api_client.dart';
 import 'package:schoolbook/core/auth_token_store.dart';
+import 'package:schoolbook/core/config/api_config.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/pdf_sharer.dart';
+import 'package:schoolbook/core/onboarding_store.dart';
+import 'package:schoolbook/core/pending_registration_store.dart';
 import 'package:schoolbook/core/router.dart';
+import 'package:schoolbook/core/server_url_store.dart';
 import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/features/auth/data/auth_repository.dart';
 import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
@@ -35,6 +39,7 @@ class SchoolbookApp extends StatefulWidget {
 
 class _SchoolbookAppState extends State<SchoolbookApp> {
   late final AuthTokenStore _tokenStore;
+  late final ServerUrlStore _serverUrlStore;
   late final ApiClient _apiClient;
   late final AuthProvider _authProvider;
   late final GoRouter _router;
@@ -45,12 +50,15 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
   void initState() {
     super.initState();
     _tokenStore = AuthTokenStore();
+    _serverUrlStore = ServerUrlStore();
     _apiClient = ApiClient(tokenStore: _tokenStore);
     _authProvider = AuthProvider(
       repository: AuthRepository(
         apiClient: _apiClient,
         tokenStore: _tokenStore,
       ),
+      pendingStore: PendingRegistrationStore(),
+      onboardingStore: OnboardingStore(),
     );
     _apiClient.onUnauthorized = _authProvider.handleUnauthorized;
     _router = createAppRouter(_authProvider);
@@ -61,12 +69,21 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
     // Approved list: refreshed whenever a session starts (login or app start with a
     // stored token); 304 when unchanged, so this is cheap.
     _authProvider.addListener(_syncReferenceOnLogin);
+    _applyStoredServerUrl();
     _authProvider.bootstrap();
+  }
+
+  Future<void> _applyStoredServerUrl() async {
+    final override = await _serverUrlStore.read();
+    if (override != null && mounted) {
+      _apiClient.setBaseUrl(override);
+    }
   }
 
   void _syncReferenceOnLogin() {
     final authed = _authProvider.isAuthenticated;
     if (authed && !_wasAuthenticated) {
+      // Titles only — stock counts load when Approved list opens.
       _referenceCatalog.sync();
     }
     _wasAuthenticated = authed;
@@ -88,6 +105,7 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
         ChangeNotifierProvider<AuthProvider>.value(value: _authProvider),
         Provider<ApiClient>.value(value: _apiClient),
         Provider<AuthTokenStore>.value(value: _tokenStore),
+        Provider<ServerUrlStore>.value(value: _serverUrlStore),
         Provider<AuthRepository>(
           create: (context) => AuthRepository(
             apiClient: context.read<ApiClient>(),

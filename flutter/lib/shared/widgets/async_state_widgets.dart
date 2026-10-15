@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 
 class LoadingBody extends StatelessWidget {
   const LoadingBody({super.key, this.message});
@@ -11,10 +12,18 @@ class LoadingBody extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(),
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
           if (message != null) ...[
-            const SizedBox(height: 16),
-            Text(message!, textAlign: TextAlign.center),
+            const SizedBox(height: 14),
+            Text(
+              message!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.mute),
+            ),
           ],
         ],
       ),
@@ -27,38 +36,43 @@ class EmptyState extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
-    this.icon = Icons.inbox_outlined,
+    this.actionLabel,
+    this.onAction,
   });
 
   final String title;
   final String? subtitle;
-  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 56, color: theme.colorScheme.outline),
-            const SizedBox(height: 16),
             Text(
               title,
-              style: theme.textTheme.titleLarge,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+              ),
               textAlign: TextAlign.center,
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 8),
               Text(
                 subtitle!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                style: const TextStyle(fontSize: 13, height: 1.45, color: AppColors.mute),
                 textAlign: TextAlign.center,
               ),
+            ],
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 20),
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],
         ),
@@ -77,24 +91,23 @@ class ErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 56,
-              color: Theme.of(context).colorScheme.error,
+            const Text(
+              'Could not load',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.mute),
+            ),
             if (onRetry != null) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
+              const SizedBox(height: 20),
+              OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
             ],
           ],
         ),

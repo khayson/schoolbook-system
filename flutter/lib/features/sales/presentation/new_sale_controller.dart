@@ -11,8 +11,11 @@ import 'package:schoolbook/features/sales/domain/sale.dart';
 class DraftLine {
   DraftLine({required this.product, required this.quantity});
 
-  final Product product;
+  Product product;
   int quantity;
+
+  /// True when the ordered qty is more than what is currently on hand.
+  bool get isShort => quantity > product.stockOnHand;
 }
 
 /// The new-sale form. Totals always come from `POST /pricing/preview` (debounced); the
@@ -34,6 +37,9 @@ class NewSaleController extends ChangeNotifier {
   Customer? customer;
   final List<DraftLine> lines = [];
 
+  /// When set, [saveDraft] updates this draft instead of creating a new one.
+  int? editingSaleId;
+
   PricedOrder? preview;
   bool previewLoading = false;
   ApiException? previewError;
@@ -44,7 +50,58 @@ class NewSaleController extends ChangeNotifier {
   Timer? _timer;
   int _previewSeq = 0;
 
+  int? _baselineCustomerId;
+  String _baselineNotes = '';
+  List<(int, int)> _baselineItems = const [];
+
+  bool get isEditing => editingSaleId != null;
+
   bool get canSave => customer != null && lines.isNotEmpty && !saving;
+
+  /// True when the form differs from the loaded draft (always true for new sales).
+  bool isDirty({String notes = ''}) {
+    if (!isEditing) return true;
+    if (customer?.id != _baselineCustomerId) return true;
+    if (_normalizeNotes(notes) != _baselineNotes) return true;
+    final current = [
+      for (final l in lines) (l.product.id, l.quantity),
+    ];
+    if (current.length != _baselineItems.length) return true;
+    for (var i = 0; i < current.length; i++) {
+      if (current[i] != _baselineItems[i]) return true;
+    }
+    return false;
+  }
+
+  /// Ready to write — for edits, requires a real change.
+  bool canPersist({String notes = ''}) =>
+      canSave && isDirty(notes: notes);
+
+  /// Hydrate the form from an existing draft (edit flow).
+  void loadExistingDraft({
+    required int saleId,
+    required Customer customer,
+    required List<DraftLine> draftLines,
+    String notes = '',
+  }) {
+    editingSaleId = saleId;
+    this.customer = customer;
+    lines
+      ..clear()
+      ..addAll(draftLines);
+    _captureBaseline(notes: notes);
+    _changed();
+  }
+
+  void _captureBaseline({String notes = ''}) {
+    _baselineCustomerId = customer?.id;
+    _baselineNotes = _normalizeNotes(notes);
+    _baselineItems = [
+      for (final l in lines) (l.product.id, l.quantity),
+    ];
+  }
+
+  static String _normalizeNotes(String notes) => notes.trim();
 
   /// Server price for a product in the current preview, if any.
   SaleLine? previewFor(int productId) {
@@ -100,6 +157,27 @@ class NewSaleController extends ChangeNotifier {
     _changed();
   }
 
+  /// Refresh a line's product (e.g. after adjusting stock) without changing qty.
+  void replaceProduct(Product product) {
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].product.id == product.id) {
+        lines[i] = DraftLine(
+          product: product,
+          quantity: lines[i].quantity,
+        );
+        notifyListeners();
+        return;
+      }
+    }
+  }
+
+  /// Drop every line that is short on stock.
+  void removeShortLines() {
+    final before = lines.length;
+    lines.removeWhere((l) => l.isShort);
+    if (lines.length != before) _changed();
+  }
+
   List<Map<String, dynamic>> get _items => [
     for (final l in lines) {'product_id': l.product.id, 'quantity': l.quantity},
   ];
@@ -150,14 +228,21 @@ class NewSaleController extends ChangeNotifier {
   }
 
   Future<Sale?> saveDraft({String? notes}) async {
-    if (!canSave) {
+    final noteText = notes ?? '';
+    if (!canPersist(notes: noteText)) {
       return null;
     }
     saving = true;
     saveError = null;
     notifyListeners();
     final payload = draftPayload(notes: notes);
+    final editId = editingSaleId;
     try {
+      if (editId != null) {
+        final sale = await _sales.updateDraft(editId, payload);
+        _captureBaseline(notes: noteText);
+        return sale;
+      }
       final key = await _pendingStore.keyFor(intent, payload);
       final sale = await _sales.createDraft(
         idempotencyKey: key,
@@ -166,7 +251,7 @@ class NewSaleController extends ChangeNotifier {
       await _pendingStore.complete(intent);
       return sale;
     } on ApiException catch (e) {
-      if (!e.isOutcomeUnknown) {
+      if (editId == null && !e.isOutcomeUnknown) {
         await _pendingStore.complete(intent);
       }
       saveError = e;

@@ -216,6 +216,12 @@ ADR-style notes when implementation must deviate from `docs/build-spec.md`.
 - `App\Support\BackupGuard` in `AppServiceProvider::boot`: in production, `offsite` in `BACKUP_DISKS` with an empty `BACKUP_ARCHIVE_PASSWORD` throws. This also stops `config:cache` and the scheduler on that server, which is intended: no unencrypted off-site uploads.
 - Off-site provider: **Cloudflare R2** (owner's choice). Storage caps for cleanup and the monitor were cut from 5000 to 2000 MB to stay inside the free allowance. The S3 package is not installed and no bucket is configured yet; that is the next ops step, before real data.
 
+## 2026-10-14 — Production host: AWS Lightsail/EC2 free-trial lean, not “free forever”
+
+Owner has an AWS free trial and wants Filament + Flutter on one URL/DB without overspending.
+
+**Decision:** Document a **single small Lightsail or `t3.micro` EC2** with MySQL on the same box, Cloudflare free for DNS/HTTPS, R2 for off-site backups. No RDS, ALB, or ECS. AWS compute is **not** free forever (typically 12 months EC2 / ~3 months Lightsail trial); after that expect ~$3.50–$5/month or move to Oracle Always Free if $0 forever is required. Guide: `docs/hosting-aws.md`.
+
 ## 2026-10-03 — Phase 3.A.1: approved list (reference catalog) import
 
 Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and mappings are in `docs/reference-catalog.md`.
@@ -333,4 +339,19 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 
 - **Owner:** the directory should list creche, KG, primary and JHS schools only, not SHS. `OsmSchoolMapper::isBasic` skips schools whose only level is SHS and, when no basic level is known, names that say college, university, polytechnic, institute, nursing, seminary or vocational; any basic level or an unknown level keeps the school. The import reports them as "SHS/tertiary (skipped)" and withdraws any loaded earlier.
 - **Fixed with it:** "Junior Secondary School" (the old name for JHS) was tagged SHS by the "secondary school" word; and "Snr.High", "International High School" and plain "... High School" were not tagged SHS. Real files (2026-10-06): Greater Accra 909 kept / 117 skipped, Central 275 / 89; every skipped name was checked by eye.
+
+## 2026-10-14 — List swipe / long-press (Flutter UX, not in build-spec)
+
+**Context:** Owner asked for swipe left/right actions and long-press multi-select on lists. Spec does not define list gestures.
+
+**Decision:** No multi-select. Swipe reveals safe shortcuts; long-press opens an action sheet (same shortcuts + Open). Destructive work stays behind a confirm sheet, never as a silent swipe.
+
+| List | Swipe right | Swipe left | Long-press also |
+| --- | --- | --- | --- |
+| Sales (draft) | Edit | Cancel | Open |
+| Sales (confirmed, owes) | — | Pay | Open, Mark delivered |
+| Schools | New sale | Pay | Open, Edit |
+| Payments (valid) | Share | — | Open, Void |
+
+Void invoice stays off swipe (detail / ⋮ only).
 

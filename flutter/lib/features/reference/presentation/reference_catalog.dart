@@ -67,11 +67,22 @@ class ReferenceCatalog extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Stored copy, then the server: the list only when its ETag changed (304
-  /// otherwise), the stock always. Offline keeps the stored copy and says so.
-  Future<void> sync() async {
+  static const _freshFor = Duration(minutes: 30);
+
+  bool get _isFresh =>
+      syncedAt != null && _clock().difference(syncedAt!) < _freshFor;
+
+  /// Snapshot of the approved list. Stock counts are optional — they paginate
+  /// `/reference-books` and should only run when the approved-list UI opens.
+  Future<void> sync({bool includeStock = false, bool force = false}) async {
     if (syncing) return;
     await load();
+    if (!force && _isFresh && _books.isNotEmpty && !includeStock) {
+      return;
+    }
+    if (!force && _isFresh && includeStock && _stock.isNotEmpty) {
+      return;
+    }
     syncing = true;
     error = null;
     notifyListeners();
@@ -79,20 +90,27 @@ class ReferenceCatalog extends ChangeNotifier {
       final snapshot = await _repository.fetchSnapshot(
         etag: _books.isEmpty ? null : _etag,
       );
-      final stock = await _repository.fetchStockedTitles();
       final stored = _stored();
-      if (!snapshot.notModified) {
+      if (!snapshot.notModified && snapshot.data != null) {
         stored
           ..['etag'] = snapshot.etag
           ..['edition'] = snapshot.data!['edition']
           ..['books'] = snapshot.data!['books'];
       }
-      stored
-        ..['stock'] = {
+      if (includeStock) {
+        final stock = await _repository.fetchStockedTitles();
+        stored['stock'] = {
           for (final e in stock.entries)
             '${e.key}': [e.value.productsCount, e.value.stockOnHand],
-        }
-        ..['synced_at'] = _clock().toIso8601String();
+        };
+      } else {
+        // Keep existing stock map when we only refresh titles.
+        stored['stock'] = {
+          for (final e in _stock.entries)
+            '${e.key}': [e.value.productsCount, e.value.stockOnHand],
+        };
+      }
+      stored['synced_at'] = _clock().toIso8601String();
       _apply(stored);
       await _cache.write(jsonEncode(stored));
       offline = false;

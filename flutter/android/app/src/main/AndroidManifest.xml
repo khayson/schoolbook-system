@@ -1,8 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cleartext allowed while hosting on a bare HTTP IP (no domain/HTTPS yet).
+         Turn this off (or remove) once APP_URL is https://… -->
     <application
         android:label="schoolbook"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

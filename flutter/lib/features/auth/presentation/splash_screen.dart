@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:schoolbook/core/theme/app_theme.dart';
 
+/// Bootstrap screen while [AuthStatus.unknown].
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -9,102 +11,92 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnim;
-  late Animation<double> _fadeAnim;
+  late final AnimationController _fade;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _fade = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _scaleAnim = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.elasticOut,
-    );
-    _fadeAnim = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
-    _controller.forward();
+      duration: const Duration(milliseconds: 400),
+    )..forward();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fade.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B6E4F),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ScaleTransition(
-              scale: _scaleAnim,
-              child: FadeTransition(
-                opacity: _fadeAnim,
-                child: SizedBox(
-                  width: 140,
-                  height: 140,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fade,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Spacer(flex: 3),
+                Center(
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AppColors.lime,
+                      border: Border.all(
+                        color: AppColors.ink.withValues(alpha: 0.08),
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'S',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.ink,
                         ),
                       ),
-                      Container(
-                        width: 96,
-                        height: 96,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const Icon(
-                        Icons.menu_book_rounded,
-                        size: 48,
-                        color: Colors.white,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Schoolbook\nSupply',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    height: 1.05,
+                    letterSpacing: -0.8,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'For bulk schoolbook sales in Ghana.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.mute,
+                  ),
+                ),
+                const Spacer(flex: 4),
+                const LinearProgressIndicator(
+                  minHeight: 3,
+                  backgroundColor: AppColors.line,
+                  color: AppColors.lime,
+                ),
+                const SizedBox(height: 28),
+              ],
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'Schoolbook Supply',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'School supplies, simplified.',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 48),
-            const CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2,
-            ),
-          ],
+          ),
         ),
       ),
     );
