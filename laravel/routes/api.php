@@ -33,6 +33,7 @@ Route::prefix('v1')->group(function () {
 
     Route::post('auth/register', [RegisterController::class, 'store'])->middleware('throttle:5,1');
     Route::post('auth/forgot-password', [ForgotPasswordController::class, 'store'])->middleware('throttle:3,1');
+    Route::post('auth/verify-setup-pin', [AuthController::class, 'verifySetupPin'])->middleware('throttle:10,1');
     Route::get('auth/status', [AuthController::class, 'status'])->middleware('throttle:10,1');
 
     Route::middleware(['auth:sanctum', 'owner'])->group(function () {

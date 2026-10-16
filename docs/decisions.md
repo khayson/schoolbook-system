@@ -355,3 +355,20 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 
 Void invoice stays off swipe (detail / ⋮ only).
 
+## 2026-10-15 — Multi-shop: one APK, one Filament per server (no control plane yet)
+
+**Context:** Owner wants Filament to manage users, share the APK, and switch between client servers / assign users to servers.
+
+**Decision (v1 go-live):**
+- Each Lightsail (or other VPS) is **one shop**: one MySQL, one Filament, one API host.
+- Filament **Users** manages staff on **that** server (active owners can use phone + admin).
+- Filament **Mobile app** holds the release APK for download/share.
+- Phones still pick the host via the hidden More → Host drawer (setup PIN). Cashiers are not assigned a server from a central hub.
+- A future **control plane** (registry of servers, user↔server binding, admin switcher) is deferred until more than one live client shop needs it. Log here again when that starts.
+
+## 2026-10-16 — Host setup PIN resettable from Filament
+
+**Context:** Compile-time `DEV_SERVER_PIN` cannot be changed without rebuilding the APK.
+
+**Decision:** Filament **Mobile app** can set/clear a hashed `mobile_host_setup_pin_hash`. Phones call `POST /api/v1/auth/verify-setup-pin` against the current API host; if the server has no PIN, the APK’s baked PIN still works. Owner can reset the host PIN without a new build.
+

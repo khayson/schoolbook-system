@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Users\SetHostSetupPin;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
@@ -53,6 +54,33 @@ class AuthController extends Controller
     public function me(Request $request): UserResource
     {
         return new UserResource($request->user());
+    }
+
+    /**
+     * Unlock the phone Host drawer. Public + throttled.
+     * When no PIN is set in Filament, clients fall back to the APK's compile-time PIN.
+     */
+    public function verifySetupPin(Request $request, SetHostSetupPin $pins): JsonResponse
+    {
+        $validated = $request->validate([
+            'pin' => ['required', 'string', 'max:128'],
+        ]);
+
+        if (! $pins->isConfigured()) {
+            return response()->json([
+                'valid' => false,
+                'code' => 'pin_not_configured',
+                'message' => 'No host setup PIN is set on this server yet.',
+            ]);
+        }
+
+        $ok = $pins->verify($validated['pin']);
+
+        return response()->json([
+            'valid' => $ok,
+            'code' => $ok ? 'ok' : 'invalid_pin',
+            'message' => $ok ? 'PIN accepted.' : 'Wrong PIN.',
+        ], $ok ? 200 : 422);
     }
 
     public function status(Request $request): JsonResponse

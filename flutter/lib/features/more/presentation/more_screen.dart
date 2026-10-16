@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -52,36 +53,51 @@ class _MoreScreenState extends State<MoreScreen> {
       body: ListView(
         padding: EdgeInsets.fromLTRB(20, top + 12, 20, bottom + 12),
         children: [
+          // Large hit target — long-press or 7 quick taps (emulator-friendly).
           GestureDetector(
             key: const Key('more_title'),
+            behavior: HitTestBehavior.opaque,
             onTap: _onTitleTap,
             onLongPress: () => _openHiddenServerSetup(context),
-            child: const Text(
-              'More',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.6,
-                height: 1,
-                color: AppColors.ink,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'More',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.6,
+                      height: 1,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Catalog, stock, money, and account',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.mute,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Catalog, stock, money, and account',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.mute,
-            ),
-          ),
           const SizedBox(height: 22),
-          _ProfileCard(
-            initials: initials,
-            name: displayName,
-            email: email,
-            role: auth.user?.role ?? 'owner',
+          GestureDetector(
+            key: const Key('more_profile_secret'),
+            behavior: HitTestBehavior.opaque,
+            onLongPress: () => _openHiddenServerSetup(context),
+            child: _ProfileCard(
+              initials: initials,
+              name: displayName,
+              email: email,
+              role: auth.user?.role ?? 'owner',
+            ),
           ),
           const SizedBox(height: 28),
           const _SectionTitle('Catalog'),
@@ -400,6 +416,7 @@ Future<void> _openHiddenServerSetup(BuildContext context) async {
 
   await showAppDrawer<void>(
     context: context,
+    useRootNavigator: true,
     builder: (context) => const AppDrawerScaffold(
       child: _ServerSetupDrawer(),
     ),
@@ -407,59 +424,138 @@ Future<void> _openHiddenServerSetup(BuildContext context) async {
 }
 
 Future<bool?> _promptSetupPin(BuildContext context) {
-  const r = 12.0;
-  final pin = TextEditingController();
   return showAppDrawer<bool>(
     context: context,
-    builder: (context) => AppDrawerScaffold(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Continue',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            key: const Key('dev_server_pin'),
-            controller: pin,
-            obscureText: true,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: 'Code',
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(r),
-                borderSide: const BorderSide(color: AppColors.line),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(r),
-                borderSide: const BorderSide(color: AppColors.ink, width: 1.5),
-              ),
-            ),
-            onSubmitted: (_) => Navigator.pop(
-              context,
-              pin.text == ApiConfig.serverToolsPin,
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            key: const Key('dev_server_pin_submit'),
-            style: FilledButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(r),
-              ),
-            ),
-            onPressed: () => Navigator.pop(
-              context,
-              pin.text == ApiConfig.serverToolsPin,
-            ),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+    builder: (context) => const AppDrawerScaffold(
+      child: _SetupPinDrawer(),
     ),
-  ).whenComplete(pin.dispose);
+  );
+}
+
+class _SetupPinDrawer extends StatefulWidget {
+  const _SetupPinDrawer();
+
+  @override
+  State<_SetupPinDrawer> createState() => _SetupPinDrawerState();
+}
+
+class _SetupPinDrawerState extends State<_SetupPinDrawer> {
+  final _pin = TextEditingController();
+  var _obscure = true;
+  var _busy = false;
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ok = await _verifyHostSetupPin(context, _pin.text);
+    if (!mounted) return;
+    Navigator.pop(context, ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const r = 12.0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Host setup',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Enter the host PIN from Filament → Mobile app (or the APK PIN if none is set on the server).',
+          style: TextStyle(fontSize: 13, color: AppColors.mute, height: 1.35),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          key: const Key('dev_server_pin'),
+          controller: _pin,
+          obscureText: _obscure,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'Host PIN',
+            suffixIcon: IconButton(
+              tooltip: _obscure ? 'Show PIN' : 'Hide PIN',
+              onPressed: () => setState(() => _obscure = !_obscure),
+              icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(r),
+              borderSide: const BorderSide(color: AppColors.line),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(r),
+              borderSide: const BorderSide(color: AppColors.ink, width: 1.5),
+            ),
+          ),
+          onSubmitted: (_) => _submit(),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          key: const Key('dev_server_pin_submit'),
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(r),
+            ),
+          ),
+          onPressed: _busy ? null : _submit,
+          child: Text(_busy ? 'Checking…' : 'OK'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Prefer the PIN set on the current API host; fall back to the APK's compile-time PIN.
+Future<bool> _verifyHostSetupPin(BuildContext context, String pin) async {
+  final trimmed = pin.trim();
+  if (trimmed.isEmpty) return false;
+
+  final baseUrl = context.read<ApiClient>().baseUrl;
+  try {
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+    final res = await dio.post<Map<String, dynamic>>(
+      '/auth/verify-setup-pin',
+      data: {'pin': trimmed},
+    );
+    final data = res.data;
+    if (data != null && data['valid'] == true) return true;
+    if (data != null && data['code'] == 'pin_not_configured') {
+      return ApiConfig.serverToolsPinConfigured &&
+          trimmed == ApiConfig.serverToolsPin;
+    }
+  } on DioException catch (e) {
+    final data = e.response?.data;
+    if (data is Map && data['code'] == 'pin_not_configured') {
+      return ApiConfig.serverToolsPinConfigured &&
+          trimmed == ApiConfig.serverToolsPin;
+    }
+    // Offline / wrong host: still allow the baked APK PIN.
+    if (e.response == null) {
+      return ApiConfig.serverToolsPinConfigured &&
+          trimmed == ApiConfig.serverToolsPin;
+    }
+  }
+
+  return false;
 }
 
 class _ServerSetupDrawer extends StatefulWidget {

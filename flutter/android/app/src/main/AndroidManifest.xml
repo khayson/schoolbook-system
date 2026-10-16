@@ -2,7 +2,7 @@
     <!-- Cleartext allowed while hosting on a bare HTTP IP (no domain/HTTPS yet).
          Turn this off (or remove) once APP_URL is https://… -->
     <application
-        android:label="schoolbook"
+        android:label="Schoolbook"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
