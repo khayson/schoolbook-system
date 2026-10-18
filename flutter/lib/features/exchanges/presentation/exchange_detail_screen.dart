@@ -12,8 +12,10 @@ import 'package:schoolbook/features/exchanges/presentation/exchange_actions_cont
 import 'package:schoolbook/shared/widgets/app_chrome.dart';
 import 'package:schoolbook/shared/widgets/app_toast.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
+import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/shared/widgets/insufficient_stock_drawer.dart';
 import 'package:schoolbook/shared/widgets/loading_overlay.dart';
+import 'package:schoolbook/shared/widgets/set_book_prices_drawer.dart';
 
 class ExchangeDetailScreen extends StatefulWidget {
   const ExchangeDetailScreen({super.key, required this.exchangeId});
@@ -92,9 +94,14 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
       if (chosen == null || !mounted) return;
     }
 
+    final priced = await _ensureBookPrices(exchange, settlement: chosen);
+    if (!priced || !mounted) return;
+    final ready = _exchange;
+    if (ready == null || !ready.isDraft) return;
+
     setState(() => _busy = true);
     final outcome = await _actions.confirm(
-      exchange,
+      ready,
       settlement: chosen,
       overrideCreditLimit: overrideCreditLimit,
     );
@@ -187,6 +194,65 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
         }
       case ExchangeConfirmFailed(:final error):
         setState(() => _error = describeApiError(error).body);
+    }
+  }
+
+  /// Opens the price drawer when Taken/out lines still lack cost/selling, writes
+  /// them onto the products and the draft, then returns whether confirm may continue.
+  Future<bool> _ensureBookPrices(
+    StockExchange exchange, {
+    required ExchangeSettlement settlement,
+  }) async {
+    final needing = booksNeedingPrices(exchange.items);
+    if (needing.isEmpty) return true;
+
+    final ok = await showSetBookPricesDrawer(context, books: needing);
+    if (ok != true || !mounted) return false;
+
+    setState(() => _busy = true);
+    try {
+      final products = context.read<ProductsRepository>();
+      final exchanges = context.read<ExchangesRepository>();
+      final prices = <int, ({int cost, int selling})>{};
+      for (final book in needing) {
+        final product = await products.getProduct(book.productId);
+        prices[book.productId] = (
+          cost: product.costPrice,
+          selling: product.sellingPrice,
+        );
+      }
+
+      final updated = await exchanges.updateDraft(exchange.id, {
+        'customer_id': exchange.customerId,
+        'counterparty_name': exchange.counterpartyName,
+        'settlement': settlement.apiValue,
+        'notes': exchange.notes,
+        'items': exchange.items
+            .map((item) {
+              final p = prices[item.productId];
+              return {
+                'direction': item.direction.apiValue,
+                'product_id': item.productId,
+                'quantity': item.quantity,
+                'unit_price': item.direction == ExchangeDirection.out
+                    ? (item.unitPrice ?? p?.selling ?? 0)
+                    : null,
+                'unit_cost': item.direction == ExchangeDirection.inn
+                    ? (item.unitCost ?? p?.cost ?? 0)
+                    : null,
+              };
+            })
+            .toList(),
+      });
+      if (mounted) setState(() => _exchange = updated);
+      return true;
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _error = describeApiError(e).body);
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 

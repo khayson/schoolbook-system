@@ -440,6 +440,23 @@ class FakeProductsRepository extends ProductsRepository {
           : (throw StateError('No fake product $id')),
     );
   }
+
+  @override
+  Future<Product> updateProduct(int id, Map<String, dynamic> payload) async {
+    final current = await getProduct(id);
+    final next = Product.fromJson({
+      ...current.toCacheJson(),
+      ...payload,
+      'id': id,
+    });
+    final index = products.indexWhere((p) => p.id == id);
+    if (index >= 0) {
+      products[index] = next;
+    } else {
+      products.add(next);
+    }
+    return next;
+  }
 }
 
 class FakeLookupsRepository extends LookupsRepository {
