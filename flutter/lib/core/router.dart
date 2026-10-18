@@ -27,6 +27,9 @@ import 'package:schoolbook/features/reports/presentation/reports_hub_screen.dart
 import 'package:schoolbook/features/sales/presentation/new_sale_screen.dart';
 import 'package:schoolbook/features/sales/presentation/sale_detail_screen.dart';
 import 'package:schoolbook/features/sales/presentation/sales_list_screen.dart';
+import 'package:schoolbook/features/exchanges/presentation/exchange_detail_screen.dart';
+import 'package:schoolbook/features/exchanges/presentation/exchange_form_screen.dart';
+import 'package:schoolbook/features/exchanges/presentation/exchanges_list_screen.dart';
 import 'package:schoolbook/features/stock/presentation/adjust_stock_screen.dart';
 import 'package:schoolbook/features/stock/presentation/goods_receipts_screen.dart';
 import 'package:schoolbook/features/stock/presentation/receive_stock_screen.dart';
@@ -155,6 +158,30 @@ GoRouter createAppRouter(AuthProvider authProvider) {
                 ],
               ),
               GoRoute(
+                path: 'exchanges',
+                builder: (context, state) => const ExchangesListScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'new',
+                    builder: (context, state) => const ExchangeFormScreen(),
+                  ),
+                  GoRoute(
+                    path: ':id/edit',
+                    builder: (context, state) => ExchangeFormScreen(
+                      editingExchangeId: int.parse(
+                        state.pathParameters['id']!,
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) => ExchangeDetailScreen(
+                      exchangeId: int.parse(state.pathParameters['id']!),
+                    ),
+                  ),
+                ],
+              ),
+              GoRoute(
                 path: 'counts',
                 builder: (context, state) => const StockCountsScreen(),
                 routes: [
@@ -208,7 +235,13 @@ GoRouter createAppRouter(AuthProvider authProvider) {
             routes: [
               GoRoute(
                 path: 'new',
-                builder: (context, state) => const ProductFormScreen(),
+                builder: (context, state) {
+                  final q = state.uri.queryParameters;
+                  return ProductFormScreen(
+                    initialTitle: q['title'],
+                    returnProduct: q['return'] == '1',
+                  );
+                },
               ),
               GoRoute(
                 path: 'scan',

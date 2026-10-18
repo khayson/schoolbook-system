@@ -16,9 +16,21 @@ import 'package:schoolbook/shared/widgets/loading_overlay.dart';
 import 'package:schoolbook/shared/widgets/option_picker.dart';
 
 class ProductFormScreen extends StatefulWidget {
-  const ProductFormScreen({super.key, this.productId});
+  const ProductFormScreen({
+    super.key,
+    this.productId,
+    this.initialTitle,
+    this.returnProduct = false,
+  });
 
   final int? productId;
+
+  /// Prefill when opened from search (exchange / receive) with a typed title.
+  final String? initialTitle;
+
+  /// When true (or when this screen was pushed), Save pops with the [Product]
+  /// instead of navigating to the product page — so the caller can keep going.
+  final bool returnProduct;
 
   bool get isEditing => productId != null;
 
@@ -57,6 +69,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   @override
   void initState() {
     super.initState();
+    final seed = widget.initialTitle?.trim();
+    if (seed != null && seed.isNotEmpty) {
+      _titleController.text = seed;
+    }
     _load();
   }
 
@@ -138,8 +154,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
     final reorder = int.tryParse(_reorderController.text.trim()) ?? 0;
 
-    final payload = {
-      'sku': _skuController.text.trim(),
+    final sku = _skuController.text.trim();
+    final payload = <String, dynamic>{
       'title': _titleController.text.trim(),
       'isbn': _emptyToNull(_isbnController.text),
       'barcode': _emptyToNull(_barcodeController.text),
@@ -153,6 +169,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       'reorder_level': reorder,
       'is_active': _isActive,
     };
+    // Blank SKU on create → server assigns BK-######.
+    if (sku.isNotEmpty || widget.isEditing) {
+      payload['sku'] = sku;
+    }
 
     setState(() {
       _saving = true;
@@ -173,7 +193,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         widget.isEditing ? 'Product updated.' : 'Product created.',
         type: ToastType.success,
       );
-      context.go('/products/${saved.id}');
+      // Mid-flow callers (exchange / receive) set returnProduct so Save
+      // hands the product back without leaving their draft.
+      if (widget.returnProduct && context.canPop()) {
+        context.pop(saved);
+      } else {
+        context.go('/products/${saved.id}');
+      }
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;
@@ -257,7 +283,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                 child: Text(
                                   widget.isEditing
                                       ? 'Change prices, codes, or classification. Stock still moves through receive / adjust.'
-                                      : 'Manual catalog entry. Prefer the approved list when the title is on NaCCA.',
+                                      : widget.returnProduct
+                                          ? 'Fill the essentials, Save, and you return to where you were — stock comes from that flow.'
+                                          : 'Manual catalog entry. Prefer the approved list when the title is on NaCCA.',
                                   style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -273,9 +301,22 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         const SizedBox(height: 10),
                         TextFormField(
                           controller: _skuController,
-                          decoration: _field('SKU'),
-                          validator: (v) =>
-                              v == null || v.trim().isEmpty ? 'Required' : null,
+                          decoration: _field(
+                            widget.isEditing ? 'SKU' : 'SKU (optional)',
+                            suffixIcon: widget.isEditing
+                                ? null
+                                : const Tooltip(
+                                    message: 'Leave blank to auto-assign',
+                                    child: Icon(Icons.info_outline, size: 18),
+                                  ),
+                          ),
+                          validator: (v) {
+                            if (widget.isEditing &&
+                                (v == null || v.trim().isEmpty)) {
+                              return 'Required';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 12),
                         TextFormField(

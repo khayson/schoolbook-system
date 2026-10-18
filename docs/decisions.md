@@ -409,3 +409,24 @@ Void invoice stays off swipe (detail / ⋮ only).
 
 **Out of v1:** offline goods receipts/adjustments; editing drafts offline; school portal; iOS.
 
+## 2026-10-18 — Stock exchange (dealer Taken / not-Taken)
+
+**Context:** Dealers bring handwritten “Taken” lists (books received) and other lines (books they took). Need stock in, an invoice for credit/installments, Filament + Flutter — without inventing a new payment ledger.
+
+**Decisions:**
+- **Taken = `in`** → `ReceiveStock` goods receipt (optional line `unit_cost`, else product cost). No supplier payable in v1.
+- **Not Taken = `out`** → `CreateDraftSale` + `ConfirmSale` against a required `customer_id`. Credit limit, installments, and payments reuse the existing sale flows.
+- Umbrella `stock_exchanges` / `stock_exchange_items` with `EXC-YYYY-######` (sequence `exc`) on confirm; morph alias `stock_exchange`. Only-in or only-out allowed.
+- Void refuses if the linked sale is paid or delivered; otherwise voids the sale and reverses GRN stock via `AdjustStock`. Cancel deletes drafts.
+- Flutter feature is online-only in v1 (no offline queue for exchanges).
+
+## 2026-10-18 — Book exchange process (who · qty · settlement)
+
+**Context:** Owner’s real flow is: name the people, list each book each side took with **how many**, set prices, then choose cash and carry / installment / pay later. First UI spoke in stock jargon and hid quantity/settlement.
+
+**Decisions:**
+- Product language: **dealer** (`customer_id`) + **other person** (`counterparty_name`); lines show **Taken** vs **they took**, with required **quantity** and optional `unit_price` (out) / `unit_cost` (in).
+- **`settlement`**: `cash` | `installment` | `pay_later` on the exchange; required at confirm. Cash → due today and UI steers to record payment; installment / pay later → open sale for balances. No separate payment engine.
+- Still one dealer account + one named other person in v1 (not N independent peer accounts on one document).
+- Person may be **school, reseller, or individual** (existing `CustomerType`). Filament/Flutter exchange UIs create a new person **inline** (name + type + region + optional phone) so staff never leave the exchange to save someone first. Paper/list name stays editable separately.
+

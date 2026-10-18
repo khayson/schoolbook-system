@@ -49,6 +49,9 @@ class MainShell extends StatelessWidget {
     if (loc == '/stock/adjust') return false;
     if (loc.startsWith('/stock/counts')) return false;
     if (RegExp(r'^/stock/receipts/\d+$').hasMatch(loc)) return false;
+    // Exchange draft / edit — leaving via the dock would wipe the form.
+    if (loc == '/stock/exchanges/new') return false;
+    if (RegExp(r'^/stock/exchanges/\d+/edit$').hasMatch(loc)) return false;
     // Report detail lists — dock covers the last rows.
     if (RegExp(r'^/reports/.+').hasMatch(loc)) return false;
     if (loc.startsWith('/products/scan')) return false;

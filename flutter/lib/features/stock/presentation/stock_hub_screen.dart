@@ -86,6 +86,13 @@ class StockHubScreen extends StatelessWidget {
             subtitle: 'Past receipts',
             onTap: () => context.push('/stock/receipts'),
           ),
+          const SizedBox(height: 8),
+          _NavCard(
+            icon: AppIcons.stock,
+            title: 'Book exchanges',
+            subtitle: 'Who took what, qty, cash / installment / pay later',
+            onTap: () => context.push('/stock/exchanges'),
+          ),
           const SizedBox(height: 22),
           const _SectionLabel('Count'),
           const SizedBox(height: 10),

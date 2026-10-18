@@ -363,6 +363,44 @@ Owner. Confirmed sales only (including delivered). Draft → confirm → void.
 
 `GET/POST/PUT/DELETE /suppliers`. `POST /purchase-orders` (Idempotency-Key) · `PUT` (draft) · `POST …/place` · `POST …/cancel` · `POST …/receive` (Idempotency-Key) with `{ "received_at", "items": [{ "purchase_order_item_id", "quantity" }] }` — creates a goods receipt linked to the PO.
 
+## Book exchanges (who · books & qty · settlement)
+
+Owner. Process: **(1) who** — dealer account + other person’s name; **(2) books** — each line is Taken (`in`) or they took (`out`), with **quantity** (copies) and optional price; **(3) settlement** — `cash` | `installment` | `pay_later` for the invoice side. Confirm creates GRN for Taken and/or a sale for they-took; money is collected on the linked sale (record payment / installments). Online only; Taken does not create supplier payables in v1.
+
+### `POST /stock/exchanges` (requires `Idempotency-Key`)
+
+```json
+{
+  "customer_id": 3,
+  "supplier_id": null,
+  "counterparty_name": "Kojo Dealer",
+  "settlement": "installment",
+  "notes": "Saturday market",
+  "items": [
+    { "direction": "in", "product_id": 10, "quantity": 4, "unit_cost": 1100 },
+    { "direction": "out", "product_id": 12, "quantity": 2, "unit_price": 3000 }
+  ]
+}
+```
+
+`customer_id` = dealer account (invoice for out lines). `counterparty_name` = other person. `quantity` = copies of that book on that side. `unit_price` optional on out (override); `unit_cost` optional on in. `settlement` optional on draft, **required to confirm**.
+
+### `GET /stock/exchanges` · `GET /stock/exchanges/{id}` · `PUT /stock/exchanges/{id}`
+
+List filters: `customer_id`, `status` (`draft|confirmed|void`). `PUT` edits drafts only.
+
+### `POST /stock/exchanges/{id}/confirm` (requires `Idempotency-Key`)
+
+Body may include `{ "settlement", "due_date", "override_credit_limit", "apply_credit" }`. Settlement must be set on the draft or in this body. Cash sets due date to today; installment/pay later use payment terms unless `due_date` given. Allocates `EXC-YYYY-######`, creates sale and/or GRN. Errors: `409 credit_limit_exceeded`, `422 insufficient_stock`, `409 stock_exchange_not_draft`, `422 validation_failed` (missing settlement).
+
+### `POST /stock/exchanges/{id}/cancel`
+
+Draft only → deletes the draft (`204`).
+
+### `POST /stock/exchanges/{id}/void`
+
+`{ "reason": "…" }` required. Confirmed only. Refuses if linked sale has payments or is delivered. Otherwise voids the sale and reverses GRN stock via adjustments.
+
 ## Reports
 
 Owner only (403 otherwise). Money in pesewas; dates `YYYY-MM-DD` in Africa/Accra; periods inclusive (`from`..`to`, at most 731 days; daily grouping at most 367). Definitions: `docs/build-spec.md` section 14; worked example with hand-calculated figures: `docs/acceptance-phase3.md`. Every response is `{"data": {...}}`. Optional `?format=json|csv|pdf` (default json); CSV/PDF via `ReportExporter` (no Excel package in v1).

@@ -14,6 +14,7 @@ use App\Models\ReferenceBook;
 use App\Models\ReferenceEdition;
 use App\Models\Sale;
 use App\Models\SaleReturn;
+use App\Models\StockExchange;
 use App\Models\User;
 use App\Support\BackupGuard;
 use Illuminate\Console\Events\CommandStarting;
@@ -64,6 +65,7 @@ class AppServiceProvider extends ServiceProvider
             'sale_return' => SaleReturn::class,
             'purchase_order' => PurchaseOrder::class,
             'price_rule' => PriceRule::class,
+            'stock_exchange' => StockExchange::class,
         ]);
     }
 }

@@ -189,6 +189,17 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
     }
   }
 
+  Future<void> _addManualProduct() async {
+    final title = _searchController.text.trim();
+    final path = title.isEmpty
+        ? '/products/new?return=1'
+        : '/products/new?return=1&title=${Uri.encodeQueryComponent(title)}';
+    final product = await context.push<Product>(path);
+    if (product != null && mounted) {
+      _addLine(product);
+    }
+  }
+
   void _addLine(Product product) {
     if (_lines.any((l) => l.product.id == product.id)) {
       AppToast.show(
@@ -420,15 +431,40 @@ class _ReceiveStockScreenState extends State<ReceiveStockScreen> {
                         border: Border.all(color: AppColors.line),
                         borderRadius: BorderRadius.circular(_r),
                       ),
-                      child: Text(
-                        'Nothing matched “${_searchController.text.trim()}”. '
-                        'Try another title or SKU.',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          height: 1.35,
-                          color: AppColors.mute,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nothing matched “${_searchController.text.trim()}”.',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Not in your library and not on the approved list. '
+                            'Add it here — you come straight back to this receipt.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.mute,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            key: const Key('receive_add_missing_book'),
+                            onPressed: _addManualProduct,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: Text(
+                              _searchController.text.trim().isEmpty
+                                  ? 'Add new book'
+                                  : 'Add “${_searchController.text.trim()}”',
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

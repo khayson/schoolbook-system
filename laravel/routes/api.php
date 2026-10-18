@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\SaleReturnController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\StockCountController;
+use App\Http\Controllers\Api\V1\StockExchangeController;
 use App\Http\Controllers\Api\V1\SubjectController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use Illuminate\Support\Facades\Route;
@@ -96,6 +97,17 @@ Route::prefix('v1')->group(function () {
             ->middleware('idempotent');
         Route::post('stock/counts/{stockCount}/cancel', [StockCountController::class, 'cancel']);
         Route::get('stock/counts/{stockCount}/sheet', [StockCountController::class, 'sheet']);
+
+        // Stock exchanges (dealer Taken / not-Taken swaps).
+        Route::get('stock/exchanges', [StockExchangeController::class, 'index']);
+        Route::post('stock/exchanges', [StockExchangeController::class, 'store'])
+            ->middleware('idempotent');
+        Route::get('stock/exchanges/{stockExchange}', [StockExchangeController::class, 'show']);
+        Route::put('stock/exchanges/{stockExchange}', [StockExchangeController::class, 'update']);
+        Route::post('stock/exchanges/{stockExchange}/confirm', [StockExchangeController::class, 'confirm'])
+            ->middleware('idempotent');
+        Route::post('stock/exchanges/{stockExchange}/cancel', [StockExchangeController::class, 'cancel']);
+        Route::post('stock/exchanges/{stockExchange}/void', [StockExchangeController::class, 'void']);
 
         Route::apiResource('customers', CustomerController::class);
         Route::get('customers/{customer}/statement', [CustomerStatementController::class, 'show']);
