@@ -25,13 +25,13 @@ class MobileAppPage extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDevicePhoneMobile;
 
-    protected static ?string $navigationLabel = 'Mobile app';
+    protected static ?string $navigationLabel = 'Get the app';
 
     protected static string|\UnitEnum|null $navigationGroup = 'System';
 
     protected static ?int $navigationSort = 2;
 
-    protected static ?string $title = 'Mobile app';
+    protected static ?string $title = 'Get the app';
 
     public const APK_DISK_PATH = 'releases/app-release.apk';
 
@@ -74,7 +74,7 @@ class MobileAppPage extends Page
                             ->same('host_setup_pin'),
                     ]),
                 Section::make('Replace build')
-                    ->description('Only when you ship a new APK. Cashiers use Download / the share link above — not this box.')
+                    ->description('Owner only — when you ship a new APK. Cashiers never use this; they use Download / the share link above.')
                     ->collapsed()
                     ->schema([
                         FileUpload::make('apk')
@@ -87,7 +87,7 @@ class MobileAppPage extends Page
                             ->directory('releases')
                             ->visibility('private')
                             ->getUploadedFileNameForStorageUsing(fn (): string => 'app-release.apk')
-                            ->helperText('Replaces the current file on Save.'),
+                            ->helperText('Drops in as schoolbook-release.apk for cashiers after Save.'),
                     ]),
             ]);
     }
