@@ -50,6 +50,7 @@ class ConfirmFailed extends ConfirmOutcome {
 
 class ShortItem {
   const ShortItem({
+    required this.productId,
     required this.sku,
     required this.title,
     required this.requested,
@@ -57,16 +58,20 @@ class ShortItem {
   });
 
   factory ShortItem.fromJson(Map<String, dynamic> json) => ShortItem(
+    productId: json['product_id'] as int? ?? 0,
     sku: json['sku']?.toString() ?? '',
     title: json['title']?.toString() ?? '',
     requested: json['requested'] as int? ?? 0,
     available: json['available'] as int? ?? 0,
   );
 
+  final int productId;
   final String sku;
   final String title;
   final int requested;
   final int available;
+
+  int get shortfall => (requested - available).clamp(0, 1 << 30);
 }
 
 /// Confirm (and re-price) a draft with a persisted idempotency key.

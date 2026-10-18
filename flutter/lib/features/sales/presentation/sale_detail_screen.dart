@@ -15,6 +15,7 @@ import 'package:schoolbook/features/sales/presentation/sale_actions_controller.d
 import 'package:schoolbook/shared/widgets/app_icons.dart';
 import 'package:schoolbook/shared/widgets/app_toast.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
+import 'package:schoolbook/shared/widgets/insufficient_stock_drawer.dart';
 
 class SaleDetailScreen extends StatefulWidget {
   const SaleDetailScreen({
@@ -128,10 +129,13 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
           }
         }
       case StockShort(:final items):
-        await showDialog<void>(
-          context: context,
-          builder: (_) => InsufficientStockDialog(items: items),
+        final retry = await showInsufficientStockDrawer(
+          context,
+          items: items,
         );
+        if (retry == true && mounted) {
+          await _confirm(choice);
+        }
       case CreditWarning():
         final proceed = await showDialog<bool>(
           context: context,
@@ -1365,171 +1369,6 @@ class PriceChangedDialog extends StatelessWidget {
           child: const Text('Accept new prices'),
         ),
       ],
-    );
-  }
-}
-
-class InsufficientStockDialog extends StatelessWidget {
-  const InsufficientStockDialog({super.key, required this.items});
-
-  final List<ShortItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      key: const Key('insufficient_stock_dialog'),
-      backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-      title: Column(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFE4E6),
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: AppIcon(
-                AppIcons.alert,
-                size: 24,
-                color: AppColors.danger,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Not enough stock',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Nothing was confirmed. Fix the short books below, then try again.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: AppColors.mute,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 14),
-          ...items.map(
-            (i) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.wash,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      i.title,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      i.sku,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.mute,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        _StockStat(
-                          label: 'Need',
-                          value: '${i.requested}',
-                          warn: true,
-                        ),
-                        const SizedBox(width: 8),
-                        _StockStat(
-                          label: 'Have',
-                          value: '${i.available}',
-                        ),
-                        const SizedBox(width: 8),
-                        _StockStat(
-                          label: 'Short',
-                          value: '${i.requested - i.available}',
-                          warn: true,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StockStat extends StatelessWidget {
-  const _StockStat({
-    required this.label,
-    required this.value,
-    this.warn = false,
-  });
-
-  final String label;
-  final String value;
-  final bool warn;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: warn ? const Color(0xFFFFE4E6) : AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: warn ? AppColors.danger : AppColors.mute,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: warn ? AppColors.danger : AppColors.ink,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

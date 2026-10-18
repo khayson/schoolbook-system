@@ -5,9 +5,11 @@ import 'package:provider/provider.dart';
 import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/pdf_sharer.dart';
+import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/sales/domain/sale.dart';
 import 'package:schoolbook/features/sales/presentation/sale_detail_screen.dart';
+import 'package:schoolbook/features/stock/data/stock_repository.dart';
 
 import '../../support/fakes.dart';
 import 'sale_actions_controller_test.dart'
@@ -16,6 +18,7 @@ import 'sale_actions_controller_test.dart'
 void main() {
   late FakeSalesRepository sales;
   late FakePdfSharer sharer;
+  late FakeProductsRepository products;
 
   Future<void> pumpDetail(
     WidgetTester tester, {
@@ -44,6 +47,10 @@ void main() {
       MultiProvider(
         providers: [
           Provider<SalesRepository>.value(value: sales),
+          Provider<ProductsRepository>.value(value: products),
+          Provider<StockRepository>.value(
+            value: StockRepository(apiClient: unusedApiClient()),
+          ),
           Provider<PendingSubmissionStore>.value(
             value: PendingSubmissionStore(store: InMemoryKeyValueStore()),
           ),
@@ -73,6 +80,10 @@ void main() {
   setUp(() {
     sales = FakeSalesRepository();
     sharer = FakePdfSharer();
+    products = FakeProductsRepository([
+      testProduct(id: 11, title: 'English Reader P4'),
+      testProduct(id: 12, title: 'Maths P4'),
+    ]);
   });
 
   testWidgets('confirming a draft issues the invoice', (tester) async {
@@ -142,42 +153,43 @@ void main() {
     await pumpDetail(tester);
     await confirmFromSheet(tester);
 
-    expect(find.byKey(const Key('insufficient_stock_dialog')), findsOneWidget);
+    expect(find.byKey(const Key('insufficient_stock_drawer')), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byKey(const Key('insufficient_stock_dialog')),
+        of: find.byKey(const Key('insufficient_stock_drawer')),
         matching: find.text('English Reader P4'),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        of: find.byKey(const Key('insufficient_stock_dialog')),
+        of: find.byKey(const Key('insufficient_stock_drawer')),
         matching: find.text('ENG-P4'),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        of: find.byKey(const Key('insufficient_stock_dialog')),
+        of: find.byKey(const Key('insufficient_stock_drawer')),
         matching: find.text('Maths P4'),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        of: find.byKey(const Key('insufficient_stock_dialog')),
+        of: find.byKey(const Key('insufficient_stock_drawer')),
         matching: find.text('MTH-P4'),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        of: find.byKey(const Key('insufficient_stock_dialog')),
+        of: find.byKey(const Key('insufficient_stock_drawer')),
         matching: find.text('Need'),
       ),
       findsNWidgets(2),
     );
+    expect(find.text('Add to stock'), findsWidgets);
   });
 
   testWidgets('credit warning: "Confirm anyway" retries with the override', (

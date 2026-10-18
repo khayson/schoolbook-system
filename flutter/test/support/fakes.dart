@@ -430,6 +430,16 @@ class FakeProductsRepository extends ProductsRepository {
       ),
     );
   }
+
+  @override
+  Future<Product> getProduct(int id) async {
+    return products.firstWhere(
+      (p) => p.id == id,
+      orElse: () => products.isNotEmpty
+          ? products.first
+          : (throw StateError('No fake product $id')),
+    );
+  }
 }
 
 class FakeLookupsRepository extends LookupsRepository {

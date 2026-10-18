@@ -12,6 +12,7 @@ import 'package:schoolbook/features/exchanges/presentation/exchange_actions_cont
 import 'package:schoolbook/shared/widgets/app_chrome.dart';
 import 'package:schoolbook/shared/widgets/app_toast.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
+import 'package:schoolbook/shared/widgets/insufficient_stock_drawer.dart';
 import 'package:schoolbook/shared/widgets/loading_overlay.dart';
 
 class ExchangeDetailScreen extends StatefulWidget {
@@ -174,26 +175,16 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
           );
         }
       case ExchangeStockShort(:final items):
-        await showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Not enough stock'),
-            content: Text(
-              items
-                  .map(
-                    (i) =>
-                        '${i.title}: need ${i.requested}, have ${i.available}',
-                  )
-                  .join('\n'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+        final retry = await showInsufficientStockDrawer(
+          context,
+          items: items,
         );
+        if (retry == true && mounted) {
+          await _confirm(
+            settlement: chosen,
+            overrideCreditLimit: overrideCreditLimit,
+          );
+        }
       case ExchangeConfirmFailed(:final error):
         setState(() => _error = describeApiError(error).body);
     }
