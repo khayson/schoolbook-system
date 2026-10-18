@@ -10,6 +10,7 @@ class AsOfRequest extends ReportRequest
         return [
             'as_of' => ['sometimes', 'date_format:Y-m-d'],
             'date' => ['sometimes', 'date_format:Y-m-d'],
+            ...$this->formatRules(),
         ];
     }
 }

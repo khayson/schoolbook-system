@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory;
 
+use App\Enums\StockMovementType;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -12,6 +13,9 @@ use Illuminate\Support\Facades\Log;
  * (by id, per product; 0 before the first) plus its quantity. Set-based SQL; the chain
  * uses a window function (MySQL 8, SQLite 3.25+). Repair only ever rewrites
  * stock_on_hand, under the product lock; movements are immutable and never touched.
+ *
+ * Phase 5: damaged sale-return movements are audit-only (quantity recorded, stock
+ * unchanged). They contribute 0 to the stock sum and do not advance the balance chain.
  */
 class ReconcileStock
 {
@@ -21,9 +25,14 @@ class ReconcileStock
      */
     public function check(?array $productIds = null): array
     {
+        $damage = StockMovementType::Damage->value;
+
         $totals = DB::table('stock_movements')
             ->groupBy('product_id')
-            ->selectRaw('product_id, SUM(quantity) as total');
+            ->selectRaw(
+                "product_id, SUM(CASE WHEN type = ? AND reference_type = 'sale_return' THEN 0 ELSE quantity END) as total",
+                [$damage],
+            );
 
         $stock = DB::table('products as p')
             ->leftJoinSub($totals, 'm', 'm.product_id', '=', 'p.id')
@@ -42,10 +51,16 @@ class ReconcileStock
 
         $withPrevious = DB::table('stock_movements')
             ->when($productIds !== null, fn ($q) => $q->whereIn('product_id', $productIds))
-            ->selectRaw('id, product_id, quantity, balance_after, LAG(balance_after, 1, 0) OVER (PARTITION BY product_id ORDER BY id) as previous_balance');
+            ->selectRaw(
+                'id, product_id, quantity, balance_after, type, reference_type,
+                LAG(balance_after, 1, 0) OVER (PARTITION BY product_id ORDER BY id) as previous_balance',
+            );
 
         $chain = DB::query()->fromSub($withPrevious, 'c')
-            ->whereRaw('balance_after <> previous_balance + quantity')
+            ->whereRaw(
+                "balance_after <> previous_balance + CASE WHEN type = ? AND reference_type = 'sale_return' THEN 0 ELSE quantity END",
+                [$damage],
+            )
             ->orderBy('product_id')
             ->orderBy('id')
             ->get()
@@ -54,7 +69,11 @@ class ReconcileStock
                 'product_id' => (int) $r->product_id,
                 'quantity' => (int) $r->quantity,
                 'balance_after' => (int) $r->balance_after,
-                'expected' => (int) $r->previous_balance + (int) $r->quantity,
+                'expected' => (int) $r->previous_balance + (
+                    $r->type === $damage && $r->reference_type === 'sale_return'
+                        ? 0
+                        : (int) $r->quantity
+                ),
             ])
             ->all();
 
@@ -71,15 +90,22 @@ class ReconcileStock
     {
         $ids = array_values(array_unique($productIds));
         sort($ids);
+        $damage = StockMovementType::Damage->value;
 
-        return DB::transaction(function () use ($ids) {
+        return DB::transaction(function () use ($ids, $damage) {
             $changed = 0;
             foreach ($ids as $id) {
                 $product = Product::withTrashed()->lockForUpdate()->find($id);
                 if ($product === null) {
                     continue;
                 }
-                $total = (int) DB::table('stock_movements')->where('product_id', $id)->sum('quantity');
+                $total = (int) DB::table('stock_movements')
+                    ->where('product_id', $id)
+                    ->selectRaw(
+                        "COALESCE(SUM(CASE WHEN type = ? AND reference_type = 'sale_return' THEN 0 ELSE quantity END), 0) as total",
+                        [$damage],
+                    )
+                    ->value('total');
                 if ($product->stock_on_hand === $total) {
                     continue;
                 }

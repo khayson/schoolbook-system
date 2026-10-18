@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:schoolbook/core/api_client.dart';
 import 'package:schoolbook/core/auth_token_store.dart';
-import 'package:schoolbook/core/config/api_config.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/pdf_sharer.dart';
 import 'package:schoolbook/core/onboarding_store.dart';
@@ -16,6 +15,10 @@ import 'package:schoolbook/features/auth/presentation/auth_provider.dart';
 import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/customers/data/school_directory_repository.dart';
+import 'package:schoolbook/features/offline/data/connectivity_service.dart';
+import 'package:schoolbook/features/offline/data/offline_store.dart';
+import 'package:schoolbook/features/offline/data/sync_worker.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/presentation/products_list_provider.dart';
@@ -44,6 +47,7 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
   late final AuthProvider _authProvider;
   late final GoRouter _router;
   late final ReferenceCatalog _referenceCatalog;
+  late final OfflineController _offlineController;
   bool _wasAuthenticated = false;
 
   @override
@@ -66,11 +70,28 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
       repository: ReferenceRepository(apiClient: _apiClient),
       cache: FileReferenceCacheStore(),
     );
+    final salesRepo = SalesRepository(apiClient: _apiClient);
+    final paymentsRepo = PaymentsRepository(apiClient: _apiClient);
+    final customersRepo = CustomersRepository(apiClient: _apiClient);
+    final productsRepo = ProductsRepository(apiClient: _apiClient);
+    final offlineStore = FileOfflineStore();
+    _offlineController = OfflineController(
+      store: offlineStore,
+      syncWorker: SyncWorker(
+        store: offlineStore,
+        sales: salesRepo,
+        payments: paymentsRepo,
+      ),
+      connectivity: PlusConnectivityService(),
+      customers: customersRepo,
+      products: productsRepo,
+    );
     // Approved list: refreshed whenever a session starts (login or app start with a
     // stored token); 304 when unchanged, so this is cheap.
     _authProvider.addListener(_syncReferenceOnLogin);
     _applyStoredServerUrl();
     _authProvider.bootstrap();
+    _offlineController.start();
   }
 
   Future<void> _applyStoredServerUrl() async {
@@ -85,6 +106,8 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
     if (authed && !_wasAuthenticated) {
       // Titles only — stock counts load when Approved list opens.
       _referenceCatalog.sync();
+      _offlineController.refreshSnapshot();
+      _offlineController.kickSync();
     }
     _wasAuthenticated = authed;
   }
@@ -95,6 +118,7 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
     _authProvider.removeListener(_syncReferenceOnLogin);
     _authProvider.dispose();
     _referenceCatalog.dispose();
+    _offlineController.dispose();
     super.dispose();
   }
 
@@ -103,6 +127,9 @@ class _SchoolbookAppState extends State<SchoolbookApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: _authProvider),
+        ChangeNotifierProvider<OfflineController>.value(
+          value: _offlineController,
+        ),
         Provider<ApiClient>.value(value: _apiClient),
         Provider<AuthTokenStore>.value(value: _tokenStore),
         Provider<ServerUrlStore>.value(value: _serverUrlStore),

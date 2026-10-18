@@ -1,3 +1,4 @@
+import 'package:schoolbook/core/money.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
 import 'package:schoolbook/features/payments/domain/payment.dart';
 
@@ -100,6 +101,42 @@ class Sale {
   String get label => invoiceNo ?? 'Draft #$id';
 }
 
+/// One rule the server applied while pricing a line (`applied_rules` entry).
+class AppliedRule {
+  const AppliedRule({
+    required this.id,
+    required this.name,
+    this.effect = const {},
+  });
+
+  factory AppliedRule.fromJson(Map<String, dynamic> json) {
+    final effect = json['effect'];
+    return AppliedRule(
+      id: json['id'] as int,
+      name: json['name'] as String? ?? '',
+      effect: effect is Map<String, dynamic>
+          ? Map<String, dynamic>.from(effect)
+          : const {},
+    );
+  }
+
+  final int id;
+  final String name;
+
+  /// Server-built effect payload (type, value, before/after prices). Display only.
+  final Map<String, dynamic> effect;
+
+  /// Human label from server `unit_price_before` / `unit_price_after` when present.
+  String? get unitPriceChangeLabel {
+    final before = effect['unit_price_before'];
+    final after = effect['unit_price_after'];
+    if (before is! int || after is! int || before == after) {
+      return null;
+    }
+    return '${Money.formatPesewas(before)} → ${Money.formatPesewas(after)}';
+  }
+}
+
 /// A sale item (`SaleItemResource`) or a priced preview line (`PricedLine`): same keys.
 class SaleLine {
   const SaleLine({
@@ -109,11 +146,17 @@ class SaleLine {
     required this.basePrice,
     required this.unitPrice,
     required this.lineTotal,
+    this.discountPerUnit = 0,
+    this.discountAmount = 0,
+    this.appliedRules = const [],
+    this.warnings = const [],
     this.isPriceOverridden = false,
     this.overrideReason,
   });
 
   factory SaleLine.fromJson(Map<String, dynamic> json) {
+    final rules = json['applied_rules'];
+    final warnings = json['warnings'];
     return SaleLine(
       productId: json['product_id'] as int,
       productTitle: json['product_title'] as String? ?? '',
@@ -121,6 +164,16 @@ class SaleLine {
       basePrice: json['base_price'] as int? ?? 0,
       unitPrice: json['unit_price'] as int? ?? 0,
       lineTotal: json['line_total'] as int? ?? 0,
+      discountPerUnit: json['discount_per_unit'] as int? ?? 0,
+      discountAmount: json['discount_amount'] as int? ?? 0,
+      appliedRules: rules is List
+          ? rules
+                .map((e) => AppliedRule.fromJson(e as Map<String, dynamic>))
+                .toList()
+          : const [],
+      warnings: warnings is List
+          ? warnings.map((e) => e.toString()).toList()
+          : const [],
       isPriceOverridden: json['is_price_overridden'] as bool? ?? false,
       overrideReason: json['override_reason'] as String?,
     );
@@ -132,8 +185,14 @@ class SaleLine {
   final int basePrice;
   final int unitPrice;
   final int lineTotal;
+  final int discountPerUnit;
+  final int discountAmount;
+  final List<AppliedRule> appliedRules;
+  final List<String> warnings;
   final bool isPriceOverridden;
   final String? overrideReason;
+
+  bool get hasDiscount => discountAmount > 0 || unitPrice < basePrice;
 }
 
 /// `POST /pricing/preview` data, and `details.priced_order` of a 409 price_changed.
@@ -142,6 +201,7 @@ class PricedOrder {
     required this.lines,
     required this.subtotal,
     required this.total,
+    this.discountTotal = 0,
     this.warnings = const [],
   });
 
@@ -151,6 +211,7 @@ class PricedOrder {
           .map((e) => SaleLine.fromJson(e as Map<String, dynamic>))
           .toList(),
       subtotal: json['subtotal'] as int? ?? 0,
+      discountTotal: json['discount_total'] as int? ?? 0,
       total: json['total'] as int? ?? 0,
       warnings: (json['warnings'] as List<dynamic>? ?? const [])
           .map((e) => e.toString())
@@ -160,6 +221,7 @@ class PricedOrder {
 
   final List<SaleLine> lines;
   final int subtotal;
+  final int discountTotal;
   final int total;
   final List<String> warnings;
 }

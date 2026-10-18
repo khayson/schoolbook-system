@@ -79,8 +79,7 @@ class SettingsPage extends Page
                     ->required(),
                 Toggle::make('tax_enabled')
                     ->label('Tax enabled')
-                    ->disabled()
-                    ->dehydrated(false),
+                    ->helperText('When on, PricingService adds active tax_rates (VAT/NHIL/GETFund) on tax-exclusive totals.'),
             ]);
     }
 
@@ -94,6 +93,7 @@ class SettingsPage extends Page
         Setting::setValue('invoice_footer', $data['invoice_footer'] ?? '');
         Setting::setValue('allow_negative_stock', (bool) ($data['allow_negative_stock'] ?? false));
         Setting::setValue('default_payment_terms_days', (int) $data['default_payment_terms_days']);
+        Setting::setValue('tax_enabled', (bool) ($data['tax_enabled'] ?? false));
 
         Notification::make()
             ->title('Settings saved')

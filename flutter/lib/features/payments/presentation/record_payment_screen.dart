@@ -11,6 +11,7 @@ import 'package:schoolbook/core/theme/app_theme.dart';
 import 'package:schoolbook/core/validators.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/payments/domain/payment.dart';
 import 'package:schoolbook/features/payments/presentation/payment_widgets.dart';
@@ -56,6 +57,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
     _controller = RecordPaymentController(
       payments: context.read<PaymentsRepository>(),
       pendingStore: context.read<PendingSubmissionStore>(),
+      offline: context.read<OfflineController>(),
       customerId: widget.customerId,
     )..addListener(_onChanged);
     _loadCustomer();
@@ -84,7 +86,17 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
       );
       if (mounted) setState(() => _customer = customer);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _customerError = e.message);
+      if (!mounted) return;
+      final cached = context
+          .read<OfflineController>()
+          .snapshot
+          .customers
+          .where((c) => c.id == widget.customerId);
+      if (e.isNetworkError && cached.isNotEmpty) {
+        setState(() => _customer = cached.first);
+      } else {
+        setState(() => _customerError = e.message);
+      }
     }
   }
 
@@ -207,7 +219,22 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
     if (confirmed != true || !mounted) return;
 
     final payment = await _controller.submit(_payload());
-    if (payment == null || !mounted) return;
+    if (!mounted) return;
+    if (_controller.queuedOffline) {
+      AppToast.show(
+        context,
+        'Saved offline — will sync',
+        type: ToastType.info,
+        title: 'Queued',
+      );
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/payments');
+      }
+      return;
+    }
+    if (payment == null) return;
     await _showRecorded(payment);
   }
 

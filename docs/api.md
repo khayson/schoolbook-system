@@ -341,9 +341,31 @@ The whole live list in one response, for offline search on the phone:
 
 `data: null` before the first publish. Compare `snapshot_etag` with the stored copy's ETag to know whether to download the snapshot.
 
+## Sale returns
+
+Owner. Confirmed sales only (including delivered). Draft → confirm → void.
+
+### `POST /sale-returns` (requires `Idempotency-Key`)
+
+```json
+{
+  "sale_id": 12,
+  "reason": "Wrong titles",
+  "items": [
+    { "sale_item_id": 40, "quantity": 2, "restock_condition": "good" }
+  ]
+}
+```
+
+`restock_condition`: `good` | `damaged`. Cannot exceed remaining returnable qty per sale line. Confirm restocks good (`return_in`), audits damaged (stock unchanged), credits via `return_credit` payment (SRN). `POST …/confirm` (Idempotency-Key) · `POST …/void`.
+
+## Suppliers · Purchase orders
+
+`GET/POST/PUT/DELETE /suppliers`. `POST /purchase-orders` (Idempotency-Key) · `PUT` (draft) · `POST …/place` · `POST …/cancel` · `POST …/receive` (Idempotency-Key) with `{ "received_at", "items": [{ "purchase_order_item_id", "quantity" }] }` — creates a goods receipt linked to the PO.
+
 ## Reports
 
-Owner only (403 otherwise). Money in pesewas; dates `YYYY-MM-DD` in Africa/Accra; periods inclusive (`from`..`to`, at most 731 days; daily grouping at most 367). Definitions: `docs/build-spec.md` section 14; worked example with hand-calculated figures: `docs/acceptance-phase3.md`. Every response is `{"data": {...}}`.
+Owner only (403 otherwise). Money in pesewas; dates `YYYY-MM-DD` in Africa/Accra; periods inclusive (`from`..`to`, at most 731 days; daily grouping at most 367). Definitions: `docs/build-spec.md` section 14; worked example with hand-calculated figures: `docs/acceptance-phase3.md`. Every response is `{"data": {...}}`. Optional `?format=json|csv|pdf` (default json); CSV/PDF via `ReportExporter` (no Excel package in v1).
 
 ### `GET /reports/dashboard?date=`
 
@@ -490,6 +512,52 @@ Open counts only; nothing is applied. `409` `stock_count_not_open` otherwise.
 #### `GET /stock/counts/{id}/sheet`
 
 Printable PDF (`{reference}-sheet.pdf`): SKU, title, level, subject and a blank "Counted" column, by level, subject and title. System quantities are not printed (blind count).
+
+## Pricing
+
+### `POST /pricing/preview`
+
+Owner. Prices lines through `PricingService` (active `price_rules` for the sale date). Does not write anything.
+
+```json
+{
+  "customer_id": 1,
+  "sale_date": "2026-04-01",
+  "items": [
+    { "product_id": 7, "quantity": 3 },
+    { "product_id": 8, "quantity": 1, "override_unit_price": 4500, "override_reason": "VIP" }
+  ]
+}
+```
+
+`customer_id` and `sale_date` optional (`sale_date` defaults to now). Response `data` is a priced order: `lines` (each with `base_price`, `unit_price`, `discount_*`, `applied_rules`, `warnings`, override flags), `subtotal`, `discount_total` (order-level only), `tax_total`, `total`, `warnings`.
+
+### `GET /price-rules` · `POST /price-rules` · `GET /price-rules/{id}` · `PUT /price-rules/{id}` · `DELETE /price-rules/{id}`
+
+Owner CRUD for pricing rules. Money/percent values are integers (pesewas or basis points: `1000` = 10.00%). Filters on list: `?search=`, `?type=`, `?active=0|1`.
+
+```json
+{
+  "name": "School 10%",
+  "type": "percent_off",
+  "value": 1000,
+  "scope_type": "all",
+  "scope_id": null,
+  "customer_scope": "customer_type",
+  "customer_scope_value": "school",
+  "min_quantity": 5,
+  "max_quantity": null,
+  "min_order_total": null,
+  "starts_at": null,
+  "ends_at": null,
+  "priority": 10,
+  "stackable": false,
+  "floor_policy": "warn",
+  "is_active": true
+}
+```
+
+`type`: `percent_off`, `amount_off`, `fixed_price`, `order_percent_off`, `order_amount_off`, `bonus_units` (reserved). `scope_type`: `all`, `product`, `publisher`, `subject`, `language`, `level`, `level_group`. `customer_scope`: `all`, `customer`, `customer_type`, `region`. `floor_policy`: `block_below_cost`, `warn`, `allow`. `scope_id` required when `scope_type` ≠ `all`; `customer_scope_value` required when `customer_scope` ≠ `all`.
 
 ## Sales
 

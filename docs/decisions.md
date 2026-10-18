@@ -268,7 +268,7 @@ Phase 3.A (approved catalog) was inserted before 3.1 by the owner. Rules and map
 ## 2026-10-05 — Phase 3.1: reports core
 
 - **Hand figures first:** `docs/acceptance-phase3.md` (dataset and every expected figure, with the arithmetic) was written before the report code; `ReportsFixtureTest` checks the dataset against it, `ReportFiguresTest` (SQLite) and `tests/Mysql/ReportFiguresTest` assert its literals. Mutation checks: counting void sales, valuing negative stock, ignoring the dead-stock cut-off and moving an aging boundary by a day each fail the tests (the boundary one only after boundary as-of dates were added: the first dataset had no invoice on a boundary).
-- **Order-level discount in the fixture:** today's `PricingService` never produces one (Phase 4). The fixture binds `Tests\Support\Phase4StandInPricing` (5% off an order of 15 books or more), so the real `CreateDraftSale`/`ConfirmSale` store a real `discount_total`; nothing bypasses the actions.
+- **Order-level discount in the fixture:** Phase 4 replaced `Phase4StandInPricing` with a real `price_rules` row (`order_percent_off` 500 bps, `min_order_total` 80,000). Only sale 6 qualifies (subtotal 80,000 → discount 4,000). Book-count gating from the stand-in is gone; order rules use money thresholds per §7.4.
 - **Catalog filters and order discounts:** split by product, level, subject or language, figures are line revenue; order discounts are a separate line (profit) or null (sales summary with a catalog filter), never prorated.
 - **SQL portability:** periods are queried half-open (`>= from`, `< to + 1 day`) so DATE columns and datetimes compare the same on MySQL and SQLite and indexes stay usable; days are grouped in SQL (`DATE()`), weeks and months rolled up from days in PHP; aging buckets are `CASE` on `due_date` against computed boundary dates.
 - **Aging uses today's balances;** the as-of date only moves invoices between buckets. Historical balances would need the allocation ledger replayed to that date; not asked for.
@@ -371,4 +371,41 @@ Void invoice stays off swipe (detail / ⋮ only).
 **Context:** Compile-time `DEV_SERVER_PIN` cannot be changed without rebuilding the APK.
 
 **Decision:** Filament **Mobile app** can set/clear a hashed `mobile_host_setup_pin_hash`. Phones call `POST /api/v1/auth/verify-setup-pin` against the current API host; if the server has no PIN, the APK’s baked PIN still works. Owner can reset the host PIN without a new build.
+
+## 2026-10-18 — Phase 5 schemas (returns, POs, tax, exports)
+
+**Context:** Spec §6.8 / §15 / §17 name the features but not column-level schemas.
+
+**Decisions:**
+- **Sale returns:** `sale_returns` + `sale_return_items`. Statuses `draft|confirmed|void`. Confirm restocks **good** via `return_in` (+stock) and records **damaged** as audit-only `damage` movements (stock unchanged). Money: immutable sale totals; credit via `PaymentMethod::ReturnCredit` payment (reference = SRN), allocated to source sale first then FIFO. Void reverses credit through `VoidPayment` and `return_out` for good lines.
+- **Purchase orders:** `purchase_orders` + items; statuses `draft|ordered|partial|received|cancelled`. Receive creates a normal `GoodsReceipt` (`purchase_order_id` FK) through `ReceiveStock`.
+- **Tax:** `tax_rates` (VAT 15%, NHIL 2.5%, GETFund 2.5% seeded; configurable). Rates apply independently on tax-exclusive net (`subtotal − discount_total`), half-up. `settings.tax_enabled` toggles; off keeps tax 0.
+- **Report exports:** CSV + DomPDF via `ReportExporter` and `?format=csv|pdf` — no `maatwebsite/excel` in v1.
+- **Backup:** already live (R2); no redo.
+
+## 2026-10-18 — Auth bootstrap keeps session when offline
+
+**Context:** Opening the app with no mobile data called `/auth/me`, treated every `ApiException` as logout, wiped the token, and left the cashier stuck on login (login needs the network).
+
+**Decision:** On bootstrap, network / unknown-outcome errors keep the stored token and restore the last cached `AuthUser`. Clear the session only on definitive auth failures (e.g. 401). Login still requires the server; staying signed in from a prior session does not.
+
+## 2026-10-18 — Phase 6 offline sales field kit (Flutter)
+
+**Context:** Spec §Phase 6 allows an offline queue “if field use justifies it.” Scope locked to a **sales field kit** (draft sales + payments), not full stock-offline, school portal, or iOS.
+
+**Storage choice:** JSON files under application support (`offline_sales_queue.json`, `field_kit_snapshot.json`) via `FileOfflineStore` — same pattern as the approved-list reference cache. Drift/SQLite deferred: queue volume is small, codegen cost not justified for v1. Interfaces (`OfflineStore`, `ConnectivityService`) keep a later Drift swap possible.
+
+**What is cached:** customers + products snapshot for pickers when the network is down. Reference catalog cache is unchanged (read-only). Device never invents money or stock; live totals still come from `POST /pricing/preview` when online; offline save queues the user intent payload only.
+
+**Outbound queue:** item types `create_draft_sale` | `record_payment`. Each row stores payload JSON + UUID `Idempotency-Key` (reused from the failed attempt / `PendingSubmissionStore`). Statuses: `pending` → `syncing` → removed on success, or `failed` on definitive error. Sync drains FIFO on app start, login, and connectivity restore.
+
+**Conflict rules (sync):**
+| Outcome | Action |
+| --- | --- |
+| 2xx | Remove from queue (server is source of truth). |
+| Network / unknown (`isOutcomeUnknown`, 5xx, `request_in_progress`) | Leave `pending` with last error; retry later with the **same** key. |
+| 422 (e.g. `insufficient_stock`, validation) or 409 (e.g. price change, in progress) | Keep queued as `failed` with `lastError` / code / status; **never silent-drop**. Banner surfaces “need attention.” User may retry (requeue → pending) after fixing stock/data, or discard. |
+| Other definitive 4xx | Same as conflict: keep `failed`, do not auto-retry. |
+
+**Out of v1:** offline goods receipts/adjustments; editing drafts offline; school portal; iOS.
 

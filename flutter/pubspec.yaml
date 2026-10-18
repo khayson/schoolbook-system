@@ -45,6 +45,7 @@ dependencies:
   open_filex: ^4.7.0
   google_fonts: ^6.2.1
   hugeicons: ^0.0.9
+  connectivity_plus: ^7.3.2
 
 dev_dependencies:
   flutter_test:

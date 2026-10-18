@@ -22,6 +22,7 @@ class ReceiveStock
     /**
      * @param  array{
      *     supplier_id?: int|null,
+     *     purchase_order_id?: int|null,
      *     supplier_reference?: string|null,
      *     received_at: string|\DateTimeInterface,
      *     notes?: string|null,
@@ -32,7 +33,7 @@ class ReceiveStock
     {
         $items = $this->normalizeItems($data['items'] ?? []);
 
-        return DB::transaction(function () use ($user, $data, $items) {
+        $create = function () use ($user, $data, $items) {
             $receivedAt = Carbon::parse($data['received_at']);
             $year = (int) $receivedAt->format('Y');
 
@@ -52,6 +53,7 @@ class ReceiveStock
             $receipt = GoodsReceipt::query()->create([
                 'receipt_no' => $receiptNo,
                 'supplier_id' => $data['supplier_id'] ?? null,
+                'purchase_order_id' => $data['purchase_order_id'] ?? null,
                 'supplier_reference' => $data['supplier_reference'] ?? null,
                 'received_at' => $receivedAt,
                 'notes' => $data['notes'] ?? null,
@@ -93,7 +95,14 @@ class ReceiveStock
             }
 
             return $receipt->load(['items.product', 'supplier', 'createdBy']);
-        });
+        };
+
+        // Nested-safe: ReceiveAgainstPurchaseOrder already holds a transaction.
+        if (DB::transactionLevel() > 0) {
+            return $create();
+        }
+
+        return DB::transaction($create);
     }
 
     /**

@@ -59,6 +59,25 @@ class Customer {
   final int outstandingBalance;
   final String? notes;
   final bool isActive;
+
+  /// Round-trip JSON for the offline field-kit snapshot (not a write payload).
+  Map<String, dynamic> toCacheJson() => {
+    'id': id,
+    'code': code,
+    'name': name,
+    'type': type,
+    'region': region,
+    'district': district,
+    'address': address,
+    'contact_person': contactPerson,
+    'phone': phone,
+    'email': email,
+    'credit_limit': creditLimit,
+    'credit_balance': creditBalance,
+    'outstanding_balance': outstandingBalance,
+    'notes': notes,
+    'is_active': isActive,
+  };
 }
 
 abstract final class CustomerOptions {

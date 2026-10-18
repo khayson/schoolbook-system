@@ -2,7 +2,9 @@
 
 namespace App\Filament\Pages\Reports;
 
+use App\Actions\Reports\Support\ReportExporter;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Field;
 use Filament\Pages\Page;
@@ -12,6 +14,7 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 /**
  * A report page: a filter form (live) above the figures of one Report Action, rendered
@@ -64,6 +67,45 @@ abstract class ReportPage extends Page
     public function form(Schema $schema): Schema
     {
         return $schema->components($this->filterFields())->columns(4);
+    }
+
+    protected function getHeaderActions(): array
+    {
+        $basename = Str::of(static::class)->classBasename()->before('Page')->kebab()->toString();
+
+        return [
+            Action::make('exportCsv')
+                ->label('Export CSV')
+                ->action(fn (ReportExporter $exporter) => $exporter->csv($this->exportPayload(), $basename ?: 'report')),
+            Action::make('exportPdf')
+                ->label('Export PDF')
+                ->action(fn (ReportExporter $exporter) => $exporter->pdf($this->exportPayload(), $basename ?: 'report')),
+        ];
+    }
+
+    /**
+     * Flatten Filament report display shape into exporter payload.
+     *
+     * @return array<string, mixed>
+     */
+    protected function exportPayload(): array
+    {
+        $report = $this->report();
+        $columns = $report['columns'] ?? [];
+        $keys = array_keys($columns);
+        $rows = [];
+        foreach ($report['rows'] ?? [] as $row) {
+            $flat = [];
+            foreach ($keys as $key) {
+                $flat[$key] = $row[$key] ?? '';
+            }
+            $rows[] = $flat;
+        }
+
+        return [
+            'rows' => $rows,
+            'totals' => $report['totals'] ?? null,
+        ];
     }
 
     public function content(Schema $schema): Schema

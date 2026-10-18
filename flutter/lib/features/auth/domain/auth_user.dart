@@ -22,4 +22,12 @@ class AuthUser {
       isActive: json['is_active'] as bool? ?? true,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'email': email,
+    'role': role,
+    'is_active': isActive,
+  };
 }

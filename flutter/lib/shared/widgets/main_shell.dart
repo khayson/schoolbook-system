@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:schoolbook/core/theme/app_theme.dart';
+import 'package:schoolbook/features/offline/presentation/offline_banner.dart';
 import 'package:schoolbook/shared/widgets/app_icons.dart';
 
 /// Floating black pill dock (NOTEE-style) with a lime center action for New sale.
@@ -79,46 +80,53 @@ class MainShell extends StatelessWidget {
       ),
       child: Scaffold(
         backgroundColor: AppColors.surface,
-        body: Stack(
+        body: Column(
           children: [
-            child,
-            if (show) ...[
-              // Frosted strip — content scrolls under the dock and is blurred here.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: veilHeight,
-                child: const IgnorePointer(child: _DockBlurVeil()),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: MediaQuery(
-                  data: media,
-                  child: SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
-                      child: _FloatingDock(
-                        sideIndex: side,
-                        onSideTap: (i) {
-                          final path = _sides[i].path;
-                          if (loc == path ||
-                              (path != '/' && loc.startsWith(path))) {
-                            return;
-                          }
-                          context.go(path);
-                        },
-                        onCenterTap: () => context.push('/sales/new'),
-                        sides: _sides,
+            const OfflineBanner(),
+            Expanded(
+              child: Stack(
+                children: [
+                  child,
+                  if (show) ...[
+                    // Frosted strip — content scrolls under the dock and is blurred here.
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: veilHeight,
+                      child: const IgnorePointer(child: _DockBlurVeil()),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: MediaQuery(
+                        data: media,
+                        child: SafeArea(
+                          top: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+                            child: _FloatingDock(
+                              sideIndex: side,
+                              onSideTap: (i) {
+                                final path = _sides[i].path;
+                                if (loc == path ||
+                                    (path != '/' && loc.startsWith(path))) {
+                                  return;
+                                }
+                                context.go(path);
+                              },
+                              onCenterTap: () => context.push('/sales/new'),
+                              sides: _sides,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
-            ],
+            ),
           ],
         ),
       ),

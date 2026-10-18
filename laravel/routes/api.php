@@ -12,17 +12,21 @@ use App\Http\Controllers\Api\V1\LevelController;
 use App\Http\Controllers\Api\V1\LevelGroupController;
 use App\Http\Controllers\Api\V1\OpeningBalanceController;
 use App\Http\Controllers\Api\V1\PaymentController;
+use App\Http\Controllers\Api\V1\PriceRuleController;
 use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\PublisherController;
+use App\Http\Controllers\Api\V1\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\ReferenceBookController;
 use App\Http\Controllers\Api\V1\ReferenceEditionController;
 use App\Http\Controllers\Api\V1\RegisterController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
+use App\Http\Controllers\Api\V1\SaleReturnController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\StockCountController;
 use App\Http\Controllers\Api\V1\SubjectController;
+use App\Http\Controllers\Api\V1\SupplierController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -106,6 +110,7 @@ Route::prefix('v1')->group(function () {
             ->middleware('idempotent');
 
         Route::post('pricing/preview', [PricingController::class, 'preview']);
+        Route::apiResource('price-rules', PriceRuleController::class);
 
         Route::get('sales', [SaleController::class, 'index']);
         // Idempotent: a retried "save draft" must not create a second draft.
@@ -126,6 +131,26 @@ Route::prefix('v1')->group(function () {
         Route::get('payments/{payment}', [PaymentController::class, 'show']);
         Route::post('payments/{payment}/void', [PaymentController::class, 'void']);
         Route::get('payments/{payment}/receipt', [PaymentController::class, 'receipt']);
+
+        Route::get('sale-returns', [SaleReturnController::class, 'index']);
+        Route::post('sale-returns', [SaleReturnController::class, 'store'])
+            ->middleware('idempotent');
+        Route::get('sale-returns/{saleReturn}', [SaleReturnController::class, 'show']);
+        Route::post('sale-returns/{saleReturn}/confirm', [SaleReturnController::class, 'confirm'])
+            ->middleware('idempotent');
+        Route::post('sale-returns/{saleReturn}/void', [SaleReturnController::class, 'void']);
+
+        Route::apiResource('suppliers', SupplierController::class);
+
+        Route::get('purchase-orders', [PurchaseOrderController::class, 'index']);
+        Route::post('purchase-orders', [PurchaseOrderController::class, 'store'])
+            ->middleware('idempotent');
+        Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
+        Route::put('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
+        Route::post('purchase-orders/{purchaseOrder}/place', [PurchaseOrderController::class, 'place']);
+        Route::post('purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel']);
+        Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])
+            ->middleware('idempotent');
 
     });
 

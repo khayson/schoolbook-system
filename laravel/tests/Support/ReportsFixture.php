@@ -8,16 +8,17 @@ use App\Actions\Payments\VoidPayment;
 use App\Actions\Sales\ConfirmSale;
 use App\Actions\Sales\CreateDraftSale;
 use App\Actions\Sales\VoidSale;
+use App\Enums\PriceRuleType;
 use App\Models\Customer;
 use App\Models\Language;
 use App\Models\Level;
 use App\Models\Payment;
+use App\Models\PriceRule;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Setting;
 use App\Models\Subject;
 use App\Models\User;
-use App\Services\PricingService;
 use Illuminate\Support\Carbon;
 
 /**
@@ -43,9 +44,15 @@ final class ReportsFixture
     public static function build(User $owner): self
     {
         $fixture = new self($owner);
-        app()->instance(PricingService::class, new Phase4StandInPricing);
         Setting::setValue('allow_negative_stock', false);
         Setting::setValue('default_payment_terms_days', 30);
+
+        // Real Phase 4 rule: 5% off orders with subtotal ≥ 80,000 (only sale 6 qualifies).
+        PriceRule::factory()->orderPercentOff(500, 80000)->create([
+            'name' => 'Reports fixture 5% bulk order',
+            'type' => PriceRuleType::OrderPercentOff,
+            'priority' => 100,
+        ]);
 
         try {
             $fixture->catalog();
@@ -53,7 +60,6 @@ final class ReportsFixture
             $fixture->payments();
         } finally {
             Carbon::setTestNow();
-            app()->forgetInstance(PricingService::class);
         }
 
         return $fixture;

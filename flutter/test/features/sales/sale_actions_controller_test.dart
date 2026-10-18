@@ -18,12 +18,32 @@ ApiException priceChanged() => ApiException(
           'quantity': 3,
           'base_price': 1200,
           'unit_price': 1200,
+          'discount_per_unit': 0,
+          'discount_amount': 0,
           'line_total': 3600,
+          'applied_rules': [
+            {
+              'id': 1,
+              'name': 'Promo',
+              'effect': {
+                'type': 'fixed_price',
+                'value': 1200,
+                'unit_price_before': 1000,
+                'unit_price_after': 1200,
+              },
+            },
+          ],
+          'warnings': [
+            'Unit price 1200 is below cost 1250 for product [ENG-P4].',
+          ],
         },
       ],
       'subtotal': 3600,
+      'discount_total': 0,
       'total': 3600,
-      'warnings': [],
+      'warnings': [
+        'Unit price 1200 is below cost 1250 for product [ENG-P4].',
+      ],
     },
   },
 );
@@ -124,6 +144,8 @@ void main() {
     final order = (outcome as PricesChanged).newOrder;
     expect(order.total, 3600);
     expect(order.lines.single.unitPrice, 1200);
+    expect(order.lines.single.appliedRules.single.name, 'Promo');
+    expect(order.warnings, isNotEmpty);
     expect(await store.pending(SaleActionsController.confirmIntent(5)), isNull);
 
     sales.repriced = testSale(

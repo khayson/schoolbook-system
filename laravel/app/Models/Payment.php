@@ -108,7 +108,7 @@ class Payment extends Model
      */
     public static function referenceKey(PaymentMethod $method, ?string $reference): ?string
     {
-        if ($method === PaymentMethod::Cash || $reference === null || trim($reference) === '') {
+        if (! $method->requiresReference() || $reference === null || trim($reference) === '') {
             return null;
         }
 

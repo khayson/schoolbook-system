@@ -5,14 +5,17 @@ import 'package:provider/provider.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
+import 'package:schoolbook/features/sales/domain/sale.dart';
 import 'package:schoolbook/features/sales/presentation/new_sale_screen.dart';
 
 import '../../support/fakes.dart';
 
 void main() {
   late FakeSalesRepository sales;
+  late OfflineController offline;
   final books = [
     for (var i = 1; i <= 8; i++) testProduct(id: 100 + i, title: 'Book $i'),
   ];
@@ -45,6 +48,7 @@ void main() {
       MultiProvider(
         providers: [
           Provider<SalesRepository>.value(value: sales),
+          ChangeNotifierProvider<OfflineController>.value(value: offline),
           Provider<PendingSubmissionStore>.value(
             value: PendingSubmissionStore(store: InMemoryKeyValueStore()),
           ),
@@ -93,7 +97,10 @@ void main() {
   bool onScreen(WidgetTester tester, Finder finder) =>
       finder.hitTestable().evaluate().isNotEmpty;
 
-  setUp(() => sales = FakeSalesRepository());
+  setUp(() {
+    sales = FakeSalesRepository();
+    offline = testOfflineStack(sales: sales).controller;
+  });
 
   testWidgets(
     'the total and both save buttons stay on screen however long the order',
@@ -198,6 +205,75 @@ void main() {
   );
 
   testWidgets(
+    'pricing preview shows applied rules, line warnings and order discount',
+    (tester) async {
+      sales.previewResult = (items) {
+        final qty = items.single['quantity'] as int;
+        return PricedOrder(
+          lines: [
+            SaleLine(
+              productId: 101,
+              productTitle: 'Book 101',
+              quantity: qty,
+              basePrice: 1000,
+              unitPrice: 900,
+              discountPerUnit: 100,
+              discountAmount: 100 * qty,
+              lineTotal: 900 * qty,
+              appliedRules: const [
+                AppliedRule(
+                  id: 3,
+                  name: 'School 10%',
+                  effect: {
+                    'type': 'percent_off',
+                    'value': 1000,
+                    'unit_price_before': 1000,
+                    'unit_price_after': 900,
+                  },
+                ),
+              ],
+              warnings: const [
+                'Unit price 900 is below cost 950 for product [BK-101].',
+              ],
+            ),
+          ],
+          subtotal: 900 * qty,
+          discountTotal: 450,
+          total: 900 * qty - 450,
+          warnings: const [
+            'Unit price 900 is below cost 950 for product [BK-101].',
+          ],
+        );
+      };
+
+      await pumpNewSale(tester);
+      await chooseCustomer(tester);
+      await tester.tap(find.byKey(const Key('new_sale_add_books')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('pick_product_101')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('product_picker_done')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('new_sale_order_warnings')), findsOneWidget);
+      expect(
+        find.text('Unit price 900 is below cost 950 for product [BK-101].'),
+        findsWidgets,
+      );
+      expect(find.byKey(const Key('line_rules_101')), findsOneWidget);
+      expect(find.byKey(const Key('line_rule_101_3')), findsOneWidget);
+      expect(find.textContaining('School 10%'), findsOneWidget);
+      expect(find.byKey(const Key('line_warnings_101')), findsOneWidget);
+      expect(find.byKey(const Key('line_discount_101')), findsOneWidget);
+      expect(find.textContaining('Was GHS 10.00'), findsOneWidget);
+      expect(find.byKey(const Key('new_sale_order_discount')), findsOneWidget);
+      expect(find.textContaining('Order discount'), findsOneWidget);
+      expect(find.byKey(const Key('new_sale_total')), findsOneWidget);
+      expect(find.text('GHS 4.50'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'empty schools list offers Add school; quick add returns into the sale',
     (tester) async {
       final emptyCustomers = FakeCustomersRepository(customers: const []);
@@ -220,6 +296,7 @@ void main() {
         MultiProvider(
           providers: [
             Provider<SalesRepository>.value(value: sales),
+            ChangeNotifierProvider<OfflineController>.value(value: offline),
             Provider<PendingSubmissionStore>.value(
               value: PendingSubmissionStore(store: InMemoryKeyValueStore()),
             ),

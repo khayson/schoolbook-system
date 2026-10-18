@@ -55,10 +55,18 @@ class AuthProvider extends ChangeNotifier {
       await _pendingStore.clear();
       pendingEmail = null;
       status = AuthStatus.authenticated;
-    } on ApiException {
-      await _repository.clearLocalSession();
-      status = AuthStatus.unauthenticated;
-      user = null;
+    } on ApiException catch (e) {
+      // Offline / timeout: keep the Sanctum token so the field kit still works.
+      // Only definitive auth failures (401 already cleared the token) sign out.
+      if (e.isNetworkError || e.isOutcomeUnknown) {
+        user = await _repository.readCachedUser();
+        status = AuthStatus.authenticated;
+        pendingEmail = null;
+      } else {
+        await _repository.clearLocalSession();
+        status = AuthStatus.unauthenticated;
+        user = null;
+      }
     } finally {
       isBusy = false;
       notifyListeners();

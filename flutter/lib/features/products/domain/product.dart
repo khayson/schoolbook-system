@@ -95,6 +95,35 @@ class Product {
       'is_active': isActive,
     };
   }
+
+  /// Round-trip JSON for the offline field-kit snapshot (not a write payload).
+  Map<String, dynamic> toCacheJson() => {
+    'id': id,
+    'sku': sku,
+    'isbn': isbn,
+    'barcode': barcode,
+    'title': title,
+    'level_id': levelId,
+    'subject_id': subjectId,
+    'language_id': languageId,
+    'publisher_id': publisherId,
+    'reference_book_id': referenceBookId,
+    'variant_label': variantLabel,
+    'edition': edition,
+    'cost_price': costPrice,
+    'selling_price': sellingPrice,
+    'reorder_level': reorderLevel,
+    'stock_on_hand': stockOnHand,
+    'is_active': isActive,
+    if (level != null) 'level': {'id': level!.id, 'name': level!.name},
+    if (subject != null) 'subject': {'id': subject!.id, 'name': subject!.name},
+    if (language != null)
+      'language': {
+        'id': language!.id,
+        'name': language!.name,
+        'code': language!.code,
+      },
+  };
 }
 
 class StockMovement {

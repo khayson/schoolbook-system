@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 #[Fillable([
     'receipt_no',
     'supplier_id',
+    'purchase_order_id',
     'supplier_reference',
     'received_at',
     'notes',
@@ -28,6 +29,11 @@ class GoodsReceipt extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function purchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrder::class);
     }
 
     public function createdBy(): BelongsTo

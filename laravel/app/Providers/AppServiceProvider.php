@@ -7,10 +7,13 @@ use App\Models\Customer;
 use App\Models\GoodsReceipt;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
+use App\Models\PriceRule;
 use App\Models\Product;
+use App\Models\PurchaseOrder;
 use App\Models\ReferenceBook;
 use App\Models\ReferenceEdition;
 use App\Models\Sale;
+use App\Models\SaleReturn;
 use App\Models\User;
 use App\Support\BackupGuard;
 use Illuminate\Console\Events\CommandStarting;
@@ -58,8 +61,9 @@ class AppServiceProvider extends ServiceProvider
             'reference_book' => ReferenceBook::class,
             'reference_edition' => ReferenceEdition::class,
             'stock_count' => 'App\Models\StockCount',
-            'sale_return' => 'App\Models\SaleReturn',
-            'purchase_order' => 'App\Models\PurchaseOrder',
+            'sale_return' => SaleReturn::class,
+            'purchase_order' => PurchaseOrder::class,
+            'price_rule' => PriceRule::class,
         ]);
     }
 }

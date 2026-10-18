@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Api\V1\Reports;
 
-/** Reports without parameters (stock valuation, low stock): authorization only. */
+/** Reports without parameters (stock valuation, low stock): authorization + optional format. */
 class PlainReportRequest extends ReportRequest
 {
     public function rules(): array
     {
-        return [];
+        return $this->formatRules();
     }
 }

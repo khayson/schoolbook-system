@@ -7,6 +7,7 @@ readonly class PricedOrder
     /**
      * @param  list<PricedLine>  $lines
      * @param  list<string>  $warnings
+     * @param  list<array{code: string, name: string, rate_bps: int, amount: int}>  $taxLines
      */
     public function __construct(
         public array $lines,
@@ -15,6 +16,7 @@ readonly class PricedOrder
         public int $taxTotal,
         public int $total,
         public array $warnings = [],
+        public array $taxLines = [],
     ) {}
 
     /**
@@ -45,6 +47,7 @@ readonly class PricedOrder
             'discount_total' => $this->discountTotal,
             'tax_total' => $this->taxTotal,
             'total' => $this->total,
+            'tax_lines' => $this->taxLines,
             'warnings' => $this->warnings,
         ];
     }

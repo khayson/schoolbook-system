@@ -6,6 +6,7 @@ import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/core/pdf_sharer.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/payments/presentation/record_payment_screen.dart';
 
@@ -15,6 +16,7 @@ void main() {
   late FakePaymentsRepository payments;
   late InMemoryKeyValueStore backing;
   late FakePdfSharer sharer;
+  late OfflineController offline;
 
   Future<void> pumpScreen(WidgetTester tester) async {
     // A tall phone-like surface so the lazily built ListView renders the whole form.
@@ -37,12 +39,17 @@ void main() {
           builder: (_, s) =>
               Scaffold(body: Text('payment ${s.pathParameters['id']}')),
         ),
+        GoRoute(
+          path: '/payments',
+          builder: (_, _) => const Scaffold(body: Text('payments list')),
+        ),
       ],
     );
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           Provider<PaymentsRepository>.value(value: payments),
+          ChangeNotifierProvider<OfflineController>.value(value: offline),
           Provider<CustomersRepository>.value(value: FakeCustomersRepository()),
           Provider<PendingSubmissionStore>.value(
             value: PendingSubmissionStore(store: backing),
@@ -81,6 +88,7 @@ void main() {
     );
     backing = InMemoryKeyValueStore();
     sharer = FakePdfSharer();
+    offline = testOfflineStack(payments: payments).controller;
   });
 
   testWidgets(
@@ -172,36 +180,39 @@ void main() {
     },
   );
 
-  testWidgets('after a lost connection the button retries with the same key', (
-    tester,
-  ) async {
-    payments.recordResults.addAll([
-      ApiException.network(),
-      testPayment(id: 9, receiptNo: 'RCT-2026-000009'),
-    ]);
-    await pumpScreen(tester);
-    await tester.enterText(find.byKey(const Key('pay_amount')), '500');
-    await submit(tester);
+  testWidgets(
+    'after a lost connection the payment is queued offline with the same key',
+    (tester) async {
+      final stack = testOfflineStack(payments: payments, online: false);
+      offline = stack.controller;
+      await offline.start();
 
-    expect(find.text('No connection'), findsOneWidget);
-    expect(find.text('Try again'), findsOneWidget);
-    expect(find.byKey(const Key('pay_unfinished')), findsOneWidget);
+      payments.recordResults.add(ApiException.network());
+      await pumpScreen(tester);
+      await tester.enterText(find.byKey(const Key('pay_amount')), '500');
+      await submit(tester);
 
-    await submit(tester);
+      // Navigates away; queue owns the retry with the attempted key.
+      expect(find.text('payments list'), findsOneWidget);
+      expect(await stack.store.queueLength(), 1);
+      expect(payments.recordCalls, hasLength(1));
+      expect(
+        (await stack.store.listQueue()).single.idempotencyKey,
+        payments.recordCalls.single.key,
+      );
 
-    expect(payments.recordCalls, hasLength(2));
-    expect(payments.recordCalls[1].key, payments.recordCalls[0].key);
-    expect(find.byKey(const Key('pay_recorded_dialog')), findsOneWidget);
-    expect(find.text('Payment RCT-2026-000009 recorded'), findsOneWidget);
-
-    await tester.tap(find.text('Share receipt'));
-    await tester.pumpAndSettle();
-    expect(sharer.shared, ['RCT-2026-000009.pdf']);
-
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
-    expect(find.text('payment 9'), findsOneWidget);
-  });
+      // Reconnect drains with that same Idempotency-Key.
+      payments.recordResults.add(
+        testPayment(id: 9, receiptNo: 'RCT-2026-000009'),
+      );
+      offline.online = true;
+      final drained = await offline.kickSync();
+      expect(drained.synced, 1);
+      expect(await stack.store.queueLength(), 0);
+      expect(payments.recordCalls, hasLength(2));
+      expect(payments.recordCalls[1].key, payments.recordCalls[0].key);
+    },
+  );
 
   testWidgets(
     'an unfinished payment from before a restart can be restored and retried safely',

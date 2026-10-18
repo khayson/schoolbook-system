@@ -10,6 +10,7 @@ class DeadStockRequest extends ReportRequest
         return [
             'as_of' => ['sometimes', 'date_format:Y-m-d'],
             'days' => ['sometimes', 'integer', 'min:1', 'max:3650'],
+            ...$this->formatRules(),
         ];
     }
 }

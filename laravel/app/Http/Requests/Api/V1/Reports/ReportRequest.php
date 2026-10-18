@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 /**
  * Base for report requests: owner only (gate view-reports), dates as YYYY-MM-DD in
@@ -26,7 +27,21 @@ abstract class ReportRequest extends FormRequest
         return [
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from', $this->maxRange()],
+            ...$this->formatRules(),
         ];
+    }
+
+    /** @return array<string, list<mixed>> */
+    protected function formatRules(): array
+    {
+        return [
+            'format' => ['sometimes', Rule::in(['json', 'csv', 'pdf'])],
+        ];
+    }
+
+    public function exportFormat(): string
+    {
+        return (string) ($this->validated('format') ?? 'json');
     }
 
     protected function maxRange(int $days = self::MAX_RANGE_DAYS): Closure

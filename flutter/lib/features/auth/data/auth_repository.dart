@@ -32,8 +32,10 @@ class AuthRepository {
 
     final body = response.data!;
     final token = body['token'] as String;
+    final user = AuthUser.fromJson(body['user'] as Map<String, dynamic>);
     await _tokenStore.writeToken(token);
-    return AuthUser.fromJson(body['user'] as Map<String, dynamic>);
+    await _tokenStore.writeCachedUser(user);
+    return user;
   }
 
   Future<void> logout() async {
@@ -51,13 +53,17 @@ class AuthRepository {
     }
     final response = await _api.get<Map<String, dynamic>>('/auth/me');
     final data = response.data!['data'] as Map<String, dynamic>;
-    return AuthUser.fromJson(data);
+    final user = AuthUser.fromJson(data);
+    await _tokenStore.writeCachedUser(user);
+    return user;
   }
 
   Future<bool> hasStoredToken() async {
     final token = await _tokenStore.readToken();
     return token != null && token.isNotEmpty;
   }
+
+  Future<AuthUser?> readCachedUser() => _tokenStore.readCachedUser();
 
   Future<void> clearLocalSession() => _tokenStore.clearToken();
 

@@ -827,6 +827,28 @@ class _BookLine extends StatelessWidget {
                     color: AppColors.mute,
                   ),
                 ),
+                if (line.hasDiscount)
+                  Text(
+                    'Was ${Money.formatPesewas(line.basePrice)}'
+                    '${line.discountAmount > 0 ? ' · save ${Money.formatPesewas(line.discountAmount)}' : ''}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.mute,
+                    ),
+                  ),
+                if (line.appliedRules.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      line.appliedRules.map((r) => r.name).join(' · '),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
                 if (line.isPriceOverridden && line.overrideReason != null)
                   Text(
                     line.overrideReason!,
@@ -1301,6 +1323,32 @@ class PriceChangedDialog extends StatelessWidget {
             'Total: ${Money.formatPesewas(sale.total)} -> ${Money.formatPesewas(newOrder.total)}',
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
+          if (newOrder.discountTotal > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Order discount −${Money.formatPesewas(newOrder.discountTotal)}',
+              key: const Key('price_changed_discount'),
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.mute,
+              ),
+            ),
+          ],
+          if (newOrder.warnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...newOrder.warnings.map(
+              (w) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  w,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.warn,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
       actions: [

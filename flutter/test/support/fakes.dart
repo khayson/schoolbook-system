@@ -7,6 +7,10 @@ import 'package:schoolbook/features/catalog/data/lookups_repository.dart';
 import 'package:schoolbook/features/catalog/domain/lookup_models.dart';
 import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
+import 'package:schoolbook/features/offline/data/connectivity_service.dart';
+import 'package:schoolbook/features/offline/data/offline_store.dart';
+import 'package:schoolbook/features/offline/data/sync_worker.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/payments/domain/payment.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
@@ -17,6 +21,43 @@ import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/sales/domain/sale.dart';
 
 ApiClient unusedApiClient() => ApiClient(tokenStore: AuthTokenStore());
+
+/// Offline field-kit stack for widget / controller tests (in-memory, online).
+({
+  OfflineController controller,
+  InMemoryOfflineStore store,
+  FakeConnectivityService connectivity,
+  FakeSalesRepository sales,
+  FakePaymentsRepository payments,
+})
+testOfflineStack({
+  FakeSalesRepository? sales,
+  FakePaymentsRepository? payments,
+  bool online = true,
+}) {
+  final salesRepo = sales ?? FakeSalesRepository();
+  final paymentsRepo = payments ?? FakePaymentsRepository();
+  final store = InMemoryOfflineStore();
+  final connectivity = FakeConnectivityService(online: online);
+  final controller = OfflineController(
+    store: store,
+    syncWorker: SyncWorker(
+      store: store,
+      sales: salesRepo,
+      payments: paymentsRepo,
+    ),
+    connectivity: connectivity,
+    customers: FakeCustomersRepository(),
+    products: FakeProductsRepository([]),
+  );
+  return (
+    controller: controller,
+    store: store,
+    connectivity: connectivity,
+    sales: salesRepo,
+    payments: paymentsRepo,
+  );
+}
 
 Customer testCustomer({
   int id = 1,

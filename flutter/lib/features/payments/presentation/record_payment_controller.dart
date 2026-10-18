@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/payments/data/payments_repository.dart';
 import 'package:schoolbook/features/payments/domain/payment.dart';
 
@@ -18,15 +19,20 @@ class RecordPaymentController extends ChangeNotifier {
     required this._payments,
     required this._pendingStore,
     required this.customerId,
+    this._offline,
   });
 
   final PaymentsRepository _payments;
   final PendingSubmissionStore _pendingStore;
+  final OfflineController? _offline;
   final int customerId;
 
   bool submitting = false;
   ApiException? error;
   Payment? recorded;
+
+  /// True when the last [submit] was enqueued for later sync (network/unknown).
+  bool queuedOffline = false;
 
   bool loadingRecent = false;
   String? recentError;
@@ -91,6 +97,7 @@ class RecordPaymentController extends ChangeNotifier {
     }
     submitting = true;
     error = null;
+    queuedOffline = false;
     notifyListeners();
 
     try {
@@ -105,6 +112,21 @@ class RecordPaymentController extends ChangeNotifier {
       await refreshRecent();
       return payment;
     } on ApiException catch (e) {
+      if (e.isOutcomeUnknown && _offline != null) {
+        final pending = await _pendingStore.pending(intent);
+        final key = pending?.idempotencyKey;
+        if (key != null) {
+          await _offline.enqueuePayment(
+            payload: payload,
+            idempotencyKey: key,
+          );
+          await _pendingStore.complete(intent);
+          queuedOffline = true;
+          unfinished = null;
+          error = null;
+          return null;
+        }
+      }
       error = e;
       if (!e.isOutcomeUnknown) {
         await _pendingStore.complete(intent);

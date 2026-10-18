@@ -15,9 +15,12 @@ import 'package:schoolbook/features/customers/data/customers_repository.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
 import 'package:schoolbook/features/products/data/products_repository.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
+import 'package:schoolbook/features/sales/domain/sale.dart';
 import 'package:schoolbook/features/sales/presentation/new_sale_controller.dart';
 import 'package:schoolbook/shared/widgets/app_icons.dart';
+import 'package:schoolbook/shared/widgets/app_toast.dart';
 import 'package:schoolbook/shared/widgets/async_state_widgets.dart';
 import 'package:schoolbook/shared/widgets/option_picker.dart';
 
@@ -54,6 +57,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _controller = NewSaleController(
       sales: context.read<SalesRepository>(),
       pendingStore: context.read<PendingSubmissionStore>(),
+      offline: context.read<OfflineController>(),
       debounce: widget.previewDebounce,
     )..addListener(_onChanged);
     // Warm filter lookups so Add books opens with Level/Subject ready.
@@ -183,7 +187,22 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
   Future<void> _save({required bool thenConfirm}) async {
     final sale = await _controller.saveDraft(notes: _notes.text);
-    if (sale == null || !mounted) {
+    if (!mounted) return;
+    if (_controller.queuedOffline) {
+      AppToast.show(
+        context,
+        'Saved offline — will sync',
+        type: ToastType.info,
+        title: 'Queued',
+      );
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/sales');
+      }
+      return;
+    }
+    if (sale == null) {
       return;
     }
     context.pushReplacement(
@@ -359,14 +378,19 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             ),
             const SizedBox(height: 10),
           ],
+          if (c.preview != null && c.preview!.warnings.isNotEmpty) ...[
+            _PricingWarningsBanner(
+              key: const Key('new_sale_order_warnings'),
+              warnings: c.preview!.warnings,
+            ),
+            const SizedBox(height: 10),
+          ],
           ...c.lines.map((line) {
             final priced = c.previewFor(line.product.id);
             return _LineRow(
               key: Key('line_${line.product.id}'),
               line: line,
-              priceText: priced == null
-                  ? '…'
-                  : '${Money.formatPesewas(priced.unitPrice)} · ${Money.formatPesewas(priced.lineTotal)}',
+              priced: priced,
               onStep: (d) => c.step(line.product.id, d),
               onSet: (q) => c.setQuantity(line.product.id, q),
               onRemove: () => c.remove(line.product.id),
@@ -473,6 +497,19 @@ class _SaveBar extends StatelessWidget {
                   ),
                 ],
               ),
+              if (preview != null && preview.discountTotal > 0) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Order discount −${Money.formatPesewas(preview.discountTotal)}'
+                  ' · was ${Money.formatPesewas(preview.subtotal)}',
+                  key: const Key('new_sale_order_discount'),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.mute,
+                  ),
+                ),
+              ],
               if (c.previewError != null)
                 Text(
                   describeApiError(c.previewError!).body,
@@ -540,11 +577,55 @@ class _SaveBar extends StatelessWidget {
   }
 }
 
+class _PricingWarningsBanner extends StatelessWidget {
+  const _PricingWarningsBanner({super.key, required this.warnings});
+
+  final List<String> warnings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1E0),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Pricing warnings',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: AppColors.warn,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final w in warnings)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                w,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.warn,
+                  height: 1.35,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LineRow extends StatefulWidget {
   const _LineRow({
     super.key,
     required this.line,
-    required this.priceText,
+    required this.priced,
     required this.onStep,
     required this.onSet,
     required this.onRemove,
@@ -552,7 +633,7 @@ class _LineRow extends StatefulWidget {
   });
 
   final DraftLine line;
-  final String priceText;
+  final SaleLine? priced;
   final void Function(int delta) onStep;
   final void Function(int quantity) onSet;
   final VoidCallback onRemove;
@@ -591,6 +672,10 @@ class _LineRowState extends State<_LineRow> {
     final p = widget.line.product;
     final short = widget.line.isShort;
     final stock = p.stockOnHand;
+    final priced = widget.priced;
+    final priceText = priced == null
+        ? '…'
+        : '${Money.formatPesewas(priced.unitPrice)} · ${Money.formatPesewas(priced.lineTotal)}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -629,12 +714,25 @@ class _LineRowState extends State<_LineRow> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.priceText,
+                      priceText,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (priced != null && priced.hasDiscount) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Was ${Money.formatPesewas(priced.basePrice)} each'
+                        '${priced.discountAmount > 0 ? ' · save ${Money.formatPesewas(priced.discountAmount)}' : ''}',
+                        key: Key('line_discount_${p.id}'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.mute,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -646,6 +744,60 @@ class _LineRowState extends State<_LineRow> {
               ),
             ],
           ),
+          if (priced != null && priced.appliedRules.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              key: Key('line_rules_${p.id}'),
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final rule in priced.appliedRules)
+                  Container(
+                    key: Key('line_rule_${p.id}_${rule.id}'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.limeSoft,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      rule.unitPriceChangeLabel == null
+                          ? rule.name
+                          : '${rule.name} · ${rule.unitPriceChangeLabel}',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (priced != null && priced.warnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Column(
+              key: Key('line_warnings_${p.id}'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final w in priced.warnings)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      w,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warn,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -788,7 +940,18 @@ class _CustomerPickerState extends State<_CustomerPicker> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        setState(() => _error = e.message);
+        final cached = context
+            .read<OfflineController>()
+            .snapshot
+            .searchCustomers(query);
+        if (e.isNetworkError && cached.isNotEmpty) {
+          setState(() {
+            _customers = cached;
+            _error = null;
+          });
+        } else {
+          setState(() => _error = e.message);
+        }
       }
     } finally {
       if (mounted) {
@@ -1279,7 +1442,31 @@ class _ProductPickerState extends State<_ProductPicker> {
         setState(() => _results = page.data.where((p) => p.isActive).toList());
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) {
+        var cached = context
+            .read<OfflineController>()
+            .snapshot
+            .searchProducts(_query)
+            .where((p) => p.isActive);
+        if (_levelId != null) {
+          cached = cached.where((p) => p.levelId == _levelId);
+        }
+        if (_subjectId != null) {
+          cached = cached.where((p) => p.subjectId == _subjectId);
+        }
+        if (_languageId != null) {
+          cached = cached.where((p) => p.languageId == _languageId);
+        }
+        final list = cached.toList();
+        if (e.isNetworkError && list.isNotEmpty) {
+          setState(() {
+            _results = list;
+            _error = null;
+          });
+        } else {
+          setState(() => _error = e.message);
+        }
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

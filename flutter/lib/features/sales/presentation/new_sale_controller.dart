@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:schoolbook/core/errors.dart';
 import 'package:schoolbook/core/idempotency/pending_submission_store.dart';
 import 'package:schoolbook/features/customers/domain/customer.dart';
+import 'package:schoolbook/features/offline/presentation/offline_controller.dart';
 import 'package:schoolbook/features/products/domain/product.dart';
 import 'package:schoolbook/features/sales/data/sales_repository.dart';
 import 'package:schoolbook/features/sales/domain/sale.dart';
@@ -25,6 +26,7 @@ class NewSaleController extends ChangeNotifier {
   NewSaleController({
     required this._sales,
     required this._pendingStore,
+    this._offline,
     this.debounce = const Duration(milliseconds: 400),
   });
 
@@ -32,6 +34,7 @@ class NewSaleController extends ChangeNotifier {
 
   final SalesRepository _sales;
   final PendingSubmissionStore _pendingStore;
+  final OfflineController? _offline;
   final Duration debounce;
 
   Customer? customer;
@@ -46,6 +49,9 @@ class NewSaleController extends ChangeNotifier {
 
   bool saving = false;
   ApiException? saveError;
+
+  /// True when the last [saveDraft] was enqueued for later sync (network/unknown).
+  bool queuedOffline = false;
 
   Timer? _timer;
   int _previewSeq = 0;
@@ -234,6 +240,7 @@ class NewSaleController extends ChangeNotifier {
     }
     saving = true;
     saveError = null;
+    queuedOffline = false;
     notifyListeners();
     final payload = draftPayload(notes: notes);
     final editId = editingSaleId;
@@ -251,6 +258,20 @@ class NewSaleController extends ChangeNotifier {
       await _pendingStore.complete(intent);
       return sale;
     } on ApiException catch (e) {
+      if (editId == null && e.isOutcomeUnknown && _offline != null) {
+        final pending = await _pendingStore.pending(intent);
+        final key = pending?.idempotencyKey;
+        if (key != null) {
+          await _offline.enqueueDraftSale(
+            payload: payload,
+            idempotencyKey: key,
+          );
+          await _pendingStore.complete(intent);
+          queuedOffline = true;
+          saveError = null;
+          return null;
+        }
+      }
       if (editId == null && !e.isOutcomeUnknown) {
         await _pendingStore.complete(intent);
       }

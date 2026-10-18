@@ -2,18 +2,30 @@
 
 namespace App\Services;
 
+use App\DTOs\Pricing\AppliedRuleSummary;
 use App\DTOs\Pricing\PricedLine;
 use App\DTOs\Pricing\PricedOrder;
 use App\DTOs\Pricing\PriceLineInput;
+use App\Enums\PriceRuleCustomerScope;
+use App\Enums\PriceRuleFloorPolicy;
+use App\Enums\PriceRuleScopeType;
+use App\Enums\PriceRuleType;
 use App\Exceptions\InvalidInputException;
 use App\Models\Customer;
+use App\Models\PriceRule;
 use App\Models\Product;
+use App\Models\Setting;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 
 class PricingService
 {
+    public function __construct(
+        private readonly TaxService $tax,
+    ) {}
+
     /**
-     * Final interface (Phase 4 fills in rules). Phase 2: base selling_price only.
+     * Price lines through active price rules (§7.3–7.5). Manual override skips line rules.
      *
      * Duplicate lines with the same (product, override price, override reason) are
      * merged into one line with summed quantity, keeping first-appearance order.
@@ -31,9 +43,20 @@ class PricingService
         sort($productIds);
 
         $products = Product::query()
+            ->with(['level'])
             ->whereIn('id', $productIds)
             ->get()
             ->keyBy('id');
+
+        $allRules = PriceRule::query()
+            ->active()
+            ->effectiveOn($date)
+            ->orderByDesc('priority')
+            ->orderBy('id')
+            ->get();
+
+        $lineRules = $allRules->filter(fn (PriceRule $rule): bool => $rule->type->isLineLevel())->values();
+        $orderRules = $allRules->filter(fn (PriceRule $rule): bool => $rule->type->isOrderLevel())->values();
 
         $pricedLines = [];
         $subtotal = 0;
@@ -53,12 +76,29 @@ class PricingService
             $unitPrice = $basePrice;
             $isOverridden = false;
             $overrideReason = null;
+            /** @var list<AppliedRuleSummary> $appliedRules */
+            $appliedRules = [];
             $lineWarnings = [];
 
             if ($line->overrideUnitPrice !== null) {
                 $unitPrice = $line->overrideUnitPrice;
                 $isOverridden = true;
                 $overrideReason = $line->overrideReason;
+            } else {
+                $candidates = $this->matchingLineRules($lineRules, $product, $customer, $line->quantity);
+                $sorted = $this->sortCandidates($candidates);
+                [$unitPrice, $appliedRules, $floorPolicy] = $this->applyLineRules($sorted, $basePrice);
+
+                if ($unitPrice < (int) $product->cost_price) {
+                    $lineWarnings = $this->floorWarnings(
+                        $floorPolicy,
+                        $product,
+                        $unitPrice,
+                        $index,
+                        $lineWarnings,
+                    );
+                    $warnings = [...$warnings, ...$lineWarnings];
+                }
             }
 
             $discountPerUnit = max(0, $basePrice - $unitPrice);
@@ -77,21 +117,320 @@ class PricingService
                 taxAmount: 0,
                 lineTotal: $lineTotal,
                 unitCost: (int) $product->cost_price,
-                appliedRules: [],
+                appliedRules: $appliedRules,
                 warnings: $lineWarnings,
                 isPriceOverridden: $isOverridden,
                 overrideReason: $overrideReason,
             );
         }
 
+        [$discountTotal, $orderApplied, $orderWarnings] = $this->applyOrderRules($orderRules, $customer, $subtotal);
+        $warnings = [...$warnings, ...$orderWarnings];
+
+        $netExclusive = max(0, $subtotal - $discountTotal);
+        $taxLines = [];
+        $taxTotal = 0;
+
+        if (Setting::getValue('tax_enabled', false)) {
+            $taxResult = $this->tax->taxOnSubtotal($netExclusive);
+            $taxLines = $taxResult['lines'];
+            $taxTotal = $taxResult['tax_total'];
+            $pricedLines = $this->allocateLineTax($pricedLines, $taxTotal);
+        }
+
         return new PricedOrder(
             lines: $pricedLines,
             subtotal: $subtotal,
-            discountTotal: 0,
-            taxTotal: 0,
-            total: $subtotal,
+            discountTotal: $discountTotal,
+            taxTotal: $taxTotal,
+            total: $netExclusive + $taxTotal,
             warnings: $warnings,
+            taxLines: $taxLines,
         );
+    }
+
+    /**
+     * Spread order tax across lines by line_total share (largest-remainder so sums match).
+     *
+     * @param  list<PricedLine>  $lines
+     * @return list<PricedLine>
+     */
+    private function allocateLineTax(array $lines, int $taxTotal): array
+    {
+        if ($lines === [] || $taxTotal <= 0) {
+            return $lines;
+        }
+
+        $lineSum = array_sum(array_map(fn (PricedLine $line): int => $line->lineTotal, $lines));
+        if ($lineSum <= 0) {
+            return $lines;
+        }
+
+        $shares = [];
+        $allocated = 0;
+        foreach ($lines as $index => $line) {
+            $exact = ($taxTotal * $line->lineTotal) / $lineSum;
+            $floor = (int) floor($exact);
+            $shares[] = ['index' => $index, 'amount' => $floor, 'frac' => $exact - $floor];
+            $allocated += $floor;
+        }
+
+        $remainder = $taxTotal - $allocated;
+        usort($shares, fn (array $a, array $b): int => $b['frac'] <=> $a['frac'] ?: $a['index'] <=> $b['index']);
+        for ($i = 0; $i < $remainder; $i++) {
+            $shares[$i]['amount']++;
+        }
+
+        $byIndex = [];
+        foreach ($shares as $share) {
+            $byIndex[$share['index']] = $share['amount'];
+        }
+
+        $out = [];
+        foreach ($lines as $index => $line) {
+            $out[] = new PricedLine(
+                productId: $line->productId,
+                productTitle: $line->productTitle,
+                quantity: $line->quantity,
+                basePrice: $line->basePrice,
+                unitPrice: $line->unitPrice,
+                discountPerUnit: $line->discountPerUnit,
+                discountAmount: $line->discountAmount,
+                taxAmount: $byIndex[$index] ?? 0,
+                lineTotal: $line->lineTotal,
+                unitCost: $line->unitCost,
+                appliedRules: $line->appliedRules,
+                warnings: $line->warnings,
+                isPriceOverridden: $line->isPriceOverridden,
+                overrideReason: $line->overrideReason,
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  Collection<int, PriceRule>  $rules
+     * @return Collection<int, PriceRule>
+     */
+    private function matchingLineRules(Collection $rules, Product $product, ?Customer $customer, int $quantity): Collection
+    {
+        return $rules->filter(function (PriceRule $rule) use ($product, $customer, $quantity): bool {
+            if (! $this->matchesProductScope($rule, $product)) {
+                return false;
+            }
+            if (! $this->matchesCustomerScope($rule, $customer)) {
+                return false;
+            }
+            if ($rule->min_quantity !== null && $quantity < $rule->min_quantity) {
+                return false;
+            }
+            if ($rule->max_quantity !== null && $quantity > $rule->max_quantity) {
+                return false;
+            }
+
+            return true;
+        })->values();
+    }
+
+    private function matchesProductScope(PriceRule $rule, Product $product): bool
+    {
+        return match ($rule->scope_type) {
+            PriceRuleScopeType::All => true,
+            PriceRuleScopeType::Product => $rule->scope_id === $product->id,
+            PriceRuleScopeType::Publisher => $rule->scope_id === $product->publisher_id,
+            PriceRuleScopeType::Subject => $rule->scope_id === $product->subject_id,
+            PriceRuleScopeType::Language => $rule->scope_id === $product->language_id,
+            PriceRuleScopeType::Level => $rule->scope_id === $product->level_id,
+            PriceRuleScopeType::LevelGroup => $rule->scope_id === $product->level?->level_group_id,
+        };
+    }
+
+    private function matchesCustomerScope(PriceRule $rule, ?Customer $customer): bool
+    {
+        return match ($rule->customer_scope) {
+            PriceRuleCustomerScope::All => true,
+            PriceRuleCustomerScope::Customer => $customer !== null
+                && (string) $rule->customer_scope_value === (string) $customer->id,
+            PriceRuleCustomerScope::CustomerType => $customer !== null
+                && $rule->customer_scope_value === $customer->type->value,
+            PriceRuleCustomerScope::Region => $customer !== null
+                && $customer->region !== null
+                && $rule->customer_scope_value === $customer->region->value,
+        };
+    }
+
+    /**
+     * Sort by priority desc, specificity desc, id asc.
+     *
+     * @param  Collection<int, PriceRule>  $candidates
+     * @return list<PriceRule>
+     */
+    private function sortCandidates(Collection $candidates): array
+    {
+        return $candidates->sort(function (PriceRule $a, PriceRule $b): int {
+            if ($a->priority !== $b->priority) {
+                return $b->priority <=> $a->priority;
+            }
+            $spec = $b->specificity() <=> $a->specificity();
+            if ($spec !== 0) {
+                return $spec;
+            }
+
+            return $a->id <=> $b->id;
+        })->values()->all();
+    }
+
+    /**
+     * Apply first rule; if stackable continue only with further stackable rules until a non-stackable is reached.
+     *
+     * @param  list<PriceRule>  $sorted
+     * @return array{0: int, 1: list<AppliedRuleSummary>, 2: PriceRuleFloorPolicy}
+     */
+    private function applyLineRules(array $sorted, int $basePrice): array
+    {
+        $unitPrice = $basePrice;
+        $applied = [];
+        $floor = PriceRuleFloorPolicy::Allow;
+        $started = false;
+
+        foreach ($sorted as $rule) {
+            if ($started && ! $rule->stackable) {
+                break;
+            }
+
+            $before = $unitPrice;
+            $unitPrice = $this->applyLineEffect($rule, $unitPrice);
+            $applied[] = new AppliedRuleSummary(
+                id: $rule->id,
+                name: $rule->name,
+                effect: [
+                    'type' => $rule->type->value,
+                    'value' => $rule->value,
+                    'unit_price_before' => $before,
+                    'unit_price_after' => $unitPrice,
+                ],
+            );
+            $floor = PriceRuleFloorPolicy::strictest($floor, $rule->floor_policy);
+            $started = true;
+
+            if (! $rule->stackable) {
+                break;
+            }
+        }
+
+        return [$unitPrice, $applied, $floor];
+    }
+
+    private function applyLineEffect(PriceRule $rule, int $unitPrice): int
+    {
+        return match ($rule->type) {
+            PriceRuleType::FixedPrice => max(0, $rule->value),
+            PriceRuleType::PercentOff => $this->percentOff($unitPrice, $rule->value),
+            PriceRuleType::AmountOff => max(0, $unitPrice - $rule->value),
+            default => $unitPrice,
+        };
+    }
+
+    /** Half-up rounding of (price * (10000 - bps) / 10000). */
+    private function percentOff(int $amount, int $basisPoints): int
+    {
+        $bps = min(10000, max(0, $basisPoints));
+        $remaining = 10000 - $bps;
+
+        return (int) intdiv(($amount * $remaining) + 5000, 10000);
+    }
+
+    /**
+     * @param  list<string>  $existing
+     * @return list<string>
+     */
+    private function floorWarnings(
+        PriceRuleFloorPolicy $policy,
+        Product $product,
+        int $unitPrice,
+        int $index,
+        array $existing,
+    ): array {
+        $cost = (int) $product->cost_price;
+
+        return match ($policy) {
+            PriceRuleFloorPolicy::BlockBelowCost => throw new InvalidInputException(
+                "items.{$index}.unit_price",
+                "Priced unit ({$unitPrice}) is below cost ({$cost}) for [{$product->sku}] and floor policy blocks it.",
+            ),
+            PriceRuleFloorPolicy::Warn => [
+                ...$existing,
+                "Unit price {$unitPrice} is below cost {$cost} for product [{$product->sku}].",
+            ],
+            PriceRuleFloorPolicy::Allow => $existing,
+        };
+    }
+
+    /**
+     * @param  Collection<int, PriceRule>  $orderRules
+     * @return array{0: int, 1: list<AppliedRuleSummary>, 2: list<string>}
+     */
+    private function applyOrderRules(Collection $orderRules, ?Customer $customer, int $subtotal): array
+    {
+        $candidates = $orderRules->filter(function (PriceRule $rule) use ($customer, $subtotal): bool {
+            if (! $this->matchesCustomerScope($rule, $customer)) {
+                return false;
+            }
+            if ($rule->min_order_total !== null && $subtotal < $rule->min_order_total) {
+                return false;
+            }
+
+            return true;
+        })->values();
+
+        $sorted = $this->sortCandidates($candidates);
+        $discount = 0;
+        $applied = [];
+        $warnings = [];
+        $started = false;
+        $running = $subtotal;
+
+        foreach ($sorted as $rule) {
+            if ($started && ! $rule->stackable) {
+                break;
+            }
+
+            $before = $discount;
+            $chunk = match ($rule->type) {
+                PriceRuleType::OrderPercentOff => $this->percentOffAmount($running, $rule->value),
+                PriceRuleType::OrderAmountOff => min($running, $rule->value),
+                default => 0,
+            };
+            $discount += $chunk;
+            $running = max(0, $subtotal - $discount);
+
+            $applied[] = new AppliedRuleSummary(
+                id: $rule->id,
+                name: $rule->name,
+                effect: [
+                    'type' => $rule->type->value,
+                    'value' => $rule->value,
+                    'discount_before' => $before,
+                    'discount_after' => $discount,
+                ],
+            );
+            $started = true;
+
+            if (! $rule->stackable) {
+                break;
+            }
+        }
+
+        return [min($discount, $subtotal), $applied, $warnings];
+    }
+
+    /** Half-up: amount * bps / 10000. */
+    private function percentOffAmount(int $amount, int $basisPoints): int
+    {
+        $bps = min(10000, max(0, $basisPoints));
+
+        return (int) intdiv(($amount * $bps) + 5000, 10000);
     }
 
     /**
@@ -150,7 +489,6 @@ class PricingService
         }
 
         if ($line->overrideUnitPrice === null) {
-            // A reason without an override price carries no meaning; drop it so it cannot split a merge.
             return $line->overrideReason === null ? $line : new PriceLineInput($line->productId, $line->quantity);
         }
 
